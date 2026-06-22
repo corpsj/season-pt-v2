@@ -40,6 +40,10 @@ export default function TrainerCalendarClient({
     () => base.calDays.map((d) => ({ ...d, selected: d.dateISO === selected })),
     [base.calDays, selected]
   );
+  const firstWeekday = useMemo(
+    () => (base.calDays[0] ? new Date(base.calDays[0].dateISO + "T00:00:00Z").getUTCDay() : 0),
+    [base.calDays]
+  );
   const dayClasses = classesByDate[selected] ?? [];
   const selDateLabel = shortDateLabel(selected);
 
@@ -92,7 +96,7 @@ export default function TrainerCalendarClient({
         <CalendarGrid
           monthLabel={base.monthLabel}
           days={calDays}
-          firstWeekday={0}
+          firstWeekday={firstWeekday}
           onPick={setSelected}
         />
 
