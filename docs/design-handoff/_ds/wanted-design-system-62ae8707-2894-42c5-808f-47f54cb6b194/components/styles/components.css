@@ -1,0 +1,224 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Wanted Design System — Component styles
+   Class-based styling for the React primitives in components/. Every value is
+   keyed to a design token. Interaction model: a darken overlay (::after) for
+   hover/press, matching Wanted's "Interaction" layer. Focus uses a 3px primary
+   ring. Disabled = interaction-disable surface + label-disable text @ .43 alpha.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* ============================ Button ============================ */
+.wds-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-base);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  text-decoration: none;
+  box-sizing: border-box;
+  transition: background-color .15s ease, box-shadow .15s ease, color .15s ease;
+}
+.wds-btn::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: #000; opacity: 0; transition: opacity .12s ease; pointer-events: none;
+}
+.wds-btn:not(:disabled):hover::after { opacity: .06; }
+.wds-btn:not(:disabled):active::after { opacity: .11; }
+.wds-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-normal) 30%, transparent); }
+.wds-btn:disabled { cursor: not-allowed; }
+
+/* sizes (radius / padding / type) */
+.wds-btn--lg { border-radius: var(--radius-12); padding: 12px 28px; font-size: 16px; line-height: 24px; letter-spacing: .006em; gap: 6px; }
+.wds-btn--md { border-radius: var(--radius-10); padding: 9px 20px;  font-size: 15px; line-height: 22px; letter-spacing: .010em; gap: 5px; }
+.wds-btn--sm { border-radius: var(--radius-8);  padding: 7px 14px;  font-size: 13px; line-height: 18px; letter-spacing: .019em; gap: 4px; }
+.wds-btn--full { width: 100%; }
+
+/* solid */
+.wds-btn--solid.wds-btn--primary   { background: var(--primary-normal); color: var(--static-white); }
+.wds-btn--solid.wds-btn--secondary { background: var(--blue-95); color: var(--primary-normal); }
+.wds-btn--solid.wds-btn--assistive { background: var(--fill-normal); color: var(--label-normal); }
+/* outlined */
+.wds-btn--outlined { background: transparent; }
+.wds-btn--outlined.wds-btn--primary   { color: var(--primary-normal);  box-shadow: inset 0 0 0 1px var(--primary-normal); }
+.wds-btn--outlined.wds-btn--secondary { color: var(--label-normal);    box-shadow: inset 0 0 0 1px var(--line-normal-normal); }
+.wds-btn--outlined.wds-btn--assistive { color: var(--label-alternative);box-shadow: inset 0 0 0 1px var(--line-normal-neutral); }
+/* text */
+.wds-btn--text { background: transparent; padding-left: 8px; padding-right: 8px; }
+.wds-btn--text.wds-btn--primary   { color: var(--primary-normal); }
+.wds-btn--text.wds-btn--secondary { color: var(--label-normal); }
+.wds-btn--text.wds-btn--assistive { color: var(--label-alternative); }
+/* disabled (solid/outlined) */
+.wds-btn--solid:disabled, .wds-btn--outlined:disabled { background: var(--interaction-disable); color: var(--label-disable); box-shadow: none; }
+.wds-btn--text:disabled { color: var(--label-disable); }
+
+/* ============================ Icon Button ============================ */
+.wds-iconbtn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  border: none; cursor: pointer; background: transparent; color: var(--label-normal);
+  box-sizing: border-box; transition: background-color .15s ease, color .15s ease;
+}
+.wds-iconbtn::after { content:""; position:absolute; inset:0; border-radius:inherit; background:#000; opacity:0; transition:opacity .12s ease; pointer-events:none; }
+.wds-iconbtn:not(:disabled):hover::after { opacity:.06; }
+.wds-iconbtn:not(:disabled):active::after { opacity:.11; }
+.wds-iconbtn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-normal) 30%, transparent); }
+.wds-iconbtn--lg { width: 48px; height: 48px; border-radius: var(--radius-12); }
+.wds-iconbtn--md { width: 40px; height: 40px; border-radius: var(--radius-10); }
+.wds-iconbtn--sm { width: 32px; height: 32px; border-radius: var(--radius-8); }
+.wds-iconbtn--fill { background: var(--fill-normal); }
+.wds-iconbtn--outlined { box-shadow: inset 0 0 0 1px var(--line-normal-neutral); }
+.wds-iconbtn--solid { background: var(--primary-normal); color: var(--static-white); }
+.wds-iconbtn:disabled { cursor: not-allowed; color: var(--label-disable); }
+
+/* ============================ Badge ============================ */
+.wds-badge {
+  display: inline-flex; align-items: center; gap: 2px; box-sizing: border-box;
+  font-family: var(--font-base); font-weight: 600; font-size: 12px; line-height: 16px;
+  letter-spacing: .025em; padding: 2px 6px; border-radius: var(--radius-6); white-space: nowrap;
+}
+.wds-badge--neutral   { background: var(--fill-normal);   color: var(--label-neutral); }
+.wds-badge--primary   { background: var(--blue-95);       color: var(--primary-normal); }
+.wds-badge--positive  { background: var(--green-95);      color: var(--accent-foreground-green); }
+.wds-badge--negative  { background: var(--red-95);        color: var(--accent-foreground-red); }
+.wds-badge--cautionary{ background: var(--orange-95);     color: var(--accent-foreground-orange); }
+.wds-badge--violet    { background: var(--violet-95);     color: var(--accent-foreground-violet); }
+.wds-badge--solid     { background: var(--primary-normal);color: var(--static-white); }
+/* numeric push badge */
+.wds-badge--push { background: var(--status-negative); color: var(--static-white); min-width: 18px; height: 18px; justify-content: center; border-radius: 999px; padding: 0 5px; font-size: 11px; line-height: 14px; }
+
+/* ============================ Tag ============================ */
+.wds-tag {
+  display: inline-flex; align-items: center; gap: 4px; box-sizing: border-box;
+  font-family: var(--font-base); font-weight: 500; font-size: 13px; line-height: 18px;
+  letter-spacing: .019em; padding: 3px 8px; border-radius: var(--radius-6);
+  background: var(--fill-normal); color: var(--label-neutral); white-space: nowrap;
+}
+.wds-tag--line { background: transparent; box-shadow: inset 0 0 0 1px var(--line-normal-normal); }
+
+/* ============================ Chip ============================ */
+.wds-chip {
+  position: relative; display: inline-flex; align-items: center; box-sizing: border-box;
+  font-family: var(--font-base); font-weight: 500; cursor: pointer; white-space: nowrap;
+  background: var(--background-normal-normal); color: var(--label-normal);
+  box-shadow: inset 0 0 0 1px var(--line-normal-neutral);
+  transition: background-color .15s ease, box-shadow .15s ease, color .15s ease;
+}
+.wds-chip::after { content:""; position:absolute; inset:0; border-radius:inherit; background:#000; opacity:0; transition:opacity .12s ease; pointer-events:none; }
+.wds-chip:hover::after { opacity:.04; }
+.wds-chip--lg { border-radius: var(--radius-10); padding: 9px 12px; font-size: 15px; line-height: 22px; letter-spacing:.010em; gap: 3px; }
+.wds-chip--md { border-radius: var(--radius-8);  padding: 6px 10px; font-size: 14px; line-height: 20px; letter-spacing:.015em; gap: 3px; }
+.wds-chip--sm { border-radius: var(--radius-6);  padding: 4px 8px;  font-size: 13px; line-height: 18px; letter-spacing:.019em; gap: 2px; }
+.wds-chip--active { background: color-mix(in srgb, var(--primary-normal) 6%, transparent); color: var(--primary-normal); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-normal) 43%, transparent); }
+.wds-chip--active .wds-chip__check { color: var(--primary-normal); }
+
+/* ============================ Avatar ============================ */
+.wds-avatar { display: inline-flex; align-items: center; justify-content: center; overflow: hidden; background: var(--fill-normal); color: var(--label-alternative); flex-shrink: 0; box-sizing: border-box; }
+.wds-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.wds-avatar--circle { border-radius: 999px; }
+.wds-avatar--square { border-radius: 28%; }
+.wds-avatar--xs { width: 24px; height: 24px; font-size: 11px; }
+.wds-avatar--sm { width: 32px; height: 32px; font-size: 13px; }
+.wds-avatar--md { width: 40px; height: 40px; font-size: 15px; }
+.wds-avatar--lg { width: 48px; height: 48px; font-size: 17px; }
+.wds-avatar--xl { width: 64px; height: 64px; font-size: 22px; }
+.wds-avatar__ring { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }
+
+/* ============================ Divider ============================ */
+.wds-divider { border: none; background: var(--line-normal-normal); }
+.wds-divider--h { width: 100%; height: 1px; margin: 0; }
+.wds-divider--v { width: 1px; align-self: stretch; height: auto; }
+.wds-divider--thick { background: var(--fill-normal); }
+.wds-divider--thick.wds-divider--h { height: 8px; }
+
+/* ============================ Card ============================ */
+.wds-card { background: var(--background-elevated-normal); border-radius: var(--radius-16); box-sizing: border-box; box-shadow: var(--shadow-normal); overflow: hidden; }
+.wds-card--outlined { box-shadow: inset 0 0 0 1px var(--line-normal-normal); }
+.wds-card--flat { box-shadow: none; background: var(--background-normal-alternative); }
+.wds-card--interactive { cursor: pointer; transition: box-shadow .18s ease, transform .18s ease; }
+.wds-card--interactive:hover { box-shadow: var(--shadow-strong); }
+
+/* ============================ Text field ============================ */
+.wds-field { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-base); }
+.wds-field__label { font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing:.015em; color: var(--label-normal); }
+.wds-field__req { color: var(--status-negative); margin-left: 2px; }
+.wds-field__box {
+  display: flex; align-items: center; gap: 8px; box-sizing: border-box;
+  background: var(--background-normal-normal); border-radius: var(--radius-10);
+  box-shadow: inset 0 0 0 1px var(--line-normal-normal); padding: 0 16px; height: 48px;
+  transition: box-shadow .15s ease;
+}
+.wds-field__box:focus-within { box-shadow: inset 0 0 0 1.5px var(--primary-normal); }
+.wds-field--error .wds-field__box { box-shadow: inset 0 0 0 1.5px var(--status-negative); }
+.wds-field--filled .wds-field__box { background: var(--fill-normal); box-shadow: none; }
+.wds-field__input { flex: 1; border: none; outline: none; background: transparent; font-family: var(--font-base); font-size: 16px; line-height: 24px; letter-spacing:.006em; color: var(--label-normal); min-width: 0; }
+.wds-field__input::placeholder { color: var(--label-assistive); }
+.wds-field__icon { color: var(--label-alternative); display: inline-flex; }
+.wds-field__help { font-size: 13px; line-height: 18px; letter-spacing:.019em; color: var(--label-alternative); }
+.wds-field--error .wds-field__help { color: var(--status-negative); }
+.wds-field__box--sm { height: 40px; border-radius: var(--radius-8); }
+.wds-field__box--sm .wds-field__input { font-size: 15px; }
+
+/* ============================ Checkbox / Radio ============================ */
+.wds-check { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-base); font-size: 16px; line-height: 24px; letter-spacing:.006em; color: var(--label-normal); cursor: pointer; user-select: none; }
+.wds-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.wds-check__box { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 1.5px var(--line-normal-strong); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--static-white); transition: background-color .12s ease, box-shadow .12s ease; }
+.wds-check input:checked + .wds-check__box { background: var(--primary-normal); box-shadow: none; }
+.wds-check input:focus-visible + .wds-check__box { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-normal) 30%, transparent), inset 0 0 0 1.5px var(--line-normal-strong); }
+.wds-check input:disabled ~ * { opacity: .43; }
+.wds-check--radio .wds-check__box { border-radius: 999px; }
+.wds-check--radio input:checked + .wds-check__box { background: var(--primary-normal); box-shadow: none; }
+.wds-check__dot { width: 8px; height: 8px; border-radius: 999px; background: #fff; }
+
+/* ============================ Switch ============================ */
+.wds-switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.wds-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.wds-switch__track { display: inline-block; background: var(--fill-strong); border-radius: 999px; transition: background-color .18s ease; position: relative; }
+.wds-switch__knob { position: absolute; top: 50%; transform: translateY(-50%); left: 4px; background: #fff; border-radius: 999px; box-shadow: 0 1px 3px rgba(0,0,0,.18); transition: left .18s ease; }
+.wds-switch--lg .wds-switch__track { width: 52px; height: 32px; }
+.wds-switch--lg .wds-switch__knob { width: 24px; height: 24px; }
+.wds-switch--lg input:checked + .wds-switch__track .wds-switch__knob { left: 24px; }
+.wds-switch--sm .wds-switch__track { width: 40px; height: 24px; }
+.wds-switch--sm .wds-switch__knob { width: 18px; height: 18px; }
+.wds-switch--sm input:checked + .wds-switch__track .wds-switch__knob { left: 18px; }
+.wds-switch input:checked + .wds-switch__track { background: var(--primary-normal); }
+.wds-switch input:focus-visible + .wds-switch__track { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-normal) 30%, transparent); }
+.wds-switch input:disabled + .wds-switch__track { opacity: .43; }
+
+/* ============================ Tabs ============================ */
+.wds-tabs { display: flex; gap: 4px; box-shadow: inset 0 -1px 0 var(--line-normal-normal); font-family: var(--font-base); }
+.wds-tab { position: relative; appearance: none; border: none; background: transparent; cursor: pointer; padding: 12px 16px; font-size: 16px; line-height: 24px; font-weight: 600; letter-spacing:.006em; color: var(--label-alternative); transition: color .15s ease; }
+.wds-tab:hover { color: var(--label-neutral); }
+.wds-tab--active { color: var(--label-normal); }
+.wds-tab--active::after { content:""; position:absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; background: var(--label-normal); border-radius: 2px; }
+
+/* ============================ Alert / Toast ============================ */
+.wds-alert { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border-radius: var(--radius-12); font-family: var(--font-base); box-sizing: border-box; }
+.wds-alert__icon { flex-shrink: 0; margin-top: 1px; }
+.wds-alert__title { font-size: 15px; line-height: 22px; font-weight: 600; letter-spacing:.010em; color: var(--label-normal); }
+.wds-alert__body { font-size: 14px; line-height: 20px; letter-spacing:.015em; color: var(--label-alternative); margin-top: 2px; }
+.wds-alert--info     { background: var(--blue-95);   }
+.wds-alert--info .wds-alert__icon { color: var(--primary-normal); }
+.wds-alert--positive { background: var(--green-95);  }
+.wds-alert--positive .wds-alert__icon { color: var(--status-positive); }
+.wds-alert--negative { background: var(--red-95);    }
+.wds-alert--negative .wds-alert__icon { color: var(--status-negative); }
+.wds-alert--cautionary { background: var(--orange-95); }
+.wds-alert--cautionary .wds-alert__icon { color: var(--status-cautionary); }
+.wds-toast { display: flex; gap: 10px; align-items: center; padding: 14px 16px; border-radius: var(--radius-12); background: var(--inverse-background); color: var(--inverse-label); font-family: var(--font-base); font-size: 15px; line-height: 22px; letter-spacing:.010em; box-shadow: var(--shadow-overlay); }
+.wds-toast__icon { color: var(--inverse-primary); display: inline-flex; }
+
+/* ============================ Tooltip ============================ */
+.wds-tooltip { display: inline-block; position: relative; }
+.wds-tooltip__bubble { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--inverse-background); color: var(--inverse-label); font-family: var(--font-base); font-size: 13px; line-height: 18px; letter-spacing:.019em; font-weight: 500; padding: 7px 10px; border-radius: var(--radius-8); white-space: nowrap; box-shadow: var(--shadow-overlay); opacity: 0; visibility: hidden; transition: opacity .14s ease; pointer-events: none; }
+.wds-tooltip:hover .wds-tooltip__bubble, .wds-tooltip:focus-within .wds-tooltip__bubble, .wds-tooltip--open .wds-tooltip__bubble { opacity: 1; visibility: visible; }
+.wds-tooltip__bubble::after { content:""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--inverse-background); }
+
+/* ============================ Spinner ============================ */
+.wds-spinner { display: inline-block; border-radius: 999px; border: 3px solid var(--fill-strong); border-top-color: var(--primary-normal); animation: wds-spin .7s linear infinite; }
+.wds-spinner--sm { width: 18px; height: 18px; border-width: 2px; }
+.wds-spinner--md { width: 28px; height: 28px; }
+.wds-spinner--lg { width: 40px; height: 40px; border-width: 4px; }
+@keyframes wds-spin { to { transform: rotate(360deg); } }

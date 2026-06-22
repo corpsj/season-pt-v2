@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap">
+<script src="pt-icons.js"></script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:'Pretendard',-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  .serif{font-family:'Cormorant Garamond',serif}
+  .stage{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#EAE5DB;padding:24px;box-sizing:border-box}
+  .frame{position:relative;width:380px;height:812px;background:#26231E;border-radius:54px;padding:9px;box-shadow:0 2px 3px rgba(38,35,30,.22),0 40px 80px -30px rgba(38,35,30,.55);flex:none}
+  .screen{position:relative;width:100%;height:100%;background:#FAF8F4;border-radius:46px;overflow:hidden;display:flex;flex-direction:column}
+  .island{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:106px;height:30px;background:#15130F;border-radius:16px;z-index:8}
+  .page{flex:1;display:flex;flex-direction:column;min-height:0}
+  .body{flex:1;display:flex;flex-direction:column;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none}
+  .body::-webkit-scrollbar{display:none}
+  .card{background:#fff;border-radius:18px;border:1px solid rgba(75,59,46,.055);box-shadow:0 1px 2px rgba(75,59,46,.04),0 10px 24px -14px rgba(75,59,46,.16)}
+  .pbtn{width:100%;height:52px;border:none;border-radius:15px;background:#768C6A;color:#FAF8F4;font:600 16px Pretendard;letter-spacing:.01em;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+  .obtn{width:100%;height:52px;border:1.5px solid rgba(107,120,94,.45);border-radius:15px;background:transparent;color:#6B785E;font:600 16px Pretendard;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+  .kick{font:600 12px Pretendard;letter-spacing:.08em;color:#8E8473;text-transform:uppercase}
+  .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex:none;font-family:Pretendard}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
+  .tabbar{flex:none;display:flex;padding:10px 12px 24px;background:rgba(250,248,244,.94);border-top:1px solid rgba(75,59,46,.07)}
+  .bk{width:38px;height:38px;border-radius:11px;background:#fff;border:1px solid rgba(75,59,46,.07);display:flex;align-items:center;justify-content:center;color:#4B3B2E;flex:none;cursor:pointer}
+  .tap{cursor:pointer}
+  .pbtn,.obtn,.bk,.tap,.chip{transition:transform .13s ease,filter .15s ease,background-color .15s ease,box-shadow .18s ease}
+  .pbtn:hover{filter:brightness(1.05)}
+  .pbtn:active,.bk:active,.tap:active{transform:scale(.975)}
+  .obtn:hover{background:rgba(118,140,106,.07)}.obtn:active{transform:scale(.975)}
+  .bk:hover{background:#F4F0E8}
+  .tap:hover{filter:brightness(.985)}
+  .tab:active{transform:scale(.9)}
+  .chip{cursor:pointer}
+  @keyframes ptPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.55);opacity:.4}}
+  @keyframes ptPop{0%{transform:scale(.3);opacity:0}55%{transform:scale(1.14)}100%{transform:scale(1);opacity:1}}
+  @keyframes ptGrow{from{width:0}}
+  @keyframes ptUp{from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1}}
+  @keyframes toastIn{from{transform:translate(-50%,12px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
+  .pt-live{animation:ptPulse 1.5s ease-in-out infinite}
+  .pt-pop{animation:ptPop .55s cubic-bezier(.2,.9,.3,1.35) both}
+  .pt-grow{animation:ptGrow 1.2s cubic-bezier(.45,0,.1,1) both}
+  .scr{animation:ptUp .26s cubic-bezier(.2,.7,.3,1) both}
+  .cinput{flex:1;min-width:0;height:40px;border:1px solid rgba(75,59,46,.12);border-radius:20px;background:#fff;padding:0 16px;font:500 13.5px Pretendard;color:#4B3B2E;outline:none}
+  .cinput::placeholder{color:#B3AA9C}
+  .cinput:focus{border-color:#A9B89B}
+  .sendbtn{width:40px;height:40px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer;transition:filter .15s ease,background-color .15s ease,transform .12s ease}
+  .sendbtn:hover{filter:brightness(1.05)}
+  .sendbtn:active{transform:scale(.92)}
+</style>
+</helmet>
+
+<div class="stage">
+  <div class="frame"><div class="screen">
+    <div class="island"></div>
+    <pt-statusbar></pt-statusbar>
+
+    <!-- ============ START · 역할 선택 ============ -->
+    <sc-if value="{{ s_start }}" hint-placeholder-val="{{ true }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 24px 0">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+          <img src="assets/brand-mark.png" alt="계절 PT" width="96" height="96" style="display:block;margin-bottom:18px">
+          <div style="font:700 22px Pretendard;color:#4B3B2E;letter-spacing:-.01em">계절 PT &amp; 필라테스</div>
+          <div class="serif" style="font-size:19px;font-style:italic;color:#8FA187;margin-top:4px">Balance, consistently</div>
+          <div style="font:500 13.5px Pretendard;color:#847A66;margin-top:14px">균형 있게, 꾸준하게</div>
+        </div>
+        <div style="flex:none;display:flex;flex-direction:column;gap:11px;padding-bottom:18px">
+          <button class="pbtn" onClick="{{ goMemberLogin }}"><pt-icon name="person" size="18"></pt-icon>회원으로 로그인</button>
+          <button class="obtn" onClick="{{ goTrainerLogin }}"><pt-icon name="persons" size="18"></pt-icon>트레이너로 로그인</button>
+          <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:8px;color:#A89F92"><pt-icon name="plus" size="15"></pt-icon><span style="font:500 12px Pretendard">홈 화면에 추가하면 앱처럼 쓸 수 있어요</span></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원 로그인 ============ -->
+    <sc-if value="{{ s_loginMember }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div></div>
+        <div style="font:700 25px Pretendard;color:#4B3B2E;letter-spacing:-.01em;margin-bottom:6px">회원 로그인</div>
+        <p style="margin:0 0 28px;font:400 14px/1.6 Pretendard;color:#8A8175">등록된 휴대폰 번호로 바로 로그인해요.</p>
+        <div style="margin-bottom:14px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">아이디 · 휴대폰 번호</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="mobile" size="19" style="color:#8FA187"></pt-icon><span style="font:500 15px Pretendard;color:#4B3B2E;letter-spacing:.01em">010-2345-6789</span></div></div>
+        <div style="margin-bottom:10px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">비밀번호 · 생년월일 6자리</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="19" style="color:#8FA187"></pt-icon><span style="font:600 17px Pretendard;color:#4B3B2E;letter-spacing:3px">••••••</span><span style="margin-left:auto;font:500 12px Pretendard;color:#B3AA9C">YYMMDD</span></div></div>
+        <div style="display:flex;gap:9px;padding:13px 15px;border-radius:13px;background:#F8F4EC;margin-top:18px"><pt-icon name="circle-info" size="17" style="color:#A89F92;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">스튜디오 명단에 등록된 번호예요. 비밀번호는 생년월일 6자리(예: 990412)로 시작해요.</span></div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ doMemberLogin }}">로그인</button><div style="text-align:center;font:600 13px Pretendard;color:#6B785E;margin-top:14px">비밀번호 변경하기</div></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 트레이너 로그인 ============ -->
+    <sc-if value="{{ s_loginTrainer }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:28px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div></div>
+        <div style="font:700 25px Pretendard;color:#4B3B2E;letter-spacing:-.01em;margin-bottom:6px">트레이너 로그인</div>
+        <p style="margin:0 0 28px;font:400 14px/1.6 Pretendard;color:#8A8175">대표·강사 트레이너 모두 여기서 로그인해요.</p>
+        <div style="margin-bottom:14px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">아이디</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="person" size="19" style="color:#8FA187"></pt-icon><span style="font:500 15px Pretendard;color:#4B3B2E">gyeaul.master</span></div></div>
+        <div style="margin-bottom:10px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">비밀번호</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="19" style="color:#8FA187"></pt-icon><span style="font:600 17px Pretendard;color:#4B3B2E;letter-spacing:3px">••••••••</span><span style="margin-left:auto;font:600 11.5px Pretendard;color:#B3AA9C">표시</span></div></div>
+        <div style="margin-top:22px;display:flex;flex-direction:column;gap:14px">
+          <div class="tap" onClick="{{ goInstrLogin }}" style="display:flex;align-items:center;gap:10px"><pt-icon name="lock" size="16" style="color:#768C6A"></pt-icon><span style="font:600 13.5px Pretendard;color:#6B785E">강사 첫 로그인 (임시 비밀번호)</span></div>
+          <div class="tap" onClick="{{ goSignupOwner }}" style="display:flex;align-items:center;gap:10px"><pt-icon name="crown" size="16" style="color:#768C6A"></pt-icon><span style="font:600 13.5px Pretendard;color:#6B785E">대표 트레이너 가입하기</span></div>
+        </div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ doTrainerLogin }}">로그인</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 대표 가입 ============ -->
+    <sc-if value="{{ s_signupOwner }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">대표 가입</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-radius:12px;background:#F4EEE3;margin-bottom:20px"><pt-icon name="crown-fill" size="18" style="color:#8A6F3E"></pt-icon><span style="font:600 12.5px Pretendard;color:#5B4B38">계절 PT &amp; 필라테스 대표 계정을 만들어요</span></div>
+        <div style="margin-bottom:13px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">아이디</div><div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="person" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14.5px Pretendard;color:#4B3B2E">gyeaul.master</span></div></div>
+        <div style="margin-bottom:13px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">비밀번호</div><div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="18" style="color:#8FA187"></pt-icon><span style="font:600 16px Pretendard;color:#4B3B2E;letter-spacing:3px">••••••••</span></div></div>
+        <div><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">비밀번호 확인</div><div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:12px;background:#fff;border:1px solid rgba(107,120,94,.4)"><pt-icon name="lock" size="18" style="color:#8FA187"></pt-icon><span style="font:600 16px Pretendard;color:#4B3B2E;letter-spacing:3px">••••••••</span><pt-icon name="check-bold" size="16" style="color:#768C6A;margin-left:auto"></pt-icon></div></div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ doOwnerSignup }}">대표로 시작하기</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 강사 첫 로그인 ============ -->
+    <sc-if value="{{ s_loginInstr }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div></div>
+        <div style="font:700 25px Pretendard;color:#4B3B2E;letter-spacing:-.01em;margin-bottom:6px">강사 첫 로그인</div>
+        <p style="margin:0 0 26px;font:400 14px/1.6 Pretendard;color:#8A8175">대표에게 받은 아이디와 임시 비밀번호를 입력해요.</p>
+        <div style="margin-bottom:14px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">아이디</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="person" size="19" style="color:#8FA187"></pt-icon><span style="font:500 15px Pretendard;color:#4B3B2E">gyeaul.sumin</span></div></div>
+        <div><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">임시 비밀번호</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="19" style="color:#C67352"></pt-icon><span style="font:600 15px Pretendard;color:#4B3B2E;letter-spacing:.04em">ptss-4821</span></div></div>
+        <div style="display:flex;gap:9px;padding:13px 15px;border-radius:13px;background:#FBF3E9;margin-top:18px"><pt-icon name="circle-info" size="17" style="color:#C67352;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#9A7B66">첫 로그인 후 비밀번호를 새로 설정하게 돼요.</span></div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ goSetPw }}">로그인</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 비밀번호 설정 ============ -->
+    <sc-if value="{{ s_setPw }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px"><div style="width:38px;height:38px;border-radius:11px;background:#EDF4E3;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="lock-fill" size="19" style="color:#6B785E"></pt-icon></div></div>
+        <div style="font:700 25px Pretendard;color:#4B3B2E;letter-spacing:-.01em;margin-bottom:6px">비밀번호 설정</div>
+        <p style="margin:0 0 26px;font:400 14px/1.6 Pretendard;color:#8A8175">앞으로 사용할 새 비밀번호를 만들어요.</p>
+        <div style="margin-bottom:14px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">새 비밀번호</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="19" style="color:#8FA187"></pt-icon><span style="font:600 17px Pretendard;color:#4B3B2E;letter-spacing:3px">•••••••••</span></div></div>
+        <div style="margin-bottom:18px"><div style="font:600 12.5px Pretendard;color:#766D60;margin-bottom:8px">새 비밀번호 확인</div><div style="display:flex;align-items:center;gap:11px;padding:15px 16px;border-radius:13px;background:#fff;border:1px solid rgba(107,120,94,.4)"><pt-icon name="lock" size="19" style="color:#8FA187"></pt-icon><span style="font:600 17px Pretendard;color:#4B3B2E;letter-spacing:3px">•••••••••</span><pt-icon name="check-bold" size="16" style="color:#768C6A;margin-left:auto"></pt-icon></div></div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <div style="display:flex;align-items:center;gap:9px"><pt-icon name="circle-check-fill" size="18" style="color:#768C6A"></pt-icon><span style="font:500 13px Pretendard;color:#5B6452">8자 이상</span></div>
+          <div style="display:flex;align-items:center;gap:9px"><pt-icon name="circle-check-fill" size="18" style="color:#768C6A"></pt-icon><span style="font:500 13px Pretendard;color:#5B6452">영문과 숫자 포함</span></div>
+        </div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ doSetPw }}"><pt-icon name="check-bold" size="18"></pt-icon>비밀번호 설정 완료</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 캘린더 (메인) ============ -->
+    <sc-if value="{{ s_calendar }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div><div style="font:500 13px Pretendard;color:#847A66">{{ todayDateLabel }}</div><div style="font:700 21px Pretendard;color:#4B3B2E;white-space:nowrap">{{ meName }} {{ meRole }}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="tap" onClick="{{ goInbox }}" style="position:relative;width:42px;height:42px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.07);display:flex;align-items:center;justify-content:center;color:#6B785E"><pt-icon name="refresh" size="20"></pt-icon><sc-if value="{{ hasInbox }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;background:#C67352;color:#FAF8F4;font:700 10px Pretendard;display:flex;align-items:center;justify-content:center;padding:0 5px;border:1.5px solid #fff">{{ inboxCount }}</span></sc-if></div>
+            <div class="tap" onClick="{{ goSettings }}" style="width:42px;height:42px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.07);display:flex;align-items:center;justify-content:center;color:#6B785E"><pt-icon name="setting" size="20"></pt-icon></div>
+          </div>
+        </div>
+        <div class="tap" onClick="{{ goRetention }}" style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-radius:13px;background:#FBF3E9;border:1px solid rgba(198,115,82,.18);margin-bottom:14px"><pt-icon name="megaphone-fill" size="18" style="color:#C67352"></pt-icon><span style="flex:1;font:700 12.5px Pretendard;color:#9A5A38">만료 임박 회원 {{ expiringCount }}명 · 재등록 안내</span><pt-icon name="chevron-right" size="15" style="color:#C67352"></pt-icon></div>
+        <div class="card" style="padding:15px 13px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:11px"><pt-icon name="chevron-left" size="18" style="color:#C2BAAD"></pt-icon><span style="font:700 15px Pretendard;color:#4B3B2E">2026년 6월</span><pt-icon name="chevron-right" size="18" style="color:#6B785E"></pt-icon></div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:3px">
+            <span style="text-align:center;font:600 11px Pretendard;color:#C0796A">일</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">월</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">화</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">수</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">목</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">금</span><span style="text-align:center;font:600 11px Pretendard;color:#7E9A87">토</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:36px">
+            <sc-for list="{{ calDays }}" as="d" hint-placeholder-count="30">
+              <div class="tap" onClick="{{ d.pick }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative"><span style="{{ d.numStyle }}">{{ d.n }}</span><sc-if value="{{ d.dot }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:#8FA187"></span></sc-if></div>
+            </sc-for>
+          </div>
+        </div>
+        <div class="kick" style="margin-bottom:10px">{{ selDateLabel }} · 수업 {{ trainerDayCount }}</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ trainerDayClasses }}" as="c" hint-placeholder-count="2">
+            <div class="tap card" onClick="{{ c.open }}" style="padding:13px 15px;display:flex;align-items:center;gap:12px"><div style="width:4px;height:36px;border-radius:3px;background:{{ c.barColor }}"></div><span style="font:700 12.5px Pretendard;color:#4B3B2E;width:58px">{{ c.timeLabel }}</span><div style="flex:1"><div style="font:700 13.5px Pretendard;color:#4B3B2E">{{ c.name }}</div></div><sc-if value="{{ c.showAttend }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.attend }}" style="border:none;background:#768C6A;color:#FAF8F4;font:700 11.5px Pretendard;padding:7px 13px;border-radius:9px;cursor:pointer">출석</button></sc-if><sc-if value="{{ c.showBadge }}" hint-placeholder-val="{{ true }}"><span style="{{ c.badgeStyle }}">{{ c.badgeText }}</span></sc-if></div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ trainerDayEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px 0"><div style="width:68px;height:68px;border-radius:50%;background:#F1ECE2;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><pt-icon name="calendar" size="28" style="color:#B3AA9C"></pt-icon></div><div style="font:700 15px Pretendard;color:#4B3B2E">예정된 수업이 없어요</div><p style="margin:7px 0 0;font:400 12.5px/1.6 Pretendard;color:#847A66;max-width:220px">이 날은 비어 있어요. 회원 정기 일정에 따라 수업이 채워져요.</p></div>
+        </sc-if>
+        <div style="height:14px"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" onClick="{{ tabCalendar }}" style="color:#6B785E"><pt-icon name="calendar-fill" size="23"></pt-icon><span style="font:600 11px Pretendard">캘린더</span></div>
+        <div class="tab" onClick="{{ tabMembers }}" style="color:#B3AA9C"><pt-icon name="persons" size="23"></pt-icon><span style="font:500 11px Pretendard">회원</span></div>
+        <div class="tab" onClick="{{ tabChat }}" style="color:#B3AA9C"><span style="position:relative;line-height:0"><pt-icon name="message" size="23"></pt-icon><sc-if value="{{ hasChatUnread }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-4px;right:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#C67352;color:#FAF8F4;font:700 9.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ chatUnread }}</span></sc-if></span><span style="font:500 11px Pretendard">채팅</span></div>
+        <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}"><div class="tab" onClick="{{ tabPerf }}" style="color:#B3AA9C"><pt-icon name="coins" size="23"></pt-icon><span style="font:500 11px Pretendard">실적</span></div></sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원 관리 ============ -->
+    <sc-if value="{{ s_members }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="font:700 21px Pretendard;color:#4B3B2E;margin-bottom:13px">회원 관리</div>
+        <div class="card" style="padding:14px 15px;margin-bottom:14px;display:flex">
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:23px;font-weight:600;color:#4B3B2E;line-height:1">{{ totalMembers }}</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">담당 회원</div></div>
+          <div style="width:1px;background:rgba(75,59,46,.08)"></div>
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:23px;font-weight:600;color:#C67352;line-height:1">{{ expiringCount }}</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">만료 임박</div></div>
+          <div style="width:1px;background:rgba(75,59,46,.08)"></div>
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:23px;font-weight:600;color:#847A66;line-height:1">2</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">휴회</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.08);margin-bottom:13px"><pt-icon name="search" size="18" style="color:#8B8374"></pt-icon><span style="font:500 13.5px Pretendard;color:#B3AA9C">이름 · 연락처 검색</span></div>
+        <div style="display:flex;gap:7px;margin-bottom:15px">
+          <sc-for list="{{ filterChips }}" as="c" hint-placeholder-count="4">
+            <span class="chip" onClick="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</span>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <sc-for list="{{ membersList }}" as="m" hint-placeholder-count="4">
+            <div class="tap" onClick="{{ m.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.06)"><sc-if value="{{ m.notTeam }}" hint-placeholder-val="{{ true }}"><div class="av" style="{{ m.avStyle }}">{{ m.initial }}</div></sc-if><sc-if value="{{ m.isTeam }}" hint-placeholder-val="{{ false }}"><div style="position:relative;width:42px;height:42px;flex:none"><div class="av" style="{{ m.av1Style }}">{{ m.init1 }}</div><div class="av" style="{{ m.av2Style }}">{{ m.init2 }}</div></div></sc-if><div style="flex:1;min-width:0"><div style="font:700 14px Pretendard;color:#4B3B2E">{{ m.name }}</div><div style="font:500 11.5px Pretendard;color:#847A66;margin-top:1px">{{ m.sub }}</div></div><span style="{{ m.badgeStyle }}">{{ m.badge }}</span><pt-icon name="chevron-right" size="18" style="color:#C2BAAD"></pt-icon></div>
+          </sc-for>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" onClick="{{ tabCalendar }}" style="color:#B3AA9C"><pt-icon name="calendar" size="23"></pt-icon><span style="font:500 11px Pretendard">캘린더</span></div>
+        <div class="tab" onClick="{{ tabMembers }}" style="color:#6B785E"><pt-icon name="persons-fill" size="23"></pt-icon><span style="font:600 11px Pretendard">회원</span></div>
+        <div class="tab" onClick="{{ tabChat }}" style="color:#B3AA9C"><span style="position:relative;line-height:0"><pt-icon name="message" size="23"></pt-icon><sc-if value="{{ hasChatUnread }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-4px;right:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#C67352;color:#FAF8F4;font:700 9.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ chatUnread }}</span></sc-if></span><span style="font:500 11px Pretendard">채팅</span></div>
+        <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}"><div class="tab" onClick="{{ tabPerf }}" style="color:#B3AA9C"><pt-icon name="coins" size="23"></pt-icon><span style="font:500 11px Pretendard">실적</span></div></sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 실적 ============ -->
+    <sc-if value="{{ s_perf }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px"><div><div style="font:500 13px Pretendard;color:#847A66">2026년 6월</div><div style="font:700 21px Pretendard;color:#4B3B2E">내 실적</div></div><div style="display:flex;align-items:center;gap:8px"><div class="tap" onClick="{{ goSettings }}" style="width:40px;height:40px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.07);display:flex;align-items:center;justify-content:center;color:#6B785E"><pt-icon name="setting" size="19"></pt-icon></div></div></div>
+        <div style="border-radius:18px;background:#768C6A;padding:18px 20px;margin-bottom:13px"><div style="font:600 12px Pretendard;color:#D7DCCF;margin-bottom:5px">이번 달 매출 기여</div><div style="display:flex;align-items:flex-end;gap:8px"><span class="serif" style="font-size:36px;line-height:.85;color:#FAF8F4;font-weight:600">₩5,800,000</span><span style="display:flex;align-items:center;gap:2px;font:600 12px Pretendard;color:#CDE0CF;padding-bottom:5px"><pt-icon name="arrow-up-right" size="13"></pt-icon>+8%</span></div></div>
+        <div style="display:flex;gap:10px;margin-bottom:13px">
+          <div class="card" style="flex:1;padding:13px 14px"><div class="serif" style="font-size:23px;font-weight:600;color:#4B3B2E;line-height:1">84</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">수업 수</div></div>
+          <div class="card" style="flex:1;padding:13px 14px"><div class="serif" style="font-size:23px;font-weight:600;color:#8FA187;line-height:1">24</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">담당 회원</div></div>
+          <div class="card" style="flex:1;padding:13px 14px"><div class="serif" style="font-size:23px;font-weight:600;color:#6B785E;line-height:1">96<span style="font-size:13px">%</span></div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:4px">출석률</div></div>
+        </div>
+        <div class="card" style="padding:16px;margin-bottom:13px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px"><span style="font:700 14px Pretendard;color:#4B3B2E">주간 수업</span><span style="font:600 12px Pretendard;color:#847A66">21타임</span></div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;height:72px;gap:8px">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:34px;background:#EAF0E0;border-radius:5px"></div><span style="font:500 10px Pretendard;color:#8B8374">월</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:50px;background:#EAF0E0;border-radius:5px"></div><span style="font:500 10px Pretendard;color:#8B8374">화</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:40px;background:#EAF0E0;border-radius:5px"></div><span style="font:500 10px Pretendard;color:#8B8374">수</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:56px;background:#EAF0E0;border-radius:5px"></div><span style="font:500 10px Pretendard;color:#8B8374">목</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:46px;background:#EAF0E0;border-radius:5px"></div><span style="font:500 10px Pretendard;color:#8B8374">금</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px"><div style="width:100%;height:60px;background:#768C6A;border-radius:5px"></div><span style="font:600 10px Pretendard;color:#6B785E">토</span></div>
+          </div>
+        </div>
+        <div class="tap" onClick="{{ goRetention }}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:#FBF3E9"><pt-icon name="refresh" size="20" style="color:#C67352"></pt-icon><div style="flex:1"><div style="font:700 13px Pretendard;color:#9A5A38">재등록 전환 관리</div><div style="font:500 11px Pretendard;color:#B08465;margin-top:1px">만료 임박 {{ expiringCount }}명 · 예상 ₩4.2M</div></div><pt-icon name="chevron-right" size="18" style="color:#C67352"></pt-icon></div>
+        <div style="height:14px"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" onClick="{{ tabCalendar }}" style="color:#B3AA9C"><pt-icon name="calendar" size="23"></pt-icon><span style="font:500 11px Pretendard">캘린더</span></div>
+        <div class="tab" onClick="{{ tabMembers }}" style="color:#B3AA9C"><pt-icon name="persons" size="23"></pt-icon><span style="font:500 11px Pretendard">회원</span></div>
+        <div class="tab" onClick="{{ tabChat }}" style="color:#B3AA9C"><span style="position:relative;line-height:0"><pt-icon name="message" size="23"></pt-icon><sc-if value="{{ hasChatUnread }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-4px;right:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#C67352;color:#FAF8F4;font:700 9.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ chatUnread }}</span></sc-if></span><span style="font:500 11px Pretendard">채팅</span></div>
+        <div class="tab" onClick="{{ tabPerf }}" style="color:#6B785E"><pt-icon name="coins-fill" size="23"></pt-icon><span style="font:600 11px Pretendard">실적</span></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 출석 · 차감 ============ -->
+    <sc-if value="{{ s_attend }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">출석 체크</span></div>
+        <div class="card" style="padding:20px;display:flex;align-items:center;gap:14px;margin-bottom:14px">
+          <sc-if value="{{ attendNotTeam }}" hint-placeholder-val="{{ true }}"><div class="av" style="{{ attendAvStyle }}">{{ attendInitial }}</div></sc-if>
+          <sc-if value="{{ attendIsTeam }}" hint-placeholder-val="{{ false }}"><div style="position:relative;width:58px;height:54px;flex:none"><div class="av" style="{{ attendAv1Style }}">{{ attendInit1 }}</div><div class="av" style="{{ attendAv2Style }}">{{ attendInit2 }}</div></div></sc-if>
+          <div style="flex:1"><div style="font:700 17px Pretendard;color:#4B3B2E">{{ attendName }}</div><div style="font:500 13px Pretendard;color:#8A8175;margin-top:2px">{{ attendMeta }}</div></div>
+        </div>
+        <sc-if value="{{ attendIsTeam }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:12px;background:#E7EDF2;margin-bottom:14px"><pt-icon name="persons-fill" size="17" style="color:#5C7286"></pt-icon><span style="font:600 12px/1.5 Pretendard;color:#48586A">2:1 팀은 함께 출석·차감돼요. 한 분만 따로 처리할 수 없어요.</span></div>
+        </sc-if>
+        <div class="kick" style="margin-bottom:11px">처리 방식</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+          <div class="tap" onClick="{{ pickAttend }}" style="{{ mAttendStyle }}"><div style="{{ mAttendDot }}"><sc-if value="{{ isAttend }}" hint-placeholder-val="{{ true }}"><pt-icon name="check-bold" size="15" style="color:#FAF8F4"></pt-icon></sc-if></div><div style="flex:1"><div style="{{ mAttendTxt }}">{{ attendLabelAttend }}</div></div><span style="font:600 12px Pretendard;color:#6B785E">기본</span></div>
+          <div class="tap" onClick="{{ pickNoshow }}" style="{{ mNoshowStyle }}"><div style="{{ mNoshowDot }}"><sc-if value="{{ isNoshow }}" hint-placeholder-val="{{ false }}"><pt-icon name="check-bold" size="15" style="color:#FAF8F4"></pt-icon></sc-if></div><div style="flex:1"><div style="{{ mNoshowTxt }}">{{ attendLabelNoshow }}</div></div></div>
+          <div class="tap" onClick="{{ pickCancel }}" style="{{ mCancelStyle }}"><div style="{{ mCancelDot }}"><sc-if value="{{ isCancel }}" hint-placeholder-val="{{ false }}"><pt-icon name="check-bold" size="15" style="color:#FAF8F4"></pt-icon></sc-if></div><div style="flex:1"><div style="{{ mCancelTxt }}">수업 취소 (미차감)</div></div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;padding:14px 16px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.06)"><pt-icon name="ticket-fill" size="20" style="color:#8FA187"></pt-icon><span style="flex:1;font:500 13.5px Pretendard;color:#766D60">차감 후 잔여</span><span style="display:flex;align-items:center;gap:6px"><span class="serif" style="font-size:22px;color:#847A66;font-weight:600">{{ attendRemaining }}</span><pt-icon name="arrow-right" size="15" style="color:#8B8374"></pt-icon><span class="serif" style="font-size:22px;color:#C67352;font-weight:600">{{ afterRemaining }}</span></span></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ confirmAttend }}"><pt-icon name="check-bold" size="18"></pt-icon>{{ attendCta }}</button><div style="text-align:center;font:500 11.5px Pretendard;color:#8B8374;margin-top:11px">모든 차감·정정은 이력에 자동 기록돼요</div></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 운동 기록 ============ -->
+    <sc-if value="{{ s_record }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:12px"><div class="bk" onClick="{{ back }}"><pt-icon name="close" size="19"></pt-icon></div><span style="font:700 18px Pretendard;color:#4B3B2E">운동 기록</span></div><span class="tap" onClick="{{ saveRecord }}" style="font:700 14px Pretendard;color:#768C6A">저장</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:12px;background:#EDF4E3;margin-bottom:18px"><div class="av" style="width:30px;height:30px;background:#768C6A;color:#FAF8F4;font-size:12px">이</div><span style="font:600 13.5px Pretendard;color:#4B3B2E">이지수</span><span style="font:500 12px Pretendard;color:#7E8B72;margin-left:auto">6월 21일 · 1:1 PT</span></div>
+        <div class="kick" style="margin-bottom:11px">운동 종목</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:13px">
+          <sc-for list="{{ exercises }}" as="e" hint-placeholder-count="2">
+            <div style="padding:14px 15px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.07)">
+              <div style="font:600 14.5px Pretendard;color:#4B3B2E;margin-bottom:11px">{{ e.name }}</div>
+              <div style="display:flex;gap:9px">
+                <div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:#FAF7F0;border-radius:10px;padding:7px 11px"><span class="tap" onClick="{{ e.kgDec }}" style="font:600 18px Pretendard;color:#C2BAAD;width:20px;text-align:center">–</span><span style="font:700 14px Pretendard;color:#4B3B2E">{{ e.kg }}<span style="font-size:11px;color:#847A66;font-weight:500"> kg</span></span><span class="tap" onClick="{{ e.kgInc }}" style="font:600 18px Pretendard;color:#6B785E;width:20px;text-align:center">+</span></div>
+                <div style="flex:1;display:flex;align-items:center;justify-content:space-between;background:#FAF7F0;border-radius:10px;padding:7px 11px"><span class="tap" onClick="{{ e.setDec }}" style="font:600 18px Pretendard;color:#C2BAAD;width:20px;text-align:center">–</span><span style="font:700 14px Pretendard;color:#4B3B2E">{{ e.sets }}<span style="font-size:11px;color:#847A66;font-weight:500"> 세트</span></span><span class="tap" onClick="{{ e.setInc }}" style="font:600 18px Pretendard;color:#6B785E;width:20px;text-align:center">+</span></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <button class="tap" onClick="{{ addExercise }}" style="width:100%;padding:13px;border:1.5px dashed rgba(107,120,94,.4);border-radius:13px;background:transparent;color:#6B785E;font:600 14px Pretendard;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><pt-icon name="plus-bold" size="17"></pt-icon>종목 추가</button>
+        <div style="margin-top:13px;padding:14px 15px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.07)"><div style="font:600 13px Pretendard;color:#4B3B2E;margin-bottom:7px">코멘트</div><div style="font:400 13px/1.5 Pretendard;color:#B3AA9C">오늘 수업 코멘트를 남겨주세요…</div></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ saveRecord }}"><pt-icon name="check-bold" size="18"></pt-icon>기록 저장</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원 상세 ============ -->
+    <sc-if value="{{ s_memberDetail }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">회원 상세</span></div>
+        <div style="display:flex;align-items:center;gap:13px;margin-bottom:13px"><sc-if value="{{ selNotTeam }}" hint-placeholder-val="{{ true }}"><div class="av" style="{{ selAvStyle }}">{{ selInitial }}</div></sc-if><sc-if value="{{ selIsTeam }}" hint-placeholder-val="{{ false }}"><div style="position:relative;width:54px;height:50px;flex:none"><div class="av" style="{{ selAv1Style }}">{{ selInit1 }}</div><div class="av" style="{{ selAv2Style }}">{{ selInit2 }}</div></div></sc-if><div style="flex:1"><div style="display:flex;align-items:center;gap:7px"><span style="font:700 18px Pretendard;color:#4B3B2E">{{ selName }}</span><span style="{{ selBadgeStyle }}">{{ selBadge }}</span></div><div style="font:500 12.5px Pretendard;color:#8A8175;margin-top:2px">{{ selTypeLabel }} · 잔여 {{ selRemaining }}회</div></div></div>
+        <sc-if value="{{ selIsTeam }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:9px;padding:11px 14px;border-radius:12px;background:#E7EDF2;margin-bottom:13px"><pt-icon name="persons-fill" size="17" style="color:#5C7286"></pt-icon><span style="font:600 12px/1.5 Pretendard;color:#48586A">2:1 팀 · 두 분을 한 팀으로 관리해요. 일정·출석·차감이 함께 적용돼요.</span></div>
+        </sc-if>
+        <div style="border-radius:18px;background:#768C6A;padding:18px;position:relative;overflow:hidden;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px"><span style="font:600 12.5px Pretendard;color:#D6E0CC">1:1 PT 20회권</span><span style="display:flex;align-items:center;gap:4px;font:700 11px Pretendard;color:#FAF8F4;background:#C67352;padding:4px 9px;border-radius:20px"><pt-icon name="clock" size="12"></pt-icon>{{ selBadge }}</span></div>
+          <div style="display:flex;align-items:flex-end;gap:6px;margin-bottom:13px"><span class="serif" style="font-size:44px;line-height:.8;color:#FAF8F4;font-weight:600">{{ selRemaining }}</span><span style="font:500 14px Pretendard;color:#E1E7D7;padding-bottom:5px">/ 20회 남음</span></div>
+          <div style="height:6px;border-radius:4px;background:rgba(250,248,244,.2);overflow:hidden;margin-bottom:9px"><div class="pt-grow" style="{{ selBarStyle }}"></div></div>
+          <div style="display:flex;justify-content:space-between"><span style="font:500 11.5px Pretendard;color:#D6E0CC">2026.03.21 시작</span><span style="font:600 11.5px Pretendard;color:#F0E6CF">2026.06.30 만료</span></div>
+        </div>
+        <div class="card" style="padding:13px 15px;margin-bottom:14px;display:flex">
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:20px;font-weight:600;color:#4B3B2E;line-height:1">58.2</div><div style="font:500 10.5px Pretendard;color:#8A8175;margin-top:3px">체중 kg</div></div>
+          <div style="width:1px;background:rgba(75,59,46,.08)"></div>
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:20px;font-weight:600;color:#6B785E;line-height:1">32.0</div><div style="font:500 10.5px Pretendard;color:#8A8175;margin-top:3px">골격근 kg</div></div>
+          <div style="width:1px;background:rgba(75,59,46,.08)"></div>
+          <div style="flex:1;text-align:center"><div class="serif" style="font-size:20px;font-weight:600;color:#4B3B2E;line-height:1">22.1</div><div style="font:500 10.5px Pretendard;color:#8A8175;margin-top:3px">체지방 %</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.06);margin-bottom:10px"><pt-icon name="calendar" size="19" style="color:#6B785E"></pt-icon><span style="flex:1;font:600 13px Pretendard;color:#4B3B2E">정기 수업</span><span style="font:700 13px Pretendard;color:#6B785E">{{ selSchedule }}</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:11px 13px;border-radius:12px;background:#FBF3E9"><pt-icon name="triangle-exclamation" size="16" style="color:#C67352"></pt-icon><span style="font:500 12.5px Pretendard;color:#9A7B66">오른쪽 어깨 회전근 주의 · 오버헤드 제한</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px;display:flex;gap:10px"><button class="obtn" onClick="{{ goRecord }}" style="flex:1"><pt-icon name="pencil" size="17"></pt-icon>기록</button><button class="pbtn" onClick="{{ goRetention }}" style="flex:1.6"><pt-icon name="refresh" size="17"></pt-icon>재등록 안내</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 재등록 관리 ============ -->
+    <sc-if value="{{ s_retention }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">재등록 관리</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:16px;border-radius:16px;background:#768C6A;margin-bottom:18px"><pt-icon name="megaphone-fill" size="24" style="color:#F0E6CF"></pt-icon><div style="flex:1"><div style="font:700 14px Pretendard;color:#FAF8F4">이번 주 만료 {{ expiringCount }}명</div><div style="font:500 12px Pretendard;color:#D7DCCF;margin-top:1px">예상 재등록 매출 ₩4.2M</div></div></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ retentionList }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.06)"><div class="av" style="{{ r.avStyle }}">{{ r.initial }}</div><div style="flex:1;min-width:0"><div style="font:700 14px Pretendard;color:#4B3B2E">{{ r.name }} <span style="font:500 12px Pretendard;color:#847A66">· 잔여 {{ r.remaining }}</span></div><div style="{{ r.statusStyle }}">{{ r.statusText }}</div></div><button onClick="{{ r.action }}" style="{{ r.btnStyle }}"><sc-if value="{{ r.showIcon }}" hint-placeholder-val="{{ true }}"><pt-icon name="message-fill" size="14"></pt-icon></sc-if>{{ r.btnText }}</button></div>
+          </sc-for>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ sendAllAlim }}"><pt-icon name="megaphone" size="18"></pt-icon>안내 전 {{ pendingCount }}명 일괄 발송</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 수업 상세 (조율 진입) ============ -->
+    <sc-if value="{{ s_classDetail }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">수업 상세</span></div>
+        <div class="card" style="padding:18px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:13px;margin-bottom:14px"><div class="av" style="width:48px;height:48px;background:#768C6A;color:#FAF8F4;font-size:17px">이</div><div style="flex:1"><div style="display:flex;align-items:center;gap:7px"><span style="font:700 16px Pretendard;color:#4B3B2E">이지수</span><span style="font:600 11px Pretendard;color:#6B785E;background:#EDF4E3;padding:2px 8px;border-radius:6px">예정</span></div><div style="font:500 12.5px Pretendard;color:#8A8175;margin-top:2px">1:1 PT · 잔여 {{ ijiRemaining }}회</div></div></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:#F8F4EC"><pt-icon name="calendar" size="18" style="color:#6B785E"></pt-icon><span style="font:600 13.5px Pretendard;color:#4B3B2E">6월 21일 토 · 오후 7:00–8:00</span></div>
+        </div>
+        <div class="kick" style="margin-bottom:11px">일정 조율</div>
+        <div class="card" style="padding:4px 4px;margin-bottom:14px">
+          <div class="tap" onClick="{{ goPropose }}" style="display:flex;align-items:center;gap:13px;padding:14px 14px;border-radius:14px"><div style="width:38px;height:38px;border-radius:11px;background:#EDF4E3;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="refresh" size="19" style="color:#6B785E"></pt-icon></div><div style="flex:1"><div style="font:700 14.5px Pretendard;color:#4B3B2E">일정 변경 요청</div><div style="font:500 11.5px Pretendard;color:#8A8175;margin-top:1px">회원에게 다른 시간을 제안해요</div></div><pt-icon name="chevron-right" size="19" style="color:#C2BAAD"></pt-icon></div>
+          <div style="height:1px;background:rgba(75,59,46,.07);margin:0 14px"></div>
+          <div class="tap" onClick="{{ cancelClass }}" style="display:flex;align-items:center;gap:13px;padding:14px 14px;border-radius:14px"><div style="width:38px;height:38px;border-radius:11px;background:#FBF3E9;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="close" size="19" style="color:#C67352"></pt-icon></div><div style="flex:1"><div style="font:700 14.5px Pretendard;color:#4B3B2E">수업 취소 요청</div><div style="font:500 11.5px Pretendard;color:#8A8175;margin-top:1px">이번 수업 취소를 요청해요</div></div><pt-icon name="chevron-right" size="19" style="color:#C2BAAD"></pt-icon></div>
+        </div>
+        <div style="display:flex;gap:10px;padding:13px 15px;border-radius:13px;background:#F8F4EC"><pt-icon name="circle-info" size="17" style="color:#A89F92;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">변경·취소 요청은 수업 24시간 전까지 보낼 수 있어요.</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ openAttend }}"><pt-icon name="check-bold" size="18"></pt-icon>출석 체크</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 변경 제안 보내기 ============ -->
+    <sc-if value="{{ s_propose }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">일정 변경 요청</span></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:13px 15px;border-radius:13px;background:#F8F4EC;margin-bottom:12px"><span style="font:600 11px Pretendard;color:#847A66;background:#fff;padding:3px 8px;border-radius:6px;white-space:nowrap">변경 전</span><span style="font:600 13.5px Pretendard;color:#787063;text-decoration:line-through;text-decoration-color:#C2BAAD">6/21 토 · 오후 7:00</span><span style="font:500 12px Pretendard;color:#847A66;margin-left:auto">이지수</span></div>
+        <div style="display:flex;justify-content:center;margin-bottom:12px"><pt-icon name="chevron-down" size="20" style="color:#C2BAAD"></pt-icon></div>
+        <div class="kick" style="margin-bottom:11px">새 시간 제안 · 최대 3개</div>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">
+          <sc-for list="{{ proposeSlotsView }}" as="sl" hint-placeholder-count="3">
+            <div class="tap" onClick="{{ sl.toggle }}" style="{{ sl.style }}"><div style="{{ sl.box }}"><sc-if value="{{ sl.sel }}" hint-placeholder-val="{{ true }}"><pt-icon name="check-bold" size="14" style="color:#FAF8F4"></pt-icon></sc-if></div><span style="{{ sl.txt }}">{{ sl.label }}</span></div>
+          </sc-for>
+        </div>
+        <div class="kick" style="margin-bottom:10px">사유 <span style="text-transform:none;letter-spacing:0;color:#C2BAAD">(선택)</span></div>
+        <div style="display:flex;gap:7px">
+          <sc-for list="{{ reasons }}" as="rs" hint-placeholder-count="3">
+            <span class="chip" onClick="{{ rs.pick }}" style="{{ rs.style }}">{{ rs.label }}</span>
+          </sc-for>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ sendPropose }}"><pt-icon name="send" size="17"></pt-icon>{{ proposeSendCta }}</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 조율 인박스 ============ -->
+    <sc-if value="{{ s_inbox }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 21px Pretendard;color:#4B3B2E">일정 조율</span><sc-if value="{{ receivedCount }}" hint-placeholder-val="{{ true }}"><span style="font:700 11px Pretendard;color:#FAF8F4;background:#C67352;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 6px">{{ receivedCount }}</span></sc-if></div>
+        <div style="display:flex;gap:7px;margin-bottom:16px"><span class="chip" onClick="{{ setRecvTab }}" style="{{ inboxRecvStyle }}">받은 요청 {{ receivedCount }}</span><span class="chip" onClick="{{ setSentTab }}" style="{{ inboxSentStyle }}">보낸 요청 1</span></div>
+        <sc-if value="{{ inboxReceived }}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 0 30px"><div style="width:76px;height:76px;border-radius:50%;background:#EDF4E3;display:flex;align-items:center;justify-content:center;margin-bottom:18px"><pt-icon name="circle-check" size="32" style="color:#9DB089"></pt-icon></div><div style="font:700 17px Pretendard;color:#4B3B2E">조율할 요청이 없어요</div><p style="margin:9px 0 0;font:400 13.5px/1.6 Pretendard;color:#847A66;max-width:230px">모든 요청을 처리했어요. 새 요청이 오면 여기에 모여요.</p></div>
+          </sc-if>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ requestsList }}" as="q" hint-placeholder-count="3">
+              <div class="card" style="padding:14px 15px">
+                <div style="display:flex;align-items:center;gap:11px;margin-bottom:10px"><div class="av" style="{{ q.avStyle }}">{{ q.initial }}</div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">{{ q.name }}</div><div style="font:500 11px Pretendard;color:#847A66;margin-top:1px">{{ q.ago }}</div></div><span style="{{ q.typeBadge }}">{{ q.typeText }}</span></div>
+                <sc-if value="{{ q.isChange }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;background:#F8F4EC;margin-bottom:11px"><span style="font:600 12px Pretendard;color:#787063;text-decoration:line-through;text-decoration-color:#C2BAAD">{{ q.before }}</span><pt-icon name="arrow-right" size="13" style="color:#8B8374"></pt-icon><span style="font:700 12.5px Pretendard;color:#4B3B2E">{{ q.after }}</span></div>
+                </sc-if>
+                <sc-if value="{{ q.isCancel }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:7px;padding:9px 12px;border-radius:10px;background:#FBF3E9;margin-bottom:11px"><pt-icon name="circle-info" size="14" style="color:#C67352"></pt-icon><span style="font:600 12px Pretendard;color:#9A7B66">{{ q.detail }}</span></div>
+                </sc-if>
+                <div style="display:flex;gap:8px"><button onClick="{{ q.reject }}" style="flex:1;border:1px solid rgba(75,59,46,.14);background:#fff;color:#766D60;font:700 12.5px Pretendard;padding:9px 0;border-radius:10px;cursor:pointer">거절</button><button onClick="{{ q.accept }}" style="flex:1.6;border:none;background:#768C6A;color:#FAF8F4;font:700 12.5px Pretendard;padding:9px 0;border-radius:10px;cursor:pointer">수락</button></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ inboxSent }}" hint-placeholder-val="{{ false }}">
+          <div class="card" style="padding:14px 15px"><div style="display:flex;align-items:center;gap:11px"><div class="av" style="width:38px;height:38px;background:#A88B57;color:#FAF8F4;font-size:14px">이</div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">이지수</div><div style="font:500 11px Pretendard;color:#847A66;margin-top:1px">6/21 19:00 → 6/22 19:00</div></div><span style="font:700 11px Pretendard;color:#9A7B2E;background:#F3EAD2;padding:3px 9px;border-radius:7px;white-space:nowrap">응답 대기</span></div></div>
+        </sc-if>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 변경 확정 ============ -->
+    <sc-if value="{{ s_confirm }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0;justify-content:center;align-items:center;text-align:center">
+        <div class="pt-pop" style="width:88px;height:88px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;margin-bottom:24px;box-shadow:0 16px 30px -12px rgba(118,140,106,.6)"><pt-icon name="check-bold" size="44" style="color:#FAF8F4"></pt-icon></div>
+        <div style="font:700 23px Pretendard;color:#4B3B2E;letter-spacing:-.01em">일정이 변경되었어요</div>
+        <p style="margin:11px 0 26px;font:400 14px/1.6 Pretendard;color:#8A8175;max-width:260px">두 분 모두에게 알림을 보냈어요.<br>캘린더에 자동으로 반영됐습니다.</p>
+        <div class="card" style="width:100%;padding:18px 20px;text-align:left;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="font:600 11px Pretendard;color:#847A66;background:#F8F4EC;padding:3px 9px;border-radius:6px;white-space:nowrap">변경 전</span><span style="font:600 14px Pretendard;color:#787063;text-decoration:line-through;text-decoration-color:#C2BAAD">{{ confirmBefore }}</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><span style="font:700 11px Pretendard;color:#FAF8F4;background:#768C6A;padding:3px 9px;border-radius:6px;white-space:nowrap">변경 후</span><span style="font:700 15px Pretendard;color:#4B3B2E">{{ confirmAfter }}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;width:100%;padding:13px 16px;border-radius:13px;background:#F8F4EC"><pt-icon name="ticket-fill" size="19" style="color:#8FA187"></pt-icon><span style="flex:1;text-align:left;font:500 12.5px Pretendard;color:#766D60">변경은 차감 없이 잔여 횟수가 유지돼요.</span></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px;display:flex;flex-direction:column;gap:10px"><button class="obtn" onClick="{{ goCalendarFromConfirm }}"><pt-icon name="calendar" size="18"></pt-icon>캘린더에서 보기</button><button class="pbtn" onClick="{{ confirmDone }}">확인</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 설정 (대표 메뉴) ============ -->
+    <sc-if value="{{ s_settings }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">설정</span></div>
+        <div class="card" style="padding:16px 17px;display:flex;align-items:center;gap:13px;margin-bottom:18px"><div class="av" style="width:48px;height:48px;background:#768C6A;color:#FAF8F4;font-size:17px">계</div><div style="flex:1"><div style="display:flex;align-items:center;gap:6px"><span style="font:700 16px Pretendard;color:#4B3B2E">김계절</span><sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}"><span style="display:flex;align-items:center;gap:3px;font:700 10.5px Pretendard;color:#8A6F3E;background:#F4EEE3;padding:2px 7px;border-radius:6px"><pt-icon name="crown-fill" size="11"></pt-icon>대표</span></sc-if><sc-if value="{{ isTrainer }}" hint-placeholder-val="{{ false }}"><span style="font:700 10.5px Pretendard;color:#5C9166;background:#E4EFE3;padding:3px 8px;border-radius:6px">강사</span></sc-if></div><div style="font:500 12px Pretendard;color:#847A66;margin-top:2px">계절 PT &amp; 필라테스</div></div></div>
+        <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}">
+          <div class="kick" style="margin-bottom:10px">운영 관리 <span style="text-transform:none;letter-spacing:0;color:#8A6F3E">· 대표 전용</span></div>
+          <div class="card" style="padding:4px 4px;margin-bottom:18px">
+            <sc-for list="{{ settingsItems }}" as="it" hint-placeholder-count="5">
+              <div class="tap" onClick="{{ it.open }}" style="{{ it.rowStyle }}"><div style="{{ it.iconWrap }}"><pt-icon name="{{ it.icon }}" size="19" style="color:{{ it.iconColor }}"></pt-icon></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">{{ it.title }}</div><div style="font:500 11px Pretendard;color:#8A8175;margin-top:1px">{{ it.sub }}</div></div><pt-icon name="chevron-right" size="18" style="color:{{ it.chev }}"></pt-icon></div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isTrainer }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:10px;padding:14px 15px;border-radius:13px;background:#F8F4EC;margin-bottom:18px"><pt-icon name="lock" size="17" style="color:#A89F92;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">실적·회원권·강사 관리 등 운영 메뉴는 <b style="color:#5B4B38">대표 트레이너</b>만 접근할 수 있어요.</span></div>
+        </sc-if>
+        <div class="kick" style="margin-bottom:10px">계정</div>
+        <div class="card" style="padding:4px 4px">
+          <div class="tap" onClick="{{ logout }}" style="display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:14px"><div style="width:36px;height:36px;border-radius:10px;background:#FBF3E9;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="login" size="18" style="color:#C67352"></pt-icon></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">로그아웃</div></div><pt-icon name="chevron-right" size="18" style="color:#C2BAAD"></pt-icon></div>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 강사 관리 ============ -->
+    <sc-if value="{{ s_instrManage }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">강사 관리</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-radius:12px;background:#F4EEE3;margin-bottom:16px"><pt-icon name="crown-fill" size="17" style="color:#8A6F3E"></pt-icon><span style="font:600 12.5px Pretendard;color:#5B4B38">대표만 강사 계정을 발급·관리할 수 있어요</span></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ instructors }}" as="t" hint-placeholder-count="4">
+            <div class="tap" onClick="{{ goInstrInvite }}" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.06)"><div class="av" style="width:42px;height:42px;background:{{ t.bg }};color:#FAF8F4;font-size:15px">{{ t.initial }}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px"><span style="font:700 14px Pretendard;color:#4B3B2E">{{ t.name }}</span><span style="font:600 10.5px Pretendard;color:#5C9166;background:#E4EFE3;padding:2px 7px;border-radius:6px;white-space:nowrap">{{ t.role }}</span></div><div style="font:500 11px Pretendard;color:#847A66;margin-top:2px">{{ t.sub }}</div></div><pt-icon name="chevron-right" size="18" style="color:#C2BAAD"></pt-icon></div>
+          </sc-for>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ goInstrInvite }}"><pt-icon name="person-plus" size="18"></pt-icon>강사 초대</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 강사 초대 ============ -->
+    <sc-if value="{{ s_instrInvite }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 22px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">강사 초대</span></div>
+        <p style="margin:0 0 20px;font:400 13.5px/1.6 Pretendard;color:#8A8175">강사 정보를 입력하면 아이디와 임시 비밀번호가 발급돼요.</p>
+        <div style="margin-bottom:13px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">강사 이름</div><div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="person" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14.5px Pretendard;color:#4B3B2E">정하늘</span></div></div>
+        <div style="margin-bottom:20px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">연락처</div><div style="display:flex;align-items:center;gap:10px;padding:14px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="mobile" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14.5px Pretendard;color:#4B3B2E">010-7788-9900</span></div></div>
+        <div class="kick" style="margin-bottom:10px">발급되는 계정</div>
+        <div class="card" style="padding:16px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:11px;padding-bottom:13px;border-bottom:1px solid rgba(75,59,46,.07)"><pt-icon name="person" size="18" style="color:#6B785E"></pt-icon><span style="font:500 13px Pretendard;color:#8A8175">아이디</span><span style="margin-left:auto;font:700 14px Pretendard;color:#4B3B2E">gyeaul.haneul</span></div>
+          <div style="display:flex;align-items:center;gap:11px;padding-top:13px"><pt-icon name="lock" size="18" style="color:#C67352"></pt-icon><span style="font:500 13px Pretendard;color:#8A8175">임시 비밀번호</span><span style="margin-left:auto;font:700 14px Pretendard;color:#4B3B2E;letter-spacing:.04em">ptss-7390</span></div>
+        </div>
+        <div style="display:flex;gap:9px;padding:13px 15px;border-radius:13px;background:#F8F4EC"><pt-icon name="circle-info" size="17" style="color:#A89F92;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">강사에게 전달하세요. 강사는 첫 로그인 후 비밀번호를 직접 설정해요.</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 22px 30px"><button class="pbtn" onClick="{{ issueInstr }}"><pt-icon name="person-plus" size="18"></pt-icon>강사 계정 발급</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원권 발급 ============ -->
+    <sc-if value="{{ s_issueMembership }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">회원권 발급</span></div>
+        <div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="av" style="width:40px;height:40px;background:#79836B;color:#FAF8F4;font-size:14px">이</div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">이지수</div><div style="font:500 11.5px Pretendard;color:#847A66">010-2345-6789</div></div></div>
+        <div class="kick" style="margin-bottom:10px">회원권 상품</div>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.1)"><div style="width:22px;height:22px;border-radius:50%;border:2px solid #D6CFC2;flex:none"></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">10회권</div></div><span style="font:700 14px Pretendard;color:#4B3B2E">₩750,000</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:13px;background:#EDF4E3;border:1.5px solid #768C6A;position:relative"><span style="position:absolute;top:-9px;left:14px;font:700 9.5px Pretendard;color:#FAF8F4;background:#768C6A;padding:2px 8px;border-radius:20px">추천</span><div style="width:22px;height:22px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="check-bold" size="13" style="color:#FAF8F4"></pt-icon></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">20회권</div><div style="font:500 11px Pretendard;color:#6B785E;margin-top:1px">회당 70,000원</div></div><span style="font:700 14px Pretendard;color:#4B3B2E">₩1,400,000</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.1)"><div style="width:22px;height:22px;border-radius:50%;border:2px solid #D6CFC2;flex:none"></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">30회권</div></div><span style="font:700 14px Pretendard;color:#4B3B2E">₩1,980,000</span></div>
+        </div>
+        <div class="card" style="padding:14px 16px;display:flex;align-items:center;gap:12px"><pt-icon name="calendar" size="19" style="color:#6B785E"></pt-icon><div style="flex:1"><div style="font:600 13px Pretendard;color:#4B3B2E">시작 6/22 · 유효기간 ~9/22</div><div style="font:500 11px Pretendard;color:#847A66;margin-top:1px">잔여 20회 자동 생성 · 3개월</div></div></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ doIssueMembership }}"><pt-icon name="ticket-fill" size="18"></pt-icon>발급하고 결제 기록</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 결제 기록 ============ -->
+    <sc-if value="{{ s_paymentRecord }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">결제 기록</span></div>
+        <div class="card" style="padding:16px;display:flex;align-items:center;gap:12px;margin-bottom:18px"><div style="width:42px;height:42px;border-radius:11px;background:#EDF4E3;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="ticket-fill" size="20" style="color:#6B785E"></pt-icon></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">이지수 · 1:1 PT 20회권</div><div style="font:500 11.5px Pretendard;color:#847A66;margin-top:1px">신규 발급</div></div><span style="font:700 15px Pretendard;color:#4B3B2E">₩1,400,000</span></div>
+        <div class="kick" style="margin-bottom:10px">결제 수단</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px"><span style="flex:1;text-align:center;font:600 13px Pretendard;color:#847A66;background:#F8F4EC;padding:11px 0;border-radius:12px">현금</span><span style="flex:1;text-align:center;font:700 13px Pretendard;color:#FAF8F4;background:#768C6A;padding:11px 0;border-radius:12px">카드</span><span style="flex:1;text-align:center;font:600 13px Pretendard;color:#847A66;background:#F8F4EC;padding:11px 0;border-radius:12px">계좌</span></div>
+        <div style="display:flex;gap:11px;margin-bottom:16px">
+          <div style="flex:1"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">결제일</div><div style="display:flex;align-items:center;gap:9px;padding:14px 14px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="calendar" size="17" style="color:#8FA187"></pt-icon><span style="font:600 13.5px Pretendard;color:#4B3B2E">06.22</span></div></div>
+          <div style="flex:1.3"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">금액</div><div style="display:flex;align-items:center;gap:9px;padding:14px 14px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><span style="font:700 14px Pretendard;color:#4B3B2E">₩1,400,000</span></div></div>
+        </div>
+        <div style="display:flex;gap:9px;padding:13px 15px;border-radius:13px;background:#F8F4EC"><pt-icon name="circle-info" size="17" style="color:#8E8473;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">PG 연동 전이라 결제는 수기로 기록돼요. 영수증/이력은 자동 보관돼요.</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ doPayment }}"><pt-icon name="check-bold" size="18"></pt-icon>결제 완료 기록</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원 등록 ============ -->
+    <sc-if value="{{ s_memberRegister }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">회원 등록</span></div>
+        <div style="margin-bottom:12px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">이름</div><div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="person" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14px Pretendard;color:#4B3B2E">윤서아</span></div></div>
+        <div style="margin-bottom:12px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">연락처 <span style="color:#9DB089">· 아이디</span></div><div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="mobile" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14px Pretendard;color:#4B3B2E">010-3456-7890</span></div></div>
+        <div style="margin-bottom:12px"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">생년월일 <span style="color:#9DB089">· 초기 비밀번호</span></div><div style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12)"><pt-icon name="lock" size="18" style="color:#8FA187"></pt-icon><span style="font:500 14px Pretendard;color:#4B3B2E">950812</span><span style="margin-left:auto;font:500 11px Pretendard;color:#948C7C">YYMMDD</span></div></div>
+        <div style="display:flex;gap:11px;margin-bottom:12px">
+          <div style="flex:1"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">성별</div><div style="display:flex;gap:6px"><span style="flex:1;text-align:center;font:700 12.5px Pretendard;color:#FAF8F4;background:#768C6A;padding:11px 0;border-radius:11px">여</span><span style="flex:1;text-align:center;font:600 12.5px Pretendard;color:#847A66;background:#F8F4EC;padding:11px 0;border-radius:11px">남</span></div></div>
+          <div style="flex:1.4"><div style="font:600 12px Pretendard;color:#766D60;margin-bottom:7px">담당 트레이너</div><div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-radius:11px;background:#fff;border:1px solid rgba(75,59,46,.12)"><span style="flex:1;font:600 13px Pretendard;color:#4B3B2E">김계절</span><pt-icon name="chevron-down" size="16" style="color:#C2BAAD"></pt-icon></div></div>
+        </div>
+        <div class="kick" style="margin-bottom:10px">정기 수업 요일</div>
+        <div style="display:flex;gap:6px;margin-bottom:11px">
+          <sc-for list="{{ regDayChips }}" as="g" hint-placeholder-count="7"><span class="chip" onClick="{{ g.toggle }}" style="{{ g.style }}">{{ g.label }}</span></sc-for>
+        </div>
+        <div class="tap" onClick="{{ cycleRegTime }}" style="display:flex;align-items:center;gap:10px;padding:13px 15px;border-radius:12px;background:#fff;border:1px solid rgba(75,59,46,.12);margin-bottom:14px"><pt-icon name="clock" size="18" style="color:#8FA187"></pt-icon><span style="flex:1;font:600 14px Pretendard;color:#4B3B2E">{{ regTime }}</span><span style="font:700 11px Pretendard;color:#6B785E;background:#EDF4E3;padding:4px 9px;border-radius:8px">{{ regSummary }}</span></div>
+        <div style="display:flex;gap:9px;padding:12px 15px;border-radius:13px;background:#EDF4E3"><pt-icon name="circle-info" size="16" style="color:#6B785E;flex:none;margin-top:1px"></pt-icon><span style="font:500 11.5px/1.5 Pretendard;color:#5B6452">매주 같은 요일·시간에 정기 수업이 자동 생성돼요.</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ doRegisterMember }}"><pt-icon name="person-plus" size="18"></pt-icon>회원 등록</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원 캘린더 (메인) ============ -->
+    <sc-if value="{{ s_mCalendar }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:4px 0 14px"><div><div style="font:500 13px Pretendard;color:#847A66">내 일정</div><div style="font:700 21px Pretendard;color:#4B3B2E">이지수 님</div></div><div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:20px;background:#EDF4E3"><pt-icon name="ticket-fill" size="15" style="color:#6B785E"></pt-icon><span style="font:700 12px Pretendard;color:#5B6452">잔여 3 · D-9</span></div></div>
+        <sc-if value="{{ mHasTrainerReq }}" hint-placeholder-val="{{ true }}">
+          <div class="tap" onClick="{{ mOpenReceive }}" style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:13px;background:#FBF3E9;border:1px solid rgba(198,115,82,.18);margin-bottom:14px"><pt-icon name="refresh" size="18" style="color:#C67352"></pt-icon><div style="flex:1"><div style="font:700 12.5px Pretendard;color:#9A5A38">트레이너가 일정 변경을 요청했어요</div><div style="font:500 11px Pretendard;color:#B08465;margin-top:1px">6/21 → 새 시간 확인 필요</div></div><pt-icon name="chevron-right" size="15" style="color:#C67352"></pt-icon></div>
+        </sc-if>
+        <div class="card" style="padding:15px 13px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;margin-bottom:11px"><pt-icon name="chevron-left" size="18" style="color:#C2BAAD"></pt-icon><span style="font:700 15px Pretendard;color:#4B3B2E">2026년 6월</span><pt-icon name="chevron-right" size="18" style="color:#6B785E"></pt-icon></div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:3px">
+            <span style="text-align:center;font:600 11px Pretendard;color:#C0796A">일</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">월</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">화</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">수</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">목</span><span style="text-align:center;font:600 11px Pretendard;color:#A89F92">금</span><span style="text-align:center;font:600 11px Pretendard;color:#7E9A87">토</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:36px">
+            <sc-for list="{{ mCalDays }}" as="d" hint-placeholder-count="30">
+              <div class="tap" onClick="{{ d.pick }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative"><span style="{{ d.numStyle }}">{{ d.n }}</span><sc-if value="{{ d.dot }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:#8FA187"></span></sc-if></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:0 2px;margin-bottom:11px"><span class="kick">{{ mSelDateLabel }}</span><span style="display:inline-flex;align-items:center;gap:5px;font:500 11px Pretendard;color:#8A8175;margin-left:auto"><span style="width:6px;height:6px;border-radius:50%;background:#8FA187"></span>정기 수업 매주 수·토</span></div>
+        <sc-if value="{{ mDayHasClass }}" hint-placeholder-val="{{ true }}">
+          <div class="tap card" onClick="{{ mOpenRequest }}" style="padding:15px;display:flex;align-items:center;gap:13px"><div style="width:4px;height:42px;border-radius:3px;background:#768C6A"></div><div style="flex:1"><div style="font:700 14.5px Pretendard;color:#4B3B2E">1:1 PT · {{ mTimeLabel }}</div><div style="font:500 12px Pretendard;color:#8A8175;margin-top:2px">김계절 트레이너</div></div><span style="display:flex;align-items:center;gap:3px;font:600 11.5px Pretendard;color:#6B785E;background:#EDF4E3;padding:6px 11px;border-radius:9px"><pt-icon name="refresh" size="13"></pt-icon>변경</span></div>
+        </sc-if>
+        <sc-if value="{{ mDayNoClass }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 0"><div style="width:68px;height:68px;border-radius:50%;background:#F1ECE2;display:flex;align-items:center;justify-content:center;margin-bottom:14px"><pt-icon name="calendar" size="28" style="color:#B3AA9C"></pt-icon></div><div style="font:700 15px Pretendard;color:#4B3B2E">이 날은 수업이 없어요</div><p style="margin:7px 0 0;font:400 12.5px/1.6 Pretendard;color:#847A66;max-width:210px">정기 수업은 매주 수·토 오후 7:00 예요.</p></div>
+        </sc-if>
+        <div style="height:14px"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" onClick="{{ tabMCalendar }}" style="color:#6B785E"><pt-icon name="calendar-fill" size="23"></pt-icon><span style="font:600 11px Pretendard">캘린더</span></div>
+        <div class="tab" onClick="{{ mOpenChat }}" style="color:#B3AA9C"><span style="position:relative;line-height:0"><pt-icon name="message" size="23"></pt-icon><sc-if value="{{ hasMChatUnread }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:-4px;right:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#C67352;color:#FAF8F4;font:700 9.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ mChatUnread }}</span></sc-if></span><span style="font:500 11px Pretendard">채팅</span></div>
+        <div class="tab" onClick="{{ mToastMy }}" style="color:#B3AA9C"><pt-icon name="person" size="23"></pt-icon><span style="font:500 11px Pretendard">마이</span></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원: 변경요청 수신 ============ -->
+    <sc-if value="{{ s_mReceive }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">일정 변경 요청</span></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="av" style="width:44px;height:44px;background:#768C6A;color:#FAF8F4;font-size:16px">계</div><div style="flex:1"><div style="font:700 14.5px Pretendard;color:#4B3B2E">김계절 트레이너</div><div style="font:500 12px Pretendard;color:#847A66;margin-top:1px">일정 변경을 요청했어요 · 10분 전</div></div></div>
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 15px;border-radius:13px;background:#F8F4EC;margin-bottom:8px"><span style="font:600 11px Pretendard;color:#847A66;background:#fff;padding:3px 8px;border-radius:6px;white-space:nowrap">변경 전</span><span style="font:600 13.5px Pretendard;color:#787063;text-decoration:line-through;text-decoration-color:#C2BAAD">6/21 토 · 오후 7:00</span></div>
+        <div style="display:flex;align-items:center;gap:7px;padding:0 4px 16px"><pt-icon name="circle-info" size="14" style="color:#A89F92"></pt-icon><span style="font:500 11.5px Pretendard;color:#847A66">사유 · 트레이너 개인 일정</span></div>
+        <div class="kick" style="margin-bottom:11px">제안된 시간 · 하나를 선택하세요</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;align-items:center;gap:12px;padding:15px;border-radius:13px;background:#EDF4E3;border:1.5px solid #768C6A"><div style="width:22px;height:22px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="check-bold" size="13" style="color:#FAF8F4"></pt-icon></div><span style="flex:1;font:700 14px Pretendard;color:#4B3B2E">6/22 일 · 오후 7:00</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.1)"><div style="width:22px;height:22px;border-radius:50%;border:2px solid #D6CFC2;flex:none"></div><span style="flex:1;font:600 14px Pretendard;color:#766D60">6/23 월 · 오후 8:00</span></div>
+        </div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ acceptChange }}">이 시간으로 변경</button><div style="display:flex;justify-content:center;gap:18px;margin-top:13px"><span class="tap" onClick="{{ mOpenRequest }}" style="font:600 13px Pretendard;color:#6B785E">다른 시간 제안</span><span class="tap" onClick="{{ rejectChange }}" style="font:600 13px Pretendard;color:#B5612F">거절하기</span></div></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원: 변경·취소 요청 ============ -->
+    <sc-if value="{{ s_mRequest }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div><span style="font:700 19px Pretendard;color:#4B3B2E">일정 변경 · 취소</span></div>
+        <div class="card" style="padding:14px 15px;display:flex;align-items:center;gap:12px;margin-bottom:16px"><div style="width:44px;height:44px;border-radius:12px;background:#EDF4E3;display:flex;flex-direction:column;align-items:center;justify-content:center;flex:none"><span style="font:600 10px Pretendard;color:#8FA187">토</span><span style="font:700 16px Pretendard;color:#6B785E;line-height:1">21</span></div><div style="flex:1"><div style="font:700 14px Pretendard;color:#4B3B2E">1:1 PT · 오후 7:00</div><div style="font:500 12px Pretendard;color:#8A8175;margin-top:1px">김계절 트레이너</div></div></div>
+        <div style="display:flex;gap:10px;margin-bottom:18px">
+          <div style="flex:1;padding:15px 14px;border-radius:14px;background:#EDF4E3;border:1.5px solid #768C6A;text-align:center"><pt-icon name="refresh" size="22" style="color:#6B785E"></pt-icon><div style="font:700 13.5px Pretendard;color:#4B3B2E;margin-top:6px">시간 변경</div></div>
+          <div style="flex:1;padding:15px 14px;border-radius:14px;background:#fff;border:1px solid rgba(75,59,46,.1);text-align:center"><pt-icon name="close" size="22" style="color:#C2BAAD"></pt-icon><div style="font:600 13.5px Pretendard;color:#766D60;margin-top:6px">수업 취소</div></div>
+        </div>
+        <div class="kick" style="margin-bottom:11px">원하는 시간</div>
+        <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:13px;background:#EDF4E3;border:1.5px solid #768C6A"><div style="width:22px;height:22px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;flex:none"><pt-icon name="check-bold" size="13" style="color:#FAF8F4"></pt-icon></div><span style="flex:1;font:700 14px Pretendard;color:#4B3B2E">6/22 일 · 오후 7:00</span></div>
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.1)"><div style="width:22px;height:22px;border-radius:50%;border:2px solid #D6CFC2;flex:none"></div><span style="flex:1;font:600 14px Pretendard;color:#766D60">6/22 일 · 오후 8:00</span></div>
+        </div>
+        <div style="display:flex;gap:10px;padding:13px 15px;border-radius:13px;background:#F8F4EC"><pt-icon name="circle-info" size="17" style="color:#A89F92;flex:none;margin-top:1px"></pt-icon><span style="font:500 12px/1.5 Pretendard;color:#8A8175">24시간 전이라 무료로 변경돼요. 횟수 차감은 없어요.</span></div>
+        <div style="height:14px"></div>
+      </div>
+      <div style="flex:none;padding:12px 18px 30px"><button class="pbtn" onClick="{{ sendMemberRequest }}"><pt-icon name="send" size="17"></pt-icon>변경 요청 보내기</button></div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 트레이너: 채팅 목록 ============ -->
+    <sc-if value="{{ s_chatList }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div class="body" style="padding:8px 18px 0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:2px 0 14px">
+          <div style="font:700 21px Pretendard;color:#4B3B2E">채팅</div>
+          <div style="display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:20px;background:#EDF4E3"><pt-icon name="persons" size="14" style="color:#6B785E"></pt-icon><span style="font:700 11.5px Pretendard;color:#5B6452">담당 회원 {{ totalMembers }}</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <sc-for list="{{ chatThreads }}" as="t" hint-placeholder-count="5">
+            <div class="tap" onClick="{{ t.open }}" style="display:flex;align-items:center;gap:13px;padding:12px 13px;border-radius:15px;background:#fff;border:1px solid rgba(75,59,46,.06)">
+              <sc-if value="{{ t.notTeam }}" hint-placeholder-val="{{ true }}"><div class="av" style="{{ t.avStyle }}">{{ t.initial }}</div></sc-if>
+              <sc-if value="{{ t.isTeam }}" hint-placeholder-val="{{ false }}"><div style="position:relative;width:46px;height:46px;flex:none"><div class="av" style="{{ t.av1Style }}">{{ t.init1 }}</div><div class="av" style="{{ t.av2Style }}">{{ t.init2 }}</div></div></sc-if>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font:700 14.5px Pretendard;color:#4B3B2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+                  <sc-if value="{{ t.isTeam }}" hint-placeholder-val="{{ false }}"><span style="font:700 9px Pretendard;color:#5C7286;background:#E7EDF2;padding:2px 6px;border-radius:6px;flex:none;white-space:nowrap">2:1</span></sc-if>
+                </div>
+                <div style="font:500 12.5px Pretendard;color:#8A8175;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.preview }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none">
+                <span style="font:500 11px Pretendard;color:#B3AA9C;white-space:nowrap">{{ t.time }}</span>
+                <sc-if value="{{ t.hasUnread }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#C67352;color:#FAF8F4;font:700 10.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ t.unread }}</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="height:14px"></div>
+      </div>
+      <div class="tabbar">
+        <div class="tab" onClick="{{ tabCalendar }}" style="color:#B3AA9C"><pt-icon name="calendar" size="23"></pt-icon><span style="font:500 11px Pretendard">캘린더</span></div>
+        <div class="tab" onClick="{{ tabMembers }}" style="color:#B3AA9C"><pt-icon name="persons" size="23"></pt-icon><span style="font:500 11px Pretendard">회원</span></div>
+        <div class="tab" onClick="{{ tabChat }}" style="color:#6B785E"><span style="position:relative;line-height:0"><pt-icon name="message-fill" size="23"></pt-icon><sc-if value="{{ hasChatUnread }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:-4px;right:-7px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#C67352;color:#FAF8F4;font:700 9.5px Pretendard;display:flex;align-items:center;justify-content:center">{{ chatUnread }}</span></sc-if></span><span style="font:600 11px Pretendard">채팅</span></div>
+        <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}"><div class="tab" onClick="{{ tabPerf }}" style="color:#B3AA9C"><pt-icon name="coins" size="23"></pt-icon><span style="font:500 11px Pretendard">실적</span></div></sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 트레이너: 채팅방 ============ -->
+    <sc-if value="{{ s_chatRoom }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div style="flex:none;display:flex;align-items:center;gap:11px;padding:6px 14px 12px;border-bottom:1px solid rgba(75,59,46,.07)">
+        <div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div>
+        <sc-if value="{{ roomNotTeam }}" hint-placeholder-val="{{ true }}"><div class="av" style="{{ roomAvStyle }}">{{ roomInitial }}</div></sc-if>
+        <sc-if value="{{ roomIsTeam }}" hint-placeholder-val="{{ false }}"><div style="position:relative;width:42px;height:40px;flex:none"><div class="av" style="{{ roomAv1Style }}">{{ roomInit1 }}</div><div class="av" style="{{ roomAv2Style }}">{{ roomInit2 }}</div></div></sc-if>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px"><span style="font:700 15px Pretendard;color:#4B3B2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ roomTitle }}</span><sc-if value="{{ roomIsTeam }}" hint-placeholder-val="{{ false }}"><span style="font:700 9px Pretendard;color:#5C7286;background:#E7EDF2;padding:2px 6px;border-radius:6px;flex:none">2:1</span></sc-if></div>
+          <div style="font:500 11.5px Pretendard;color:#8A8175;margin-top:1px">{{ roomSub }}</div>
+        </div>
+      </div>
+      <div class="body" ref="{{ chatRef }}" style="padding:14px 16px 8px;gap:13px">
+        <sc-if value="{{ roomIsTeam }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:center"><span style="display:inline-flex;align-items:center;gap:5px;font:500 10.5px Pretendard;color:#5C7286;background:#E7EDF2;padding:6px 13px;border-radius:20px"><pt-icon name="persons" size="12"></pt-icon>2:1 수업은 한 채팅방을 함께 써요</span></div></sc-if>
+        <div style="display:flex;justify-content:center"><span style="font:600 10.5px Pretendard;color:#8A8175;background:#F1ECE2;padding:5px 12px;border-radius:20px">{{ roomDateLabel }}</span></div>
+        <sc-for list="{{ roomMsgs }}" as="m" hint-placeholder-count="5">
+          <sc-if value="{{ m.mine }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:6px">
+              <span style="font:500 10px Pretendard;color:#B3AA9C;margin-bottom:3px;white-space:nowrap">{{ m.time }}</span>
+              <div style="max-width:74%;padding:10px 13px;border-radius:16px 16px 4px 16px;background:#768C6A;color:#FAF8F4;font:500 13.5px/1.5 Pretendard;word-break:break-word">{{ m.text }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ m.isOther }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:flex-end;gap:8px">
+              <div class="av" style="{{ m.avStyle }}">{{ m.initial }}</div>
+              <div style="max-width:76%">
+                <sc-if value="{{ m.nameVisible }}" hint-placeholder-val="{{ false }}"><div style="font:600 11px Pretendard;color:#847A66;margin:0 0 3px 3px">{{ m.name }}</div></sc-if>
+                <div style="display:flex;align-items:flex-end;gap:6px">
+                  <div style="padding:10px 13px;border-radius:4px 16px 16px 16px;background:#fff;border:1px solid rgba(75,59,46,.07);color:#4B3B2E;font:500 13.5px/1.5 Pretendard;word-break:break-word;box-shadow:0 1px 2px rgba(75,59,46,.04)">{{ m.text }}</div>
+                  <span style="font:500 10px Pretendard;color:#B3AA9C;margin-bottom:3px;white-space:nowrap">{{ m.time }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </sc-for>
+        <div style="height:2px"></div>
+      </div>
+      <div style="flex:none;display:flex;align-items:center;gap:9px;padding:10px 14px 26px;border-top:1px solid rgba(75,59,46,.07);background:rgba(250,248,244,.96)">
+        <div style="width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid rgba(75,59,46,.08);display:flex;align-items:center;justify-content:center;flex:none;color:#9A917F;cursor:pointer"><pt-icon name="plus" size="19"></pt-icon></div>
+        <input class="cinput" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="메시지 입력" />
+        <button class="sendbtn" onClick="{{ sendChat }}" style="{{ sendBtnStyle }}"><pt-icon name="send" size="17"></pt-icon></button>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ============ 회원: 트레이너 채팅 ============ -->
+    <sc-if value="{{ s_mChat }}" hint-placeholder-val="{{ false }}">
+    <div class="page scr">
+      <div style="flex:none;display:flex;align-items:center;gap:11px;padding:6px 14px 12px;border-bottom:1px solid rgba(75,59,46,.07)">
+        <div class="bk" onClick="{{ back }}"><pt-icon name="chevron-left" size="20"></pt-icon></div>
+        <div class="av" style="width:40px;height:40px;background:#768C6A;color:#FAF8F4;font-size:15px">계</div>
+        <div style="flex:1;min-width:0">
+          <div style="font:700 15px Pretendard;color:#4B3B2E">김계절 트레이너</div>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:1px"><span style="width:6px;height:6px;border-radius:50%;background:#8FA187"></span><span style="font:500 11.5px Pretendard;color:#8A8175">담당 트레이너 · 1:1 채팅</span></div>
+        </div>
+      </div>
+      <div class="body" ref="{{ chatRef }}" style="padding:14px 16px 8px;gap:13px">
+        <div style="display:flex;justify-content:center"><span style="display:inline-flex;align-items:center;gap:5px;font:500 10.5px Pretendard;color:#8A8175;background:#F1ECE2;padding:6px 13px;border-radius:20px"><pt-icon name="lock" size="12"></pt-icon>담당 트레이너와만 대화할 수 있어요</span></div>
+        <div style="display:flex;justify-content:center"><span style="font:600 10.5px Pretendard;color:#8A8175;background:#F1ECE2;padding:5px 12px;border-radius:20px">{{ roomDateLabel }}</span></div>
+        <sc-for list="{{ roomMsgs }}" as="m" hint-placeholder-count="5">
+          <sc-if value="{{ m.mine }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;justify-content:flex-end;align-items:flex-end;gap:6px">
+              <span style="font:500 10px Pretendard;color:#B3AA9C;margin-bottom:3px;white-space:nowrap">{{ m.time }}</span>
+              <div style="max-width:74%;padding:10px 13px;border-radius:16px 16px 4px 16px;background:#768C6A;color:#FAF8F4;font:500 13.5px/1.5 Pretendard;word-break:break-word">{{ m.text }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ m.isOther }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:flex-end;gap:8px">
+              <div class="av" style="{{ m.avStyle }}">{{ m.initial }}</div>
+              <div style="max-width:76%">
+                <div style="display:flex;align-items:flex-end;gap:6px">
+                  <div style="padding:10px 13px;border-radius:4px 16px 16px 16px;background:#fff;border:1px solid rgba(75,59,46,.07);color:#4B3B2E;font:500 13.5px/1.5 Pretendard;word-break:break-word;box-shadow:0 1px 2px rgba(75,59,46,.04)">{{ m.text }}</div>
+                  <span style="font:500 10px Pretendard;color:#B3AA9C;margin-bottom:3px;white-space:nowrap">{{ m.time }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </sc-for>
+        <div style="height:2px"></div>
+      </div>
+      <div style="flex:none;display:flex;align-items:center;gap:9px;padding:10px 14px 26px;border-top:1px solid rgba(75,59,46,.07);background:rgba(250,248,244,.96)">
+        <div style="width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid rgba(75,59,46,.08);display:flex;align-items:center;justify-content:center;flex:none;color:#9A917F;cursor:pointer"><pt-icon name="plus" size="19"></pt-icon></div>
+        <input class="cinput" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="메시지 입력" />
+        <button class="sendbtn" onClick="{{ sendChat }}" style="{{ sendBtnStyle }}"><pt-icon name="send" size="17"></pt-icon></button>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- toast -->
+    <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:50%;bottom:36px;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:14px;background:#26231E;box-shadow:0 14px 30px -10px rgba(38,35,30,.5);animation:toastIn .26s cubic-bezier(.2,.8,.3,1) both;max-width:300px"><pt-icon name="circle-check-fill" size="18" style="color:#9DB089"></pt-icon><span style="font:600 13px Pretendard;color:#FAF8F4">{{ toast }}</span></div>
+    </sc-if>
+
+    <pt-home></pt-home>
+  </div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'start',
+    role: null,
+    history: [],
+    attendId: 'iji',
+    attended: {},
+    attendMethod: 'attend',
+    filter: 'all',
+    exercises: [
+      { name: '바벨 스쿼트', kg: 40, sets: 5 },
+      { name: '루마니안 데드리프트', kg: 35, sets: 4 }
+    ],
+    members: [
+      { id: 'jung', name: '정민호', initial: '정', bg: '#79836B', remaining: 1, dday: 3, status: 'expiring', guided: false, days: [2, 4], time: '18:00' },
+      { id: 'park', name: '박서연', initial: '박', bg: '#79836B', remaining: 2, dday: 5, status: 'expiring', guided: true, days: [1, 3], time: '19:00' },
+      { id: 'iji', name: '이지수', initial: '이', bg: '#A88B57', remaining: 3, dday: 9, status: 'expiring', guided: false, days: [3, 6], time: '19:00' },
+      { id: 'han', name: '한지우', initial: '한', bg: '#768C6A', remaining: 12, dday: null, status: 'active', guided: false, days: [1, 5], time: '20:00' },
+      { id: 'team1', type: '2:1', name: '윤지아·강민', pair: ['윤지아', '강민'], inits: ['윤', '강'], initial: '윤', bg: '#79836B', bg2: '#A88B57', remaining: 8, dday: null, status: 'active', guided: false, days: [2, 6], time: '20:00' }
+    ],
+    selId: 'iji',
+    selDate: 21,
+    inboxTab: 'received',
+    requests: [
+      { id: 'r1', name: '박서연', initial: '박', bg: '#768C6A', type: 'change', before: '6/20 19:00', after: '6/22 19:00', ago: '10분 전' },
+      { id: 'r2', name: '정민호', initial: '정', bg: '#79836B', type: 'cancel', detail: '6/19 18:00 · 사유 출장', ago: '32분 전' },
+      { id: 'r3', name: '이지수', initial: '이', bg: '#A88B57', type: 'change', before: '6/21 19:00', after: '6/22 19:00', ago: '1시간 전' }
+    ],
+    proposeSlots: [
+      { label: '6/22 일 · 오후 7:00', sel: true },
+      { label: '6/23 월 · 오후 8:00', sel: true },
+      { label: '6/24 화 · 오후 7:00', sel: false }
+    ],
+    proposeReason: '개인 일정',
+    confirmData: { before: '6/21 토 · 오후 7:00', after: '6/22 일 · 오후 7:00' },
+    mTrainerRequest: true,
+    regDays: [3, 5],
+    regTime: '19:00',
+    mSelDate: 21,
+    chatSel: 'iji',
+    draft: '',
+    mChatUnread: 1,
+    chatOrder: ['iji', 'team1', 'jung', 'park', 'han'],
+    threads: {
+      iji: { id: 'iji', type: '1:1', name: '이지수', initial: '이', bg: '#A88B57', time: '오후 2:41', unread: 0, msgs: [
+        { from: 'trainer', text: '지수님, 오늘 7시 수업 그대로 진행돼요. 컨디션은 좀 어떠세요?', time: '오후 2:10' },
+        { from: 'iji', text: '네 좋아요! 어제 알려주신 스트레칭 했더니 한결 가벼워요', time: '오후 2:32' },
+        { from: 'trainer', text: '잘하셨어요. 오늘은 하체 위주로 가볍게 가볼게요', time: '오후 2:33' },
+        { from: 'iji', text: '좋습니다. 혹시 물통 챙겨가야 할까요?', time: '오후 2:40' },
+        { from: 'trainer', text: '센터에 정수기 있으니 편하게 오셔도 돼요', time: '오후 2:41' }
+      ] },
+      team1: { id: 'team1', type: '2:1', name: '윤지아 · 강민', inits: ['윤', '강'], bg: '#79836B', bg2: '#A88B57', time: '오전 11:31', unread: 2, parts: { yunji: { name: '윤지아', initial: '윤', bg: '#79836B' }, gangmin: { name: '강민', initial: '강', bg: '#A88B57' } }, msgs: [
+        { from: 'trainer', text: '두 분, 토요일 8시 2:1 수업 안내드려요. 같이 등 운동 진행할게요', time: '오전 11:00' },
+        { from: 'yunji', text: '넵 트레이너님! 강민이랑 같이 갈게요', time: '오전 11:15' },
+        { from: 'gangmin', text: '저도 확인했습니다. 좋습니다', time: '오전 11:20' },
+        { from: 'trainer', text: '좋아요. 지난번 데드리프트 자세 영상 보내드릴게요', time: '오전 11:22' },
+        { from: 'yunji', text: '오 감사해요. 강민아 너도 꼭 봐둬', time: '오전 11:30' },
+        { from: 'gangmin', text: '알겠어 누나. 트레이너님 내일 뵐게요!', time: '오전 11:31' }
+      ] },
+      jung: { id: 'jung', type: '1:1', name: '정민호', initial: '정', bg: '#79836B', time: '오전 9:20', unread: 1, msgs: [
+        { from: 'trainer', text: '민호님, 이번 주 수업 준비 잘 되고 계세요?', time: '오전 9:05' },
+        { from: 'jung', text: '트레이너님, 다음 주 출장이라 화요일 수업 변경 가능할까요?', time: '오전 9:20' }
+      ] },
+      park: { id: 'park', type: '1:1', name: '박서연', initial: '박', bg: '#768C6A', time: '어제', unread: 0, msgs: [
+        { from: 'park', text: '오늘 수업 정말 좋았어요! 다음에도 잘 부탁드려요', time: '어제' },
+        { from: 'trainer', text: '고생하셨어요 서연님. 내일 근육통 있으면 가벼운 산책 추천해요', time: '어제' }
+      ] },
+      han: { id: 'han', type: '1:1', name: '한지우', initial: '한', bg: '#768C6A', time: '2일 전', unread: 0, msgs: [
+        { from: 'trainer', text: '지우님, 회원권 연장 안내 도와드릴까요?', time: '2일 전' },
+        { from: 'han', text: '넵 곧 결정해서 말씀드릴게요', time: '2일 전' }
+      ] }
+    },
+    toast: ''
+  };
+
+  chatRef = React.createRef();
+
+  componentDidUpdate() {
+    if ((this.state.screen === 'chatRoom' || this.state.screen === 'mChat') && this.chatRef && this.chatRef.current) {
+      const el = this.chatRef.current; el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  schedShort(days, time) { const w = ['일', '월', '화', '수', '목', '금', '토']; return days.slice().sort((a, b) => a - b).map(d => w[d]).join('·') + ' ' + time; }
+  schedLabel(days, time) { return days.length ? '매주 ' + this.schedShort(days, time) : '정기 일정 미지정'; }
+  toggleRegDay(d) { this.setState(s => ({ regDays: s.regDays.includes(d) ? s.regDays.filter(x => x !== d) : [...s.regDays, d] })); }
+  cycleRegTime() { const opts = ['18:00', '19:00', '20:00', '21:00']; this.setState(s => ({ regTime: opts[(opts.indexOf(s.regTime) + 1) % opts.length] })); }
+
+  // ---------- nav ----------
+  go(to) { this.setState(s => ({ screen: to, history: [...s.history, s.screen] })); }
+  back() { this.setState(s => { const h = [...s.history]; const p = h.pop(); return { screen: p || (s.role === 'member' ? 'mCalendar' : 'calendar'), history: h }; }); }
+  timeLabel(t) { const h = parseInt(t, 10); return (h >= 12 ? '오후 ' : '오전 ') + (h > 12 ? h - 12 : h) + ':00'; }
+  tab(to) { this.setState({ screen: to, history: [] }); }
+  showToast(msg) { this.setState({ toast: msg }); clearTimeout(this._t); this._t = setTimeout(() => this.setState({ toast: '' }), 1900); }
+
+  // ---------- login ----------
+  enterApp(role) { this.setState({ role: role, screen: role === 'member' ? 'mCalendar' : 'calendar', history: [] }); }
+  confirmDone() { this.setState(s => ({ screen: s.role === 'member' ? 'mCalendar' : 'calendar', history: [] })); }
+
+  // ---------- scheduling ----------
+  toggleSlot(i) { this.setState(s => ({ proposeSlots: s.proposeSlots.map((x, idx) => idx === i ? { ...x, sel: !x.sel } : x) })); }
+  sendPropose() {
+    const n = this.state.proposeSlots.filter(x => x.sel).length;
+    this.showToast('변경 요청을 보냈어요 · ' + n + '개 제안');
+    this.tab('calendar');
+  }
+  acceptReq(id) {
+    const r = this.state.requests.find(x => x.id === id);
+    this.setState(s => ({ requests: s.requests.filter(x => x.id !== id) }));
+    if (r && r.type === 'change') {
+      this.setState({ confirmData: { before: r.before, after: r.after } });
+      this.go('confirm');
+    } else {
+      this.showToast('수업 취소를 수락했어요');
+    }
+  }
+  rejectReq(id) { this.setState(s => ({ requests: s.requests.filter(x => x.id !== id) })); this.showToast('요청을 거절했어요'); }
+
+  // ---------- member app ----------
+  acceptChange() { this.setState({ confirmData: { before: '6/21 토 · 오후 7:00', after: '6/22 일 · 오후 7:00' } }); this.go('confirm'); }
+  sendMemberRequest() { this.showToast('변경 요청을 보냈어요'); this.tab('mCalendar'); }
+
+  // ---------- chat ----------
+  openRoom(id) {
+    this.setState(s => ({ threads: { ...s.threads, [id]: { ...s.threads[id], unread: 0 } }, chatSel: id, screen: 'chatRoom', history: [...s.history, s.screen] }));
+  }
+  mOpenChat() { this.setState({ chatSel: 'iji', mChatUnread: 0, screen: 'mChat', history: [] }); }
+  onDraft(e) { this.setState({ draft: e.target.value }); }
+  onDraftKey(e) { if (e.key === 'Enter') { e.preventDefault(); this.sendChat(); } }
+  sendChat() {
+    const text = (this.state.draft || '').trim();
+    if (!text) return;
+    const viewer = this.state.role === 'member' ? 'iji' : 'trainer';
+    const id = this.state.chatSel;
+    this.setState(s => ({ threads: { ...s.threads, [id]: { ...s.threads[id], time: '지금', msgs: [...s.threads[id].msgs, { from: viewer, text: text, time: '지금' }] } }, draft: '' }));
+  }
+
+  // ---------- attend ----------
+  openAttendFor(id) { this.setState(s => ({ attendId: id, screen: 'attend', history: [...s.history, s.screen] })); }
+  confirmAttend() {
+    const m = this.state.attendMethod;
+    const id = this.state.attendId;
+    const t = this.state.members.find(x => x.id === id);
+    const team = t && t.type === '2:1';
+    this.setState(s => ({
+      attended: { ...s.attended, [id]: m },
+      members: s.members.map(x => x.id === id ? { ...x, remaining: m === 'cancel' ? x.remaining : Math.max(0, x.remaining - 1) } : x)
+    }));
+    this.showToast(m === 'cancel' ? '수업 취소로 처리됐어요' : (team ? '팀 출석 · 1회 함께 차감됐어요' : (m === 'noshow' ? '노쇼 · 1회 차감됐어요' : '출석 완료 · 1회 차감됐어요')));
+    this.tab('calendar');
+  }
+
+  // ---------- record ----------
+  step(i, field, delta) {
+    this.setState(s => ({ exercises: s.exercises.map((e, idx) => idx === i ? { ...e, [field]: Math.max(0, e[field] + delta) } : e) }));
+  }
+  addExercise() { this.setState(s => ({ exercises: [...s.exercises, { name: '새 종목', kg: 20, sets: 3 }] })); this.showToast('종목을 추가했어요'); }
+  saveRecord() { this.showToast('운동 기록을 저장했어요'); this.tab('calendar'); }
+
+  // ---------- retention ----------
+  guide(id) {
+    this.setState(s => ({ members: s.members.map(m => m.id === id ? { ...m, guided: true } : m) }));
+    this.showToast('알림톡을 보냈어요');
+  }
+  sendAllAlim() {
+    this.setState(s => ({ members: s.members.map(m => m.status === 'expiring' ? { ...m, guided: true } : m) }));
+    this.showToast('안내 전 회원에게 일괄 발송했어요');
+  }
+
+  openMember(id) { this.setState(s => ({ selId: id, screen: 'memberDetail', history: [...s.history, s.screen] })); }
+
+  badgeFor(m) {
+    if (m.status === 'active') return { text: '활성', style: 'font:600 11px Pretendard;color:#5C9166;background:#E4EFE3;padding:4px 8px;border-radius:7px;white-space:nowrap' };
+    if (m.dday <= 5) return { text: 'D-' + m.dday, style: 'font:700 11px Pretendard;color:#FAF8F4;background:#C67352;padding:4px 8px;border-radius:7px;white-space:nowrap' };
+    return { text: 'D-' + m.dday, style: 'font:700 11px Pretendard;color:#9A7B2E;background:#F3EAD2;padding:4px 8px;border-radius:7px;white-space:nowrap' };
+  }
+
+  renderVals() {
+    const st = this.state;
+    const S = id => st.screen === id;
+    const back = () => this.back();
+    const expiring = st.members.filter(m => m.status === 'expiring');
+    const sel = st.members.find(m => m.id === st.selId) || st.members[0];
+
+    // members filter
+    const filters = [
+      { key: 'all', label: '전체' },
+      { key: 'expiring', label: '만료 임박' },
+      { key: 'active', label: '활성' },
+      { key: 'rest', label: '휴회' }
+    ];
+    const filterChips = filters.map(f => {
+      const on = st.filter === f.key;
+      return {
+        label: f.label,
+        pick: () => this.setState({ filter: f.key }),
+        style: on
+          ? 'font:700 12px Pretendard;color:#FAF8F4;background:#768C6A;padding:7px 13px;border-radius:20px'
+          : (f.key === 'expiring'
+            ? 'font:600 12px Pretendard;color:#B5612F;background:#FBF3E9;border:1px solid rgba(198,115,82,.25);padding:7px 13px;border-radius:20px'
+            : 'font:600 12px Pretendard;color:#766D60;background:#fff;border:1px solid rgba(75,59,46,.1);padding:7px 13px;border-radius:20px')
+      };
+    });
+    let visible = st.members;
+    if (st.filter === 'expiring') visible = st.members.filter(m => m.status === 'expiring');
+    else if (st.filter === 'active') visible = st.members.filter(m => m.status === 'active');
+    else if (st.filter === 'rest') visible = [];
+    const membersList = visible.map(m => {
+      const b = this.badgeFor(m);
+      const team = m.type === '2:1';
+      return {
+        name: m.name, initial: m.initial, remaining: m.remaining,
+        isTeam: team, notTeam: !team,
+        sub: (team ? '2:1 · ' : '') + this.schedShort(m.days, m.time) + ' · 잔여 ' + m.remaining + '회',
+        avStyle: 'width:42px;height:42px;background:' + m.bg + ';color:#FAF8F4;font-size:15px',
+        av1Style: team ? 'position:absolute;left:0;top:0;width:29px;height:29px;background:' + m.bg + ';color:#FAF8F4;font-size:11px;border:2px solid #fff' : '',
+        av2Style: team ? 'position:absolute;right:0;bottom:0;width:29px;height:29px;background:' + (m.bg2 || m.bg) + ';color:#FAF8F4;font-size:11px;border:2px solid #fff' : '',
+        init1: team ? m.inits[0] : m.initial, init2: team ? m.inits[1] : '',
+        badge: b.text, badgeStyle: b.style,
+        open: () => this.openMember(m.id)
+      };
+    });
+
+    // retention list
+    const retentionList = expiring.map(m => {
+      const guided = m.guided;
+      return {
+        name: m.name, initial: m.initial, remaining: m.remaining,
+        avStyle: 'width:42px;height:42px;background:' + m.bg + ';color:#FAF8F4;font-size:15px',
+        statusText: guided ? ('D-' + m.dday + ' · 안내 완료') : ('D-' + m.dday + ' · 안내 전'),
+        statusStyle: 'font:500 11px Pretendard;color:' + (guided ? '#5C9166' : (m.dday <= 5 ? '#C67352' : '#9A7B2E')) + ';margin-top:1px',
+        showIcon: !guided,
+        btnText: guided ? '상담' : '알림톡',
+        btnStyle: guided
+          ? 'border:1px solid rgba(107,120,94,.4);background:#fff;color:#6B785E;font:700 11.5px Pretendard;padding:8px 12px;border-radius:10px;cursor:pointer'
+          : 'border:none;background:#768C6A;color:#FAF8F4;font:700 11.5px Pretendard;padding:8px 12px;border-radius:10px;display:flex;align-items:center;gap:4px;cursor:pointer',
+        action: guided ? (() => this.showToast(m.name + ' 님 상담 메모를 열었어요')) : (() => this.guide(m.id))
+      };
+    });
+    const pendingCount = expiring.filter(m => !m.guided).length;
+
+    // calendar days
+    const dotSet = new Set([2, 4, 6, 9, 12, 16, 17, 19, 21, 23, 26]);
+    const sundays = new Set([1, 8, 15, 22, 28]);
+    const calDays = [];
+    for (let n = 1; n <= 30; n++) {
+      const isSel = n === st.selDate;
+      let numStyle;
+      if (isSel) numStyle = 'width:30px;height:30px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;font:700 13px Pretendard;color:#FAF8F4';
+      else if (sundays.has(n)) numStyle = 'font:500 12.5px Pretendard;color:#C0796A';
+      else numStyle = 'font:500 12.5px Pretendard;color:#6B6258';
+      calDays.push({ n: n, numStyle: numStyle, dot: dotSet.has(n) && !isSel, pick: () => this.setState({ selDate: n }) });
+    }
+    const dows = ['일', '월', '화', '수', '목', '금', '토'];
+    const selDateLabel = '6월 ' + st.selDate + '일 · ' + (st.selDate === 21 ? '오늘' : dows[(st.selDate - 1) % 7] + '요일');
+    const todayDateLabel = '6월 21일 토요일';
+
+    // trainer's classes on the selected day (from recurring schedules)
+    const tDow = (st.selDate - 1) % 7;
+    const tDayMembers = st.members.filter(m => m.days.includes(tDow)).slice().sort((a, b) => parseInt(a.time, 10) - parseInt(b.time, 10));
+    const trainerDayClasses = tDayMembers.map(m => {
+      const team = m.type === '2:1';
+      const done = st.attended[m.id];
+      const attendedDone = done && done !== 'cancel';
+      const showAttend = st.selDate === 21 && !done;
+      return {
+        timeLabel: this.timeLabel(m.time),
+        name: m.name + (team ? ' · 2:1' : ' · 1:1'),
+        barColor: done ? (done === 'cancel' ? '#C2BAAD' : '#8FA187') : (team ? '#6E8AA0' : '#768C6A'),
+        showAttend: showAttend,
+        showBadge: !showAttend,
+        badgeText: done ? (done === 'cancel' ? '취소' : '완료') : (team ? '2:1' : '예정'),
+        badgeStyle: 'font:600 11px Pretendard;color:' + (attendedDone ? '#8FA187' : (team ? '#5C7286' : '#6B785E')) + ';background:' + (team && !done ? '#E7EDF2' : '#EDF4E3') + ';padding:3px 8px;border-radius:7px',
+        open: m.id === 'iji' ? (() => this.go('classDetail')) : (() => this.openMember(m.id)),
+        attend: (e) => { if (e && e.stopPropagation) e.stopPropagation(); this.openAttendFor(m.id); }
+      };
+    });
+    const trainerDayEmpty = trainerDayClasses.length === 0;
+
+    // attend option styles
+    const opt = (active, accent) => active
+      ? 'display:flex;align-items:center;gap:13px;padding:16px;border-radius:15px;background:#EDF4E3;border:1.5px solid #768C6A;cursor:pointer'
+      : 'display:flex;align-items:center;gap:13px;padding:16px;border-radius:15px;background:#fff;border:1px solid rgba(75,59,46,.08);cursor:pointer';
+    const dot = active => active
+      ? 'width:24px;height:24px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;flex:none'
+      : 'width:24px;height:24px;border-radius:50%;border:2px solid #D6CFC2;flex:none;display:flex;align-items:center;justify-content:center';
+    const txt = active => active
+      ? 'font:700 15px Pretendard;color:#4B3B2E'
+      : 'font:600 15px Pretendard;color:#766D60';
+    const am = st.attendMethod;
+    const at = st.members.find(x => x.id === st.attendId) || st.members[0];
+    const atTeam = at.type === '2:1';
+    const attendRemaining = at.remaining;
+    const afterRemaining = am === 'cancel' ? at.remaining : Math.max(0, at.remaining - 1);
+    const ijiRemaining = (st.members.find(x => x.id === 'iji') || {}).remaining;
+
+    // selected member detail
+    const selBadgeInfo = this.badgeFor(sel);
+    const selBarPct = Math.round((sel.remaining / 20) * 100);
+
+    const roleName = st.role === 'owner' ? '대표' : '트레이너';
+
+    // inbox requests
+    const requestsList = st.requests.map(r => ({
+      name: r.name, initial: r.initial, ago: r.ago,
+      avStyle: 'width:38px;height:38px;background:' + r.bg + ';color:#FAF8F4;font-size:14px',
+      isChange: r.type === 'change', isCancel: r.type === 'cancel',
+      typeBadge: r.type === 'change'
+        ? 'font:700 11px Pretendard;color:#6B785E;background:#EDF4E3;padding:3px 9px;border-radius:7px;white-space:nowrap'
+        : 'font:700 11px Pretendard;color:#B5612F;background:#FBF3E9;padding:3px 9px;border-radius:7px;white-space:nowrap',
+      typeText: r.type === 'change' ? '변경 요청' : '취소 요청',
+      before: r.before, after: r.after, detail: r.detail,
+      accept: () => this.acceptReq(r.id), reject: () => this.rejectReq(r.id)
+    }));
+    const receivedCount = st.requests.length;
+
+    // propose slots
+    const proposeSlotsView = st.proposeSlots.map((x, i) => ({
+      label: x.label, sel: x.sel, toggle: () => this.toggleSlot(i),
+      style: x.sel
+        ? 'display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:13px;background:#EDF4E3;border:1.5px solid #768C6A;cursor:pointer'
+        : 'display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:13px;background:#fff;border:1px solid rgba(75,59,46,.1);cursor:pointer',
+      box: x.sel
+        ? 'width:22px;height:22px;border-radius:6px;background:#768C6A;display:flex;align-items:center;justify-content:center;flex:none'
+        : 'width:22px;height:22px;border-radius:6px;border:2px solid #D6CFC2;flex:none',
+      txt: x.sel ? 'flex:1;font:700 14px Pretendard;color:#4B3B2E' : 'flex:1;font:600 14px Pretendard;color:#766D60'
+    }));
+    const proposeCount = st.proposeSlots.filter(x => x.sel).length;
+    const reasons = ['개인 일정', '시설 점검', '직접 입력'].map(rr => ({
+      label: rr, pick: () => this.setState({ proposeReason: rr }),
+      style: st.proposeReason === rr
+        ? 'font:600 12.5px Pretendard;color:#FAF8F4;background:#768C6A;padding:7px 13px;border-radius:20px;cursor:pointer'
+        : 'font:600 12.5px Pretendard;color:#766D60;background:#fff;border:1px solid rgba(75,59,46,.1);padding:7px 13px;border-radius:20px;cursor:pointer'
+    }));
+
+    // inbox tabs
+    const inboxRecvStyle = st.inboxTab === 'received'
+      ? 'flex:1;text-align:center;font:700 12.5px Pretendard;color:#FAF8F4;background:#768C6A;padding:9px 0;border-radius:11px;cursor:pointer'
+      : 'flex:1;text-align:center;font:600 12.5px Pretendard;color:#847A66;background:#F8F4EC;padding:9px 0;border-radius:11px;cursor:pointer';
+    const inboxSentStyle = st.inboxTab === 'sent'
+      ? 'flex:1;text-align:center;font:700 12.5px Pretendard;color:#FAF8F4;background:#768C6A;padding:9px 0;border-radius:11px;cursor:pointer'
+      : 'flex:1;text-align:center;font:600 12.5px Pretendard;color:#847A66;background:#F8F4EC;padding:9px 0;border-radius:11px;cursor:pointer';
+
+    // settings menu (owner ops)
+    const settingsItems = [
+      { icon: 'persons', title: '강사 관리', sub: '강사 계정 · 권한', go: () => this.go('instrManage'), accent: true },
+      { icon: 'person-plus', title: '회원 등록', sub: '신규 회원 추가', go: () => this.go('memberRegister') },
+      { icon: 'ticket', title: '회원권 발급', sub: '10 · 20 · 30회권', go: () => this.go('issueMembership') },
+      { icon: 'circle-info', title: '노쇼 · 취소 정책', sub: '시간 기준 · 차감 규칙', go: () => this.showToast('정책 설정은 준비 중이에요') },
+      { icon: 'bell', title: '알림 설정', sub: '알림톡 · 푸시', go: () => this.showToast('알림 설정은 준비 중이에요') }
+    ].map(it => ({
+      title: it.title, sub: it.sub, icon: it.icon, open: it.go,
+      iconWrap: it.accent
+        ? 'width:36px;height:36px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;flex:none'
+        : 'width:36px;height:36px;border-radius:10px;background:#F8F4EC;display:flex;align-items:center;justify-content:center;flex:none',
+      iconColor: it.accent ? '#6B785E' : '#8A8175',
+      rowStyle: it.accent
+        ? 'display:flex;align-items:center;gap:13px;padding:13px 14px;background:#EDF4E3;border-radius:14px;cursor:pointer'
+        : 'display:flex;align-items:center;gap:13px;padding:13px 14px;border-radius:14px;cursor:pointer',
+      chev: it.accent ? '#9DB089' : '#C2BAAD'
+    }));
+
+    // instructors
+    const instructors = [
+      { name: '김계절', initial: '계', bg: '#768C6A', role: '대표 · 나', sub: '담당 24명', owner: true },
+      { name: '이수민', initial: '수', bg: '#8FA187', role: '활성', sub: '강사 · 담당 12명' },
+      { name: '박지훈', initial: '지', bg: '#8FA187', role: '활성', sub: '강사 · 담당 9명' },
+      { name: '정하늘', initial: '하', bg: '#A89A80', role: '초대 대기', sub: '임시 비밀번호 미설정', pending: true }
+    ];
+
+    // recurring schedule (member register)
+    const regDayChips = ['일', '월', '화', '수', '목', '금', '토'].map((w, i) => {
+      const on = st.regDays.includes(i);
+      const sun = i === 0;
+      return {
+        label: w, toggle: () => this.toggleRegDay(i),
+        style: on
+          ? 'flex:1;text-align:center;font:700 13px Pretendard;color:#FAF8F4;background:#768C6A;padding:10px 0;border-radius:11px;cursor:pointer'
+          : 'flex:1;text-align:center;font:600 13px Pretendard;color:' + (sun ? '#C0796A' : '#847A66') + ';background:#F8F4EC;padding:10px 0;border-radius:11px;cursor:pointer'
+      };
+    });
+    const regSummary = this.schedLabel(st.regDays, st.regTime);
+
+    // member calendar (logged-in member = 이지수)
+    const mMember = st.members.find(x => x.id === 'iji') || st.members[0];
+    const wkd = ['일', '월', '화', '수', '목', '금', '토'];
+    const mCalDays = [];
+    for (let n = 1; n <= 30; n++) {
+      const dow = (n - 1) % 7;
+      const isSel = n === st.mSelDate;
+      const cls = mMember.days.includes(dow);
+      let numStyle;
+      if (isSel) numStyle = 'width:30px;height:30px;border-radius:50%;background:#768C6A;display:flex;align-items:center;justify-content:center;font:700 13px Pretendard;color:#FAF8F4';
+      else if (dow === 0) numStyle = 'font:500 12.5px Pretendard;color:#C0796A';
+      else numStyle = 'font:500 12.5px Pretendard;color:#6B6258';
+      mCalDays.push({ n: n, numStyle: numStyle, dot: cls && !isSel, pick: () => this.setState({ mSelDate: n }) });
+    }
+    const mDow = (st.mSelDate - 1) % 7;
+    const mDayHasClass = mMember.days.includes(mDow);
+    const mSelDateLabel = '6월 ' + st.mSelDate + '일 · ' + (st.mSelDate === 21 ? '오늘' : wkd[mDow] + '요일');
+    const mHh = parseInt(mMember.time, 10);
+    const mTimeLabel = (mHh >= 12 ? '오후 ' : '오전 ') + (mHh > 12 ? mHh - 12 : mHh) + ':00';
+
+    // ---------- chat ----------
+    const chatViewer = st.role === 'member' ? 'iji' : 'trainer';
+    const tRoom = st.threads[st.chatSel] || st.threads.iji;
+    const roomTeam = tRoom.type === '2:1';
+    const senderInfo = (from) => {
+      if (from === 'trainer') return { name: '김계절', initial: '계', bg: '#768C6A' };
+      if (roomTeam && tRoom.parts && tRoom.parts[from]) return tRoom.parts[from];
+      if (from === 'iji') return { name: '이지수', initial: '이', bg: '#A88B57' };
+      return { name: tRoom.name, initial: tRoom.initial, bg: tRoom.bg };
+    };
+    const roomMsgs = tRoom.msgs.map(m => {
+      const mine = m.from === chatViewer;
+      const info = senderInfo(m.from);
+      return {
+        mine: mine, isOther: !mine, text: m.text, time: m.time,
+        nameVisible: !mine && roomTeam, name: info.name, initial: info.initial,
+        avStyle: 'width:30px;height:30px;background:' + info.bg + ';color:#FAF8F4;font-size:12px;flex:none'
+      };
+    });
+    const roomDateLabel = (tRoom.time.indexOf('오') === 0 || tRoom.time === '지금') ? '오늘' : tRoom.time;
+    const roomSub = roomTeam ? '2:1 팀 채팅 · 3명 참여' : '1:1 채팅 · 담당 회원';
+    const roomAvStyle = 'width:40px;height:40px;background:' + tRoom.bg + ';color:#FAF8F4;font-size:15px';
+    const chatThreads = st.chatOrder.map(id => {
+      const t = st.threads[id];
+      const last = t.msgs[t.msgs.length - 1];
+      const team = t.type === '2:1';
+      let preview = last.text;
+      if (last.from === 'trainer') preview = '나: ' + last.text;
+      else if (team && t.parts && t.parts[last.from]) preview = t.parts[last.from].name + ': ' + last.text;
+      return {
+        name: t.name, isTeam: team, notTeam: !team, initial: t.initial,
+        avStyle: 'width:46px;height:46px;background:' + t.bg + ';color:#FAF8F4;font-size:17px',
+        av1Style: team ? 'position:absolute;left:0;top:0;width:30px;height:30px;background:' + t.bg + ';color:#FAF8F4;font-size:12px;border:2px solid #fff' : '',
+        av2Style: team ? 'position:absolute;right:0;bottom:0;width:30px;height:30px;background:' + (t.bg2 || t.bg) + ';color:#FAF8F4;font-size:12px;border:2px solid #fff' : '',
+        init1: team ? t.inits[0] : t.initial, init2: team ? t.inits[1] : '',
+        preview: preview, time: t.time, hasUnread: t.unread > 0, unread: t.unread,
+        open: () => this.openRoom(id)
+      };
+    });
+    const chatUnreadTotal = st.chatOrder.reduce((a, id) => a + st.threads[id].unread, 0);
+    const draftHas = (st.draft || '').trim().length > 0;
+    const sendBtnStyle = draftHas ? 'background:#768C6A;color:#FAF8F4' : 'background:#E4DFD2;color:#B3AA9C';
+
+    return {
+      // screen flags
+      s_start: S('start'), s_loginMember: S('loginMember'), s_loginTrainer: S('loginTrainer'),
+      s_signupOwner: S('signupOwner'), s_loginInstr: S('loginInstr'), s_setPw: S('setPw'),
+      s_home: S('home'), s_calendar: S('calendar'), s_members: S('members'), s_perf: S('perf'),
+      s_attend: S('attend'), s_record: S('record'), s_memberDetail: S('memberDetail'), s_retention: S('retention'),
+      s_classDetail: S('classDetail'), s_propose: S('propose'), s_inbox: S('inbox'), s_confirm: S('confirm'),
+      s_settings: S('settings'), s_instrManage: S('instrManage'), s_instrInvite: S('instrInvite'),
+      s_issueMembership: S('issueMembership'), s_paymentRecord: S('paymentRecord'), s_memberRegister: S('memberRegister'),
+      s_mHome: S('mHome'), s_mCalendar: S('mCalendar'), s_mReceive: S('mReceive'), s_mRequest: S('mRequest'),
+
+      // onboarding handlers
+      back,
+      goMemberLogin: () => this.go('loginMember'),
+      goTrainerLogin: () => this.go('loginTrainer'),
+      goSignupOwner: () => this.go('signupOwner'),
+      goInstrLogin: () => this.go('loginInstr'),
+      goSetPw: () => this.go('setPw'),
+      doMemberLogin: () => this.enterApp('member'),
+      doTrainerLogin: () => this.enterApp('trainer'),
+      doOwnerSignup: () => this.enterApp('owner'),
+      doSetPw: () => { this.showToast('비밀번호가 설정됐어요'); this.enterApp('trainer'); },
+
+      // tabs
+      tabHome: () => this.tab('home'),
+      tabCalendar: () => this.tab('calendar'),
+      tabMembers: () => this.tab('members'),
+      tabPerf: () => this.tab('perf'),
+
+      // header / shared
+      meName: '김계절', meRole: roleName,
+      isOwner: st.role === 'owner', isTrainer: st.role === 'trainer',
+      logout: () => this.setState({ role: null, screen: 'start', history: [], attended: {} }),
+      expiringCount: expiring.length,
+      ijiRemaining: ijiRemaining,
+      inboxCount: 3, hasInbox: true,
+      goInbox: () => this.go('inbox'),
+      goSettings: () => this.go('settings'),
+      goRetention: () => this.go('retention'),
+      openAttend: () => this.openAttendFor('iji'),
+
+      // calendar
+      calDays, selDateLabel,
+      todayDateLabel, trainerDayClasses, trainerDayEmpty, trainerDayCount: trainerDayClasses.length,
+      toastSlot: () => this.showToast('새 수업 슬롯을 열었어요'),
+
+      // members
+      totalMembers: 24, filterChips, membersList,
+
+      // attend
+      pickAttend: () => this.setState({ attendMethod: 'attend' }),
+      pickNoshow: () => this.setState({ attendMethod: 'noshow' }),
+      pickCancel: () => this.setState({ attendMethod: 'cancel' }),
+      isAttend: am === 'attend', isNoshow: am === 'noshow', isCancel: am === 'cancel',
+      mAttendStyle: opt(am === 'attend'), mNoshowStyle: opt(am === 'noshow'), mCancelStyle: opt(am === 'cancel'),
+      mAttendDot: dot(am === 'attend'), mNoshowDot: dot(am === 'noshow'), mCancelDot: dot(am === 'cancel'),
+      mAttendTxt: txt(am === 'attend'), mNoshowTxt: txt(am === 'noshow'), mCancelTxt: txt(am === 'cancel'),
+      afterRemaining, attendRemaining,
+      attendName: at.name, attendIsTeam: atTeam, attendNotTeam: !atTeam,
+      attendInitial: at.initial,
+      attendAvStyle: 'width:54px;height:54px;background:' + at.bg + ';color:#FAF8F4;font-size:19px',
+      attendInit1: atTeam ? at.inits[0] : at.initial,
+      attendInit2: atTeam ? at.inits[1] : '',
+      attendAv1Style: 'position:absolute;left:0;top:1px;width:38px;height:38px;background:' + at.bg + ';color:#FAF8F4;font-size:14px;border:2.5px solid #fff',
+      attendAv2Style: 'position:absolute;right:0;bottom:1px;width:38px;height:38px;background:' + (at.bg2 || at.bg) + ';color:#FAF8F4;font-size:14px;border:2.5px solid #fff',
+      attendMeta: (atTeam ? '2:1 PT · 두 분 한 팀' : '1:1 PT') + ' · ' + this.timeLabel(at.time) + ' · 잔여 ' + at.remaining + '회',
+      attendLabelAttend: atTeam ? '팀 출석 (1회 함께 차감)' : '출석 (1회 차감)',
+      attendLabelNoshow: atTeam ? '팀 노쇼 (정책 차감)' : '노쇼 (정책 차감)',
+      attendCta: am === 'cancel' ? '수업 취소로 처리' : (atTeam ? '팀 출석 완료 · 함께 차감' : '출석 완료 · 자동 차감'),
+      confirmAttend: () => this.confirmAttend(),
+
+      // record
+      exercises: st.exercises.map((e, i) => ({
+        name: e.name, kg: e.kg, sets: e.sets,
+        kgDec: () => this.step(i, 'kg', -5), kgInc: () => this.step(i, 'kg', 5),
+        setDec: () => this.step(i, 'sets', -1), setInc: () => this.step(i, 'sets', 1)
+      })),
+      addExercise: () => this.addExercise(),
+      saveRecord: () => this.saveRecord(),
+      goRecord: () => this.go('record'),
+
+      // member detail
+      selName: sel.name, selInitial: sel.initial, selRemaining: sel.remaining,
+      selSchedule: this.schedLabel(sel.days, sel.time),
+      selIsTeam: sel.type === '2:1', selNotTeam: sel.type !== '2:1',
+      selTypeLabel: sel.type === '2:1' ? '2:1 팀 PT' : '1:1 PT',
+      selInit1: sel.type === '2:1' ? sel.inits[0] : sel.initial,
+      selInit2: sel.type === '2:1' ? sel.inits[1] : '',
+      selAvStyle: 'width:50px;height:50px;background:' + sel.bg + ';color:#FAF8F4;font-size:18px',
+      selAv1Style: 'position:absolute;left:0;top:0;width:34px;height:34px;background:' + sel.bg + ';color:#FAF8F4;font-size:13px;border:2.5px solid #fff',
+      selAv2Style: 'position:absolute;right:0;bottom:0;width:34px;height:34px;background:' + (sel.bg2 || sel.bg) + ';color:#FAF8F4;font-size:13px;border:2.5px solid #fff',
+      selBadge: selBadgeInfo.text,
+      selBadgeStyle: selBadgeInfo.style,
+      selBarStyle: 'width:' + selBarPct + '%;height:100%;background:#F0E0C8;border-radius:4px',
+
+      // retention
+      retentionList, pendingCount, sendAllAlim: () => this.sendAllAlim(),
+
+      // class detail
+      goPropose: () => this.go('propose'),
+      cancelClass: () => this.showToast('수업 취소 요청을 보냈어요'),
+
+      // propose
+      proposeSlotsView, proposeCount, reasons,
+      sendPropose: () => this.sendPropose(),
+      proposeSendCta: '변경 요청 보내기 · ' + proposeCount + '개 제안',
+
+      // inbox
+      requestsList, receivedCount,
+      inboxRecvStyle, inboxSentStyle,
+      inboxReceived: st.inboxTab === 'received', inboxSent: st.inboxTab === 'sent',
+      setRecvTab: () => this.setState({ inboxTab: 'received' }),
+      setSentTab: () => this.setState({ inboxTab: 'sent' }),
+      inboxEmpty: st.requests.length === 0,
+
+      // confirm
+      confirmBefore: st.confirmData.before, confirmAfter: st.confirmData.after,
+      confirmDone: () => this.confirmDone(),
+      goCalendarFromConfirm: () => this.tab(st.role === 'member' ? 'mCalendar' : 'calendar'),
+
+      // settings / owner
+      settingsItems,
+      instructors,
+      goInstrInvite: () => this.go('instrInvite'),
+      issueInstr: () => { this.showToast('강사 계정을 발급했어요'); this.back(); },
+      doIssueMembership: () => this.go('paymentRecord'),
+      doPayment: () => { this.showToast('결제를 기록했어요'); this.tab('calendar'); },
+      regDayChips, regTime: st.regTime, regSummary,
+      cycleRegTime: () => this.cycleRegTime(),
+      doRegisterMember: () => { this.showToast('윤서아 님 등록 · ' + regSummary); this.tab('calendar'); },
+
+      // member app
+      tabMHome: () => this.tab('mHome'),
+      tabMCalendar: () => this.tab('mCalendar'),
+      mToastMy: () => this.showToast('마이 페이지는 준비 중이에요'),
+      mCalDays, mSelDateLabel, mDayHasClass, mDayNoClass: !mDayHasClass, mTimeLabel,
+      mOpenReceive: () => this.go('mReceive'),
+      mOpenRequest: () => this.go('mRequest'),
+      mHasTrainerReq: st.mTrainerRequest,
+      acceptChange: () => this.acceptChange(),
+      rejectChange: () => this.showToast('변경 요청을 거절했어요'),
+      sendMemberRequest: () => this.sendMemberRequest(),
+
+      // chat
+      s_chatList: S('chatList'), s_chatRoom: S('chatRoom'), s_mChat: S('mChat'),
+      tabChat: () => this.tab('chatList'),
+      chatThreads, chatUnread: chatUnreadTotal, hasChatUnread: chatUnreadTotal > 0,
+      roomMsgs, roomTitle: tRoom.name, roomIsTeam: roomTeam, roomNotTeam: !roomTeam,
+      roomInitial: tRoom.initial, roomAvStyle, roomSub, roomDateLabel,
+      roomInit1: roomTeam ? tRoom.inits[0] : tRoom.initial, roomInit2: roomTeam ? tRoom.inits[1] : '',
+      roomAv1Style: 'position:absolute;left:0;top:0;width:26px;height:26px;background:' + tRoom.bg + ';color:#FAF8F4;font-size:11px;border:2px solid #FAF8F4',
+      roomAv2Style: 'position:absolute;right:0;bottom:0;width:26px;height:26px;background:' + (tRoom.bg2 || tRoom.bg) + ';color:#FAF8F4;font-size:11px;border:2px solid #FAF8F4',
+      chatRef: this.chatRef,
+      draft: st.draft, onDraft: (e) => this.onDraft(e), onDraftKey: (e) => this.onDraftKey(e),
+      sendChat: () => this.sendChat(), sendBtnStyle,
+      mOpenChat: () => this.mOpenChat(),
+      mChatUnread: st.mChatUnread, hasMChatUnread: st.mChatUnread > 0,
+
+      // toast
+      toast: st.toast, hasToast: !!st.toast
+    };
+  }
+}
+</script>
+</body>
+</html>

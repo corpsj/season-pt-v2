@@ -1,0 +1,11 @@
+/* Wanted Design System — Webfonts
+   Base UI typeface: Pretendard JP (KR / EN / JP coverage).
+   Brand typeface: Wanted Sans (used for logo lockups and large brand moments).
+   Served from jsDelivr dynamic-subset CDN. To self-host, download the woff2
+   files from the repos below and replace these @import lines with @font-face. */
+
+/* Pretendard JP — family name "Pretendard JP" */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-jp-dynamic-subset.min.css");
+
+/* Wanted Sans (variable) — family name "Wanted Sans Variable" */
+@import url("https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.3/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css");

@@ -1,0 +1,67 @@
+/* Wanted Design System — Typography tokens & utilities
+   Base typeface Pretendard JP. The scale has 7 tiers (Display, Title, Heading,
+   Headline, Body, Label, Caption) across 18 sub-steps. Each style carries an
+   intentional size / line-height / letter-spacing pairing — never override them
+   piecemeal; pick the named step. Weight axis: 700 Bold, 600 SemiBold, 500
+   Medium, 400 Regular. Most UI text is Medium 500; SemiBold 600 for emphasis. */
+
+:root {
+  --font-base: "Pretendard JP", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-brand: "Wanted Sans Variable", "Pretendard JP", -apple-system, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --font-weight-bold: 700;
+  --font-weight-semibold: 600;
+  --font-weight-medium: 500;
+  --font-weight-regular: 400;
+
+  /* size / line-height / letter-spacing per named step */
+  --display1-size: 56px;   --display1-line: 72px;  --display1-spacing: -0.032em;
+  --display2-size: 40px;   --display2-line: 52px;  --display2-spacing: -0.0282em;
+  --display3-size: 36px;   --display3-line: 48px;  --display3-spacing: -0.027em;
+  --title1-size: 32px;     --title1-line: 44px;    --title1-spacing: -0.0253em;
+  --title2-size: 28px;     --title2-line: 38px;    --title2-spacing: -0.0236em;
+  --title3-size: 24px;     --title3-line: 32px;    --title3-spacing: -0.023em;
+  --heading1-size: 22px;   --heading1-line: 30px;  --heading1-spacing: -0.0194em;
+  --heading2-size: 20px;   --heading2-line: 28px;  --heading2-spacing: -0.012em;
+  --headline1-size: 18px;  --headline1-line: 26px; --headline1-spacing: -0.002em;
+  --headline2-size: 17px;  --headline2-line: 24px; --headline2-spacing: 0em;
+  --body1-size: 16px;      --body1-line: 24px;     --body1-reading: 26px;  --body1-spacing: 0.0057em;
+  --body2-size: 15px;      --body2-line: 22px;     --body2-reading: 24px;  --body2-spacing: 0.0096em;
+  --label1-size: 14px;     --label1-line: 20px;    --label1-reading: 22px; --label1-spacing: 0.0145em;
+  --label2-size: 13px;     --label2-line: 18px;    --label2-spacing: 0.0194em;
+  --caption1-size: 12px;   --caption1-line: 16px;  --caption1-spacing: 0.0252em;
+  --caption2-size: 11px;   --caption2-line: 14px;  --caption2-spacing: 0.0311em;
+}
+
+/* Utility classes — apply font, size, line-height, tracking and a default weight. */
+.wds-display1, .wds-display2, .wds-display3,
+.wds-title1, .wds-title2, .wds-title3,
+.wds-heading1, .wds-heading2,
+.wds-headline1, .wds-headline2,
+.wds-body1, .wds-body1-reading, .wds-body2, .wds-body2-reading,
+.wds-label1, .wds-label1-reading, .wds-label2,
+.wds-caption1, .wds-caption2 {
+  font-family: var(--font-base);
+  margin: 0;
+}
+
+.wds-display1 { font-size: var(--display1-size); line-height: var(--display1-line); letter-spacing: var(--display1-spacing); font-weight: 700; }
+.wds-display2 { font-size: var(--display2-size); line-height: var(--display2-line); letter-spacing: var(--display2-spacing); font-weight: 700; }
+.wds-display3 { font-size: var(--display3-size); line-height: var(--display3-line); letter-spacing: var(--display3-spacing); font-weight: 700; }
+.wds-title1 { font-size: var(--title1-size); line-height: var(--title1-line); letter-spacing: var(--title1-spacing); font-weight: 700; }
+.wds-title2 { font-size: var(--title2-size); line-height: var(--title2-line); letter-spacing: var(--title2-spacing); font-weight: 700; }
+.wds-title3 { font-size: var(--title3-size); line-height: var(--title3-line); letter-spacing: var(--title3-spacing); font-weight: 700; }
+.wds-heading1 { font-size: var(--heading1-size); line-height: var(--heading1-line); letter-spacing: var(--heading1-spacing); font-weight: 700; }
+.wds-heading2 { font-size: var(--heading2-size); line-height: var(--heading2-line); letter-spacing: var(--heading2-spacing); font-weight: 700; }
+.wds-headline1 { font-size: var(--headline1-size); line-height: var(--headline1-line); letter-spacing: var(--headline1-spacing); font-weight: 600; }
+.wds-headline2 { font-size: var(--headline2-size); line-height: var(--headline2-line); letter-spacing: var(--headline2-spacing); font-weight: 600; }
+.wds-body1 { font-size: var(--body1-size); line-height: var(--body1-line); letter-spacing: var(--body1-spacing); font-weight: 500; }
+.wds-body1-reading { font-size: var(--body1-size); line-height: var(--body1-reading); letter-spacing: var(--body1-spacing); font-weight: 500; }
+.wds-body2 { font-size: var(--body2-size); line-height: var(--body2-line); letter-spacing: var(--body2-spacing); font-weight: 500; }
+.wds-body2-reading { font-size: var(--body2-size); line-height: var(--body2-reading); letter-spacing: var(--body2-spacing); font-weight: 500; }
+.wds-label1 { font-size: var(--label1-size); line-height: var(--label1-line); letter-spacing: var(--label1-spacing); font-weight: 600; }
+.wds-label1-reading { font-size: var(--label1-size); line-height: var(--label1-reading); letter-spacing: var(--label1-spacing); font-weight: 500; }
+.wds-label2 { font-size: var(--label2-size); line-height: var(--label2-line); letter-spacing: var(--label2-spacing); font-weight: 600; }
+.wds-caption1 { font-size: var(--caption1-size); line-height: var(--caption1-line); letter-spacing: var(--caption1-spacing); font-weight: 600; }
+.wds-caption2 { font-size: var(--caption2-size); line-height: var(--caption2-line); letter-spacing: var(--caption2-spacing); font-weight: 600; }

@@ -1,0 +1,11 @@
+/* Wanted Design System — global stylesheet (entry point).
+   Consumers link THIS file. It is an @import manifest only — no rules live here.
+   Load order: fonts → primitive tokens → semantic tokens → typography →
+   spacing/elevation → asset classes. */
+
+@import "./tokens/fonts.css";
+@import "./tokens/fig-tokens.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";
+@import "./components/styles/components.css";
+@import "./assets/logos/fig-assets.css";
