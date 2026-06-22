@@ -361,6 +361,82 @@ export interface MemberRequestView {
   slots: { id: string; label: string }[];
 }
 
+/* --------------------------- member · my page --------------------------- */
+/** One stat in the profile hero (누적 출석 / 함께한 기간 / 미열람 공지). */
+export interface MemberMyStat {
+  value: string;
+  unit: string;
+  label: string;
+}
+export interface MemberMyMembership {
+  productLabel: string; // "1:1 PT 20회권"
+  remaining: number;
+  total: number;
+  dDay: number;
+  endLabel: string; // "2026.08.21"
+  barPct: number;
+  expired: boolean;
+}
+export interface MemberMyView {
+  name: string;
+  initial: string;
+  avatarTone: AvatarTone;
+  statusLabel: string; // "활동 중" 등 (등급 칩 대체)
+  stats: MemberMyStat[];
+  membership: MemberMyMembership | null;
+  trainer: { name: string; sub: string } | null;
+  unreadNotices: number;
+}
+
+/** A single purchase row in 결제·구매 내역. */
+export interface MemberPaymentItem {
+  id: string;
+  productLabel: string; // "1:1 PT 20회권"
+  dateLabel: string; // "04.02 · 카드 결제"
+  amount: number | null;
+  statusLabel: string; // "결제완료" | "사용완료"
+  done: boolean; // true → 진행/완료 강조(sage), false → 종료(muted)
+}
+export interface MemberPaymentYear {
+  year: string;
+  count: number;
+  items: MemberPaymentItem[];
+}
+export interface MemberPaymentsView {
+  totalAmount: number;
+  totalCount: number;
+  years: MemberPaymentYear[];
+}
+
+export type NoticeTone = "important" | "facility" | "ops";
+export interface MemberNotice {
+  id: string;
+  tag: string; // "중요" | "시설" | "운영"
+  tone: NoticeTone;
+  dateLabel: string; // "08.10"
+  title: string;
+  body: string;
+  unread: boolean;
+}
+export interface MemberNoticesView {
+  notices: MemberNotice[];
+  unread: number;
+}
+
+export interface MemberNotifItem {
+  key: string;
+  title: string;
+  sub: string;
+  on: boolean;
+}
+export interface MemberNotifGroup {
+  title: string;
+  items: MemberNotifItem[];
+}
+export interface MemberNotifView {
+  groups: MemberNotifGroup[];
+}
+
 /* --------------------------- membership issue --------------------------- */
 export interface MembershipProduct {
   product: "10" | "20" | "30";

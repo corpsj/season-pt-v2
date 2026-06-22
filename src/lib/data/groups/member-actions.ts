@@ -1,8 +1,24 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { sb, getMemberContext } from "@/lib/data/db";
+import {
+  NOTICE_READ_COOKIE,
+  NOTICE_UNREAD_IDS,
+  NOTIF_COOKIE,
+  NOTIF_KEYS,
+} from "./member";
 
 type Result = { ok: boolean; error?: string };
+
+const YEAR = 60 * 60 * 24 * 365;
+const COOKIE_OPTS = {
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: YEAR,
+};
 
 async function requireMember() {
   const m = await getMemberContext();
@@ -146,5 +162,49 @@ export async function sendMemberChat(text: string): Promise<Result> {
     .eq("id", thread.id);
 
   revalidatePath("/m/chat");
+  return { ok: true };
+}
+
+/* ----------------------------- my page (/m/my) ----------------------------- */
+
+/** Mark all currently-unread notices as read (per device). Called when 공지사항 opens. */
+export async function markNoticesRead(): Promise<void> {
+  await requireMember();
+  const c = await cookies();
+  let ids: string[] = [];
+  const raw = c.get(NOTICE_READ_COOKIE)?.value;
+  if (raw) {
+    try {
+      const a: unknown = JSON.parse(raw);
+      if (Array.isArray(a)) ids = a.filter((x): x is string => typeof x === "string");
+    } catch {
+      /* ignore malformed cookie */
+    }
+  }
+  const merged = [...new Set([...ids, ...NOTICE_UNREAD_IDS])];
+  c.set(NOTICE_READ_COOKIE, JSON.stringify(merged), COOKIE_OPTS);
+  // Only refresh the My page (for the unread badge/stat). The notices screen
+  // keeps its unread highlight for this visit; it clears on the next open.
+  revalidatePath("/m/my");
+}
+
+/** Toggle one notification setting (per device). */
+export async function setMemberNotifSetting(key: string, on: boolean): Promise<Result> {
+  await requireMember();
+  if (!NOTIF_KEYS.includes(key)) return { ok: false, error: "알 수 없는 설정이에요" };
+  const c = await cookies();
+  let obj: Record<string, boolean> = {};
+  const raw = c.get(NOTIF_COOKIE)?.value;
+  if (raw) {
+    try {
+      const o: unknown = JSON.parse(raw);
+      if (o && typeof o === "object" && !Array.isArray(o)) obj = o as Record<string, boolean>;
+    } catch {
+      /* ignore malformed cookie */
+    }
+  }
+  obj[key] = on;
+  c.set(NOTIF_COOKIE, JSON.stringify(obj), COOKIE_OPTS);
+  revalidatePath("/m/my/notifications");
   return { ok: true };
 }

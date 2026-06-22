@@ -20,6 +20,6 @@ export function memberTabs({ chatUnread }: { chatUnread: number }): TabDef[] {
   return [
     { label: "캘린더", href: "/m", icon: "calendar", activeIcon: "calendar-fill", matchExact: true },
     { label: "채팅", href: "/m/chat", icon: "message", activeIcon: "message-fill", badge: chatUnread || undefined },
-    { label: "마이", icon: "person", activeIcon: "person-fill", toast: "마이 페이지는 준비 중이에요" },
+    { label: "마이", href: "/m/my", icon: "person", activeIcon: "person-fill" },
   ];
 }

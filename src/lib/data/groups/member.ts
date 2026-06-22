@@ -1,4 +1,5 @@
 import "server-only";
+import { cookies } from "next/headers";
 import {
   sb,
   getMemberContext,
@@ -12,8 +13,16 @@ import {
   nowKstParts,
 } from "@/lib/data/db";
 import type {
+  AvatarTone,
   CalendarDay,
   MemberCalendarView,
+  MemberMyView,
+  MemberNotice,
+  MemberNoticesView,
+  MemberNotifView,
+  MemberPaymentItem,
+  MemberPaymentsView,
+  MemberPaymentYear,
   MemberReceiveView,
   MemberRequestView,
 } from "@/lib/types";
@@ -489,4 +498,307 @@ export async function getMemberChatUnread(): Promise<number> {
     .eq("sender_type", "trainer")
     .eq("read_by_member", false);
   return count ?? 0;
+}
+
+/* ============================================================
+   my page (/m/my) — design: 마이페이지 (A안 상세).dc.html
+   ------------------------------------------------------------
+   Notices and notification settings have no backing tables yet;
+   notices are a curated source and both keep per-device state in
+   cookies (server-readable, so RSC renders the correct initial
+   state). View shapes are stable, so a future `notices` /
+   `member_notification_settings` table can swap in untouched.
+   ============================================================ */
+
+export const NOTICE_READ_COOKIE = "spt_notice_reads";
+export const NOTIF_COOKIE = "spt_notif";
+
+/** Curated facility notices (newest first). */
+const NOTICES: Omit<MemberNotice, "unread">[] = [
+  {
+    id: "n-summer-closure",
+    tag: "중요",
+    tone: "important",
+    dateLabel: "08.10",
+    title: "여름 휴관 안내 (8/15~8/16)",
+    body: "광복절 연휴 기간 전관 휴무입니다. 예약은 8/17부터 가능해요.",
+  },
+  {
+    id: "n-new-reformer",
+    tag: "시설",
+    tone: "facility",
+    dateLabel: "06.18",
+    title: "신규 필라테스 기구 입고 안내",
+    body: "리포머 2대가 추가 입고되어 예약 슬롯이 늘었어요.",
+  },
+  {
+    id: "n-june-schedule",
+    tag: "운영",
+    tone: "ops",
+    dateLabel: "06.01",
+    title: "6월 수업 일정 변경 안내",
+    body: "현충일(6/6) 휴무로 일부 수업이 조정됩니다.",
+  },
+  {
+    id: "n-parking",
+    tag: "운영",
+    tone: "ops",
+    dateLabel: "05.20",
+    title: "주차장 이용 안내",
+    body: "건물 지하 2~3층, 2시간 무료 주차 가능합니다.",
+  },
+];
+
+/** Notices that start unread (until the member opens 공지사항). */
+export const NOTICE_UNREAD_IDS = ["n-summer-closure", "n-new-reformer"] as const;
+
+/** Notification toggles, grouped — with sensible defaults. */
+const NOTIF_GROUPS: { title: string; items: { key: string; title: string; sub: string; def: boolean }[] }[] = [
+  {
+    title: "수업 알림",
+    items: [
+      { key: "class_status", title: "예약 확정·취소", sub: "예약 상태가 바뀌면 알려드려요", def: true },
+      { key: "class_reminder", title: "수업 1시간 전 리마인더", sub: "놓치지 않도록 미리 알림", def: true },
+      { key: "attend_deduct", title: "출석·차감 알림", sub: "수업 후 잔여 횟수를 확인", def: false },
+    ],
+  },
+  {
+    title: "회원권",
+    items: [
+      { key: "expiry_soon", title: "만료 임박 안내", sub: "유효기간 D-7부터 안내", def: true },
+      { key: "low_sessions", title: "잔여 횟수 소진 임박", sub: "3회 이하로 남으면 알림", def: true },
+    ],
+  },
+  {
+    title: "마케팅",
+    items: [
+      { key: "events", title: "이벤트·혜택 소식", sub: "할인·프로모션 안내", def: false },
+      { key: "night_push", title: "야간 푸시 (21–8시)", sub: "늦은 시간 알림 받기", def: false },
+    ],
+  },
+];
+
+/** Valid notification keys (for action-side validation). */
+export const NOTIF_KEYS = NOTIF_GROUPS.flatMap((g) => g.items.map((i) => i.key));
+
+async function readNoticeReadIds(): Promise<string[]> {
+  const c = await cookies();
+  const raw = c.get(NOTICE_READ_COOKIE)?.value;
+  if (!raw) return [];
+  try {
+    const a: unknown = JSON.parse(raw);
+    return Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function unreadNoticeCount(readIds: string[]): number {
+  return NOTICE_UNREAD_IDS.filter((id) => !readIds.includes(id)).length;
+}
+
+async function readNotifOverrides(): Promise<Record<string, boolean>> {
+  const c = await cookies();
+  const raw = c.get(NOTIF_COOKIE)?.value;
+  if (!raw) return {};
+  try {
+    const o: unknown = JSON.parse(raw);
+    return o && typeof o === "object" && !Array.isArray(o) ? (o as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Number of sessions this member actually attended (누적 출석). */
+async function attendedCount(memberId: string): Promise<number> {
+  const { data } = await sb
+    .from("session_members")
+    .select("sessions(status)")
+    .eq("member_id", memberId);
+  return (data ?? [])
+    .map((r) => (r as unknown as { sessions?: { status: string } }).sessions)
+    .filter((s): s is { status: string } => !!s && s.status === "attended").length;
+}
+
+/** Earliest membership start date (YYYY-MM-DD) — for 함께한 기간. */
+async function earliestMembershipStart(memberId: string): Promise<string | null> {
+  const { data } = await sb
+    .from("memberships")
+    .select("start_date")
+    .eq("member_id", memberId)
+    .order("start_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.start_date ?? null;
+}
+
+/** "함께한 기간" value/unit from the join date. <12개월 → 개월, else → 년차. */
+function joinStat(startISO: string | null, todayISOd: string): { value: string; unit: string } {
+  if (!startISO) return { value: "1", unit: "개월" };
+  const sy = Number(startISO.slice(0, 4));
+  const sm = Number(startISO.slice(5, 7));
+  const sd = Number(startISO.slice(8, 10));
+  const ty = Number(todayISOd.slice(0, 4));
+  const tm = Number(todayISOd.slice(5, 7));
+  const td = Number(todayISOd.slice(8, 10));
+  let months = (ty - sy) * 12 + (tm - sm);
+  if (td < sd) months -= 1;
+  months = Math.max(0, months);
+  if (months >= 12) return { value: String(Math.floor(months / 12)), unit: "년차" };
+  return { value: String(Math.max(1, months)), unit: "개월" };
+}
+
+const MEMBER_STATUS_LABEL: Record<string, string> = {
+  active: "활동 중",
+  rest: "휴회 중",
+  inactive: "비활성",
+};
+
+/** Given name (drop the surname) capped at 2 chars — for the round avatars. */
+function avatarInitial(name: string): string {
+  const given = name.length > 1 ? name.slice(1) : name;
+  return given.slice(0, 2) || name.slice(0, 2);
+}
+
+/* ----------------------------- A1 · 마이페이지 메인 ----------------------------- */
+export async function getMemberMyPage(): Promise<MemberMyView> {
+  const me = await requireMember();
+  const today = todayISO();
+
+  const [mrow, membership, tr, attended, firstStart, readIds] = await Promise.all([
+    sb.from("members").select("name, status, avatar_tone").eq("id", me.memberId).maybeSingle(),
+    activeMembership(me.memberId),
+    primaryTrainer(me.memberId),
+    attendedCount(me.memberId),
+    earliestMembershipStart(me.memberId),
+    readNoticeReadIds(),
+  ]);
+
+  const name = mrow.data?.name ?? me.name;
+  const status = mrow.data?.status ?? "active";
+  const tone = (mrow.data?.avatar_tone ?? "sage") as AvatarTone;
+  const join = joinStat(firstStart, today);
+
+  let membershipView: MemberMyView["membership"] = null;
+  if (membership) {
+    const total = membership.total_sessions ?? 0;
+    const remaining = membership.remaining_sessions ?? 0;
+    const dDay = dayDiff(today, membership.end_date);
+    membershipView = {
+      productLabel: `1:1 PT ${total}회권`,
+      remaining,
+      total,
+      dDay,
+      endLabel: String(membership.end_date).replace(/-/g, "."),
+      barPct: total > 0 ? Math.round((remaining / total) * 100) : 0,
+      expired: membership.status === "expired" || dDay < 0,
+    };
+  }
+
+  return {
+    name,
+    initial: avatarInitial(name),
+    avatarTone: tone,
+    statusLabel: MEMBER_STATUS_LABEL[status] ?? "회원",
+    stats: [
+      { value: String(attended), unit: "회", label: "누적 출석" },
+      { value: join.value, unit: join.unit, label: "함께한 기간" },
+      { value: String(unreadNoticeCount(readIds)), unit: "건", label: "미열람 공지" },
+    ],
+    membership: membershipView,
+    trainer: tr ? { name: tr.display_name, sub: "담당 트레이너" } : null,
+    unreadNotices: unreadNoticeCount(readIds),
+  };
+}
+
+/* ----------------------------- A2 · 결제·구매 내역 ----------------------------- */
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  card: "카드 결제",
+  cash: "현금 결제",
+  account: "계좌이체",
+};
+
+export async function getMemberPayments(): Promise<MemberPaymentsView> {
+  const me = await requireMember();
+
+  const { data: ms } = await sb
+    .from("memberships")
+    .select("id, total_sessions, status")
+    .eq("member_id", me.memberId);
+  const memberships = ms ?? [];
+  if (!memberships.length) return { totalAmount: 0, totalCount: 0, years: [] };
+
+  const byId = new Map(memberships.map((m) => [m.id, m]));
+  const { data: pays } = await sb
+    .from("payments")
+    .select("id, membership_id, method, amount, paid_at")
+    .in(
+      "membership_id",
+      memberships.map((m) => m.id)
+    )
+    .order("paid_at", { ascending: false });
+  const payments = pays ?? [];
+
+  let totalAmount = 0;
+  const items: (MemberPaymentItem & { paidAt: string })[] = payments.map((p) => {
+    const m = byId.get(p.membership_id);
+    const total = m?.total_sessions ?? 0;
+    const done = (m?.status ?? "active") === "active";
+    const mm = String(p.paid_at).slice(5, 7);
+    const dd = String(p.paid_at).slice(8, 10);
+    if (typeof p.amount === "number") totalAmount += p.amount;
+    return {
+      id: p.id,
+      productLabel: `1:1 PT ${total}회권`,
+      dateLabel: `${mm}.${dd} · ${PAYMENT_METHOD_LABEL[p.method] ?? "결제"}`,
+      amount: p.amount ?? null,
+      statusLabel: done ? "결제완료" : "사용완료",
+      done,
+      paidAt: String(p.paid_at),
+    };
+  });
+
+  // group by year (paid_at), newest year first
+  const yearMap = new Map<string, MemberPaymentItem[]>();
+  for (const it of items) {
+    const y = it.paidAt.slice(0, 4);
+    if (!yearMap.has(y)) yearMap.set(y, []);
+    // strip the internal paidAt before exposing
+    const { paidAt, ...pub } = it;
+    void paidAt;
+    yearMap.get(y)!.push(pub);
+  }
+  const years: MemberPaymentYear[] = [...yearMap.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([year, list]) => ({ year, count: list.length, items: list }));
+
+  return { totalAmount, totalCount: payments.length, years };
+}
+
+/* ----------------------------- A3 · 공지사항 ----------------------------- */
+export async function getMemberNotices(): Promise<MemberNoticesView> {
+  await requireMember();
+  const readIds = await readNoticeReadIds();
+  const notices: MemberNotice[] = NOTICES.map((n) => ({
+    ...n,
+    unread: (NOTICE_UNREAD_IDS as readonly string[]).includes(n.id) && !readIds.includes(n.id),
+  }));
+  return { notices, unread: notices.filter((n) => n.unread).length };
+}
+
+/* ----------------------------- A4 · 알림 설정 ----------------------------- */
+export async function getMemberNotifSettings(): Promise<MemberNotifView> {
+  await requireMember();
+  const overrides = await readNotifOverrides();
+  return {
+    groups: NOTIF_GROUPS.map((g) => ({
+      title: g.title,
+      items: g.items.map((it) => ({
+        key: it.key,
+        title: it.title,
+        sub: it.sub,
+        on: typeof overrides[it.key] === "boolean" ? overrides[it.key] : it.def,
+      })),
+    })),
+  };
 }
