@@ -1,26 +1,197 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   계절 PT v2 — design tokens (authority: DESIGN_SPEC.md §A)
+   Warm / sage palette. Inline hex from the C-plan prototype.
+   ============================================================ */
+@theme {
+  /* fonts */
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: var(--font-cormorant), "Cormorant Garamond", serif;
+
+  /* surfaces */
+  --color-canvas: #eae5db;
+  --color-surface: #faf8f4;
+  --color-card: #ffffff;
+  --color-frame: #26231e;
+  --color-island: #15130f;
+
+  /* ink / text */
+  --color-ink: #4b3b2e;
+  --color-ink-soft: #5b4b38;
+  --color-ink-row: #6b6258;
+
+  /* sage family */
+  --color-sage: #768c6a;
+  --color-sage-deep: #6b785e;
+  --color-sage-soft: #8fa187;
+  --color-sage-mid: #79836b;
+  --color-sage-leaf: #9db089;
+  --color-sage-line: #a9b89b;
+
+  /* muted scale */
+  --color-muted: #847a66;
+  --color-muted2: #8a8175;
+  --color-muted3: #8e8473;
+  --color-muted4: #8b8374;
+  --color-muted5: #766d60;
+  --color-muted6: #787063;
+  --color-placeholder: #b3aa9c;
+  --color-chevron: #c2baad;
+  --color-stroke-disabled: #d6cfc2;
+
+  /* terracotta / alert */
+  --color-terracotta: #c67352;
+  --color-terracotta-deep: #9a5a38;
+  --color-terracotta-text: #b08465;
+  --color-terracotta-link: #b5612f;
+  --color-sunday: #c0796a;
+
+  /* info blue (2:1 team) */
+  --color-info-bg: #e7edf2;
+  --color-info-ink: #48586a;
+  --color-info-accent: #5c7286;
+  --color-team-bar: #6e8aa0;
+
+  /* banner tints */
+  --color-warm-banner: #fbf3e9;
+  --color-sage-banner: #f8f4ec;
+  --color-sage-banner2: #edf4e3;
+  --color-green-active-bg: #e4efe3;
+  --color-green-active: #5c9166;
+
+  /* gold / owner */
+  --color-gold-bg: #f4eee3;
+  --color-gold: #8a6f3e;
+  --color-gold-pending-bg: #f3ead2;
+  --color-gold-pending: #9a7b2e;
+  --color-gold-avatar: #a88b57;
+  --color-pending-avatar: #a89a80;
+
+  /* misc fills */
+  --color-chip-soft: #f1ece2;
+  --color-stepper-bg: #faf7f0;
+  --color-bar-empty: #eaf0e0;
+  --color-progress: #f0e0c8;
+  --color-disabled-send: #e4dfd2;
+
+  /* radii */
+  --radius-frame: 54px;
+  --radius-screen: 46px;
+  --radius-card: 18px;
+  --radius-field: 13px;
+  --radius-btn: 15px;
+  --radius-chip: 20px;
+
+  /* shadows */
+  --shadow-card: 0 1px 2px rgba(75, 59, 46, 0.04), 0 10px 24px -14px rgba(75, 59, 46, 0.16);
+  --shadow-frame: 0 2px 3px rgba(38, 35, 30, 0.22), 0 40px 80px -30px rgba(38, 35, 30, 0.55);
+  --shadow-success: 0 16px 30px -12px rgba(118, 140, 106, 0.6);
+  --shadow-toast: 0 14px 30px -10px rgba(38, 35, 30, 0.5);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* base */
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.serif {
+  font-family: var(--font-serif);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* hide scrollbars on the scrollable screen body */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ============================================================
+   animations (DESIGN_SPEC §A.4) — gated by reduced-motion
+   ============================================================ */
+@keyframes ptPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scale(1.55);
+    opacity: 0.4;
+  }
+}
+@keyframes ptPop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes ptGrow {
+  from {
+    width: 0;
+  }
+}
+@keyframes ptUp {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes toastIn {
+  from {
+    transform: translate(-50%, 12px);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, 0);
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: no-preference) {
+  .scr {
+    animation: ptUp 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  }
+  .pt-pop {
+    animation: ptPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+  }
+  .pt-grow {
+    animation: ptGrow 1.2s cubic-bezier(0.45, 0, 0.1, 1) both;
+  }
+  .pt-live {
+    animation: ptPulse 1.5s ease-in-out infinite;
+  }
+  .toast-in {
+    animation: toastIn 0.26s ease both;
+  }
+}
+
+/* shared interactive transitions */
+.tappable {
+  transition: transform 0.13s ease, filter 0.15s ease, background-color 0.15s ease,
+    box-shadow 0.18s ease;
+}
+.tappable:active {
+  transform: scale(0.975);
 }
