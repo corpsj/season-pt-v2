@@ -483,6 +483,19 @@ export function getProposeSlots() {
   };
 }
 
+export function getMemberChatRoom() {
+  return {
+    trainerName: ME_TRAINER.name,
+    initial: "계",
+    sub: "담당 트레이너",
+    messages: [
+      { id: "1", mine: false, text: "이번 주 토요일 수업 잊지 마세요! 컨디션 어떠세요?", time: "오후 1:50" },
+      { id: "2", mine: true, text: "네 코치님, 어깨는 좀 나아졌어요", time: "오후 2:11" },
+      { id: "3", mine: false, text: "좋아요. 토요일에 가볍게 시작할게요 :)", time: "오후 2:14" },
+    ] as { id: string; mine: boolean; text: string; time?: string }[],
+  };
+}
+
 export function getClassDetail(sessionId: string) {
   const m = memberFromSession(sessionId);
   return {
