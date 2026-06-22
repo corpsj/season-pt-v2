@@ -5,12 +5,32 @@ import { Card } from "@/components/ui/Card";
 import { Stat } from "@/components/ui/StatCard";
 import { BarChart } from "@/components/ui/BarChart";
 import { Icon } from "@/components/ui/icon";
-import { getPerf, getMe, getChatUnread } from "@/lib/data";
 import { trainerTabs } from "@/components/trainer/tabs";
+import { getPerf } from "@/lib/data/groups/perf-retention";
+import { sb, getTrainerContext } from "@/lib/data/db";
 
-export default function TrainerPerfPage() {
-  const me = getMe();
-  const perf = getPerf();
+/** Unread chat count for this trainer (for the tab badge). */
+async function chatUnreadFor(trainerId: string): Promise<number> {
+  const { data } = await sb
+    .from("chat_threads")
+    .select("id")
+    .eq("trainer_id", trainerId);
+  const threadIds = (data ?? []).map((t) => t.id);
+  if (threadIds.length === 0) return 0;
+  const { count } = await sb
+    .from("chat_messages")
+    .select("id", { count: "exact", head: true })
+    .in("thread_id", threadIds)
+    .eq("sender_type", "member")
+    .eq("read_by_trainer", false);
+  return count ?? 0;
+}
+
+export default async function TrainerPerfPage() {
+  const t = await getTrainerContext();
+  const isOwner = t?.role === "owner";
+  const perf = await getPerf();
+  const chatUnread = t ? await chatUnreadFor(t.id) : 0;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -83,7 +103,7 @@ export default function TrainerPerfPage() {
         <div className="h-3.5" />
       </Body>
 
-      <TabBar tabs={trainerTabs({ isOwner: me.isOwner, chatUnread: getChatUnread() })} />
+      <TabBar tabs={trainerTabs({ isOwner, chatUnread })} />
     </div>
   );
 }

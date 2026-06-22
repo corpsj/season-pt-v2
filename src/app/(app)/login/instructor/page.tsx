@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -7,11 +7,26 @@ import { Field, TextInput } from "@/components/ui/Field";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
+import { trainerLogin } from "@/lib/auth/trainer-actions";
 
 export default function InstructorLoginPage() {
   const router = useRouter();
-  const [id, setId] = useState("gyeaul.sumin");
-  const [pw, setPw] = useState("ptss-4821");
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const res = await trainerLogin(id, pw);
+      if (res.ok) {
+        router.push("/set-password");
+      } else {
+        setError(res.error ?? "로그인에 실패했어요");
+      }
+    });
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -47,10 +62,16 @@ export default function InstructorLoginPage() {
         <Banner tone="warn" className="mt-4">
           임시 비밀번호로 로그인한 뒤, 본인만 아는 새 비밀번호를 설정해요.
         </Banner>
+
+        {error ? (
+          <p className="mt-3 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton onClick={() => router.push("/set-password")}>로그인</PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={pending}>
+          로그인
+        </PrimaryButton>
       </Footer>
     </div>
   );

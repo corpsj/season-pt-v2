@@ -1,5 +1,3 @@
-"use client";
-import { useParams } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
@@ -10,12 +8,11 @@ import { Stat } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { getMemberDetail } from "@/lib/data";
+import { getMemberDetail, getMemberRecordHref } from "@/lib/data/groups/trainer-home";
 
-export default function MemberDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
-  const m = getMemberDetail(id);
+export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
+  const [m, recordHref] = await Promise.all([getMemberDetail(id), getMemberRecordHref(id)]);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -93,7 +90,7 @@ export default function MemberDetailPage() {
 
       <Footer>
         <div className="flex gap-2.5">
-          <OutlineButton icon="pencil" href={`/t/record/s_${id.replace("m_", "")}`}>
+          <OutlineButton icon="pencil" href={recordHref}>
             기록
           </OutlineButton>
           <PrimaryButton icon="refresh" href="/t/retention">

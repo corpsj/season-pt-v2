@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -7,16 +7,32 @@ import { Field, TextInput } from "@/components/ui/Field";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { setTrainerPassword } from "@/lib/auth/trainer-actions";
 
 export default function SetPasswordPage() {
   const router = useRouter();
   const toast = useToast();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   function submit() {
-    toast("비밀번호가 설정되었어요");
-    router.push("/t");
+    setError(null);
+    if (pw.length === 0 || pw !== pw2) {
+      setError("비밀번호가 일치하지 않아요");
+      return;
+    }
+    startTransition(async () => {
+      const res = await setTrainerPassword(pw);
+      if (res.ok) {
+        toast("비밀번호가 설정되었어요");
+        router.push("/t");
+        router.refresh();
+      } else {
+        setError(res.error ?? "비밀번호 설정에 실패했어요");
+      }
+    });
   }
 
   return (
@@ -64,10 +80,14 @@ export default function SetPasswordPage() {
             <span className="text-[12.5px] font-medium text-muted2">영문과 숫자 포함</span>
           </div>
         </div>
+
+        {error ? (
+          <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton icon="check-bold" onClick={submit}>
+        <PrimaryButton icon="check-bold" onClick={submit} disabled={pending}>
           비밀번호 설정 완료
         </PrimaryButton>
       </Footer>

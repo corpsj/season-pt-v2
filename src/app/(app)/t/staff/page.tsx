@@ -7,11 +7,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { getStaff } from "@/lib/data";
+import { getStaff } from "@/lib/data/groups/owner-ops";
 import type { BadgeVariant } from "@/lib/types";
 
-export default function StaffPage() {
-  const staff = getStaff();
+export default async function StaffPage() {
+  const staff = await getStaff();
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">

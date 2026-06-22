@@ -10,12 +10,29 @@ import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { inviteInstructor } from "@/lib/auth/trainer-actions";
 
 export default function StaffInvitePage() {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit() {
+    if (pending) return;
+    setPending(true);
+    const res = await inviteInstructor(name, phone);
+    setPending(false);
+    if (!res.ok || !res.username || !res.tempPassword) {
+      toast(res.error ?? "강사 계정 발급에 실패했어요");
+      return;
+    }
+    setIssued({ username: res.username, tempPassword: res.tempPassword });
+    toast("강사 계정을 발급했어요");
+    router.refresh();
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -51,12 +68,12 @@ export default function StaffInvitePage() {
           <div className="flex items-center gap-2.5 px-4 py-[14px]">
             <Icon name="person" size={18} className="flex-none text-sage" />
             <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
-            <span className="text-[14px] font-bold text-ink">gyeaul.haneul</span>
+            <span className="text-[14px] font-bold text-ink">{issued?.username ?? "gyeaul.haneul"}</span>
           </div>
           <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
             <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
             <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
-            <span className="text-[14px] font-bold text-ink">ptss-7390</span>
+            <span className="text-[14px] font-bold text-ink">{issued?.tempPassword ?? "ptss-7390"}</span>
           </div>
         </Card>
 
@@ -65,13 +82,8 @@ export default function StaffInvitePage() {
       </Body>
 
       <Footer>
-        <PrimaryButton
-          onClick={() => {
-            toast("강사 계정을 발급했어요");
-            router.back();
-          }}
-        >
-          강사 계정 발급
+        <PrimaryButton onClick={issued ? () => router.back() : onSubmit}>
+          {issued ? "완료" : "강사 계정 발급"}
         </PrimaryButton>
       </Footer>
     </div>

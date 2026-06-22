@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
@@ -7,11 +7,29 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Field, TextInput } from "@/components/ui/Field";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
+import { trainerLogin } from "@/lib/auth/trainer-actions";
 
 export default function TrainerLoginPage() {
   const router = useRouter();
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const res = await trainerLogin(id, pw);
+      if (res.ok && res.mustChangePassword) {
+        router.push("/set-password");
+      } else if (res.ok) {
+        router.push("/t");
+        router.refresh();
+      } else {
+        setError(res.error ?? "로그인에 실패했어요");
+      }
+    });
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -65,10 +83,16 @@ export default function TrainerLoginPage() {
             <Icon name="chevron-right" size={15} className="text-chevron" />
           </Link>
         </div>
+
+        {error ? (
+          <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton onClick={() => router.push("/t")}>로그인</PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={pending}>
+          로그인
+        </PrimaryButton>
       </Footer>
     </div>
   );

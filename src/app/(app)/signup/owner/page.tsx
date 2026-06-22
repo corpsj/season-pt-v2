@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -7,6 +7,7 @@ import { Field, TextInput } from "@/components/ui/Field";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
+import { ownerSignup } from "@/lib/auth/trainer-actions";
 
 export default function OwnerSignupPage() {
   const router = useRouter();
@@ -14,6 +15,25 @@ export default function OwnerSignupPage() {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const matched = pw.length > 0 && pw === pw2;
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    if (!matched) {
+      setError("비밀번호가 일치하지 않아요");
+      return;
+    }
+    startTransition(async () => {
+      const res = await ownerSignup(id, pw);
+      if (res.ok) {
+        router.push("/t");
+        router.refresh();
+      } else {
+        setError(res.error ?? "가입에 실패했어요");
+      }
+    });
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -58,10 +78,16 @@ export default function OwnerSignupPage() {
             />
           </Field>
         </div>
+
+        {error ? (
+          <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton onClick={() => router.push("/t")}>대표로 시작하기</PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={pending}>
+          대표로 시작하기
+        </PrimaryButton>
       </Footer>
     </div>
   );

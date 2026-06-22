@@ -4,13 +4,21 @@ import { TabBar } from "@/components/shell/TabBar";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icon";
-import { getChatThreads, getChatUnread, getMe, getMembers } from "@/lib/data";
+import {
+  getChatThreads,
+  getChatUnread,
+  getMe,
+  getMembersCount,
+} from "@/lib/data/groups/chat";
 import { trainerTabs } from "@/components/trainer/tabs";
 
-export default function TrainerChatListPage() {
-  const me = getMe();
-  const threads = getChatThreads();
-  const totalMembers = getMembers("all").totals.total;
+export default async function TrainerChatListPage() {
+  const [me, threads, totalMembers, chatUnread] = await Promise.all([
+    getMe(),
+    getChatThreads(),
+    getMembersCount(),
+    getChatUnread(),
+  ]);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -58,7 +66,7 @@ export default function TrainerChatListPage() {
         <div className="h-3.5" />
       </Body>
 
-      <TabBar tabs={trainerTabs({ isOwner: me.isOwner, chatUnread: getChatUnread() })} />
+      <TabBar tabs={trainerTabs({ isOwner: me.isOwner, chatUnread })} />
     </div>
   );
 }

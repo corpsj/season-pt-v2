@@ -1,17 +1,16 @@
-"use client";
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { getConfirm } from "@/lib/data";
+import { getConfirm } from "@/lib/data/groups/scheduling";
 
-function ConfirmContent() {
-  const searchParams = useSearchParams();
-  const to = searchParams.get("to") || "/t";
-  const view = getConfirm();
+export default async function ConfirmPage(props: {
+  searchParams: Promise<{ to?: string }>;
+}) {
+  const { to: toParam } = await props.searchParams;
+  const to = toParam || "/t";
+  const view = await getConfirm();
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -55,15 +54,5 @@ function ConfirmContent() {
         <PrimaryButton href={to}>확인</PrimaryButton>
       </Footer>
     </div>
-  );
-}
-
-export default function ConfirmPage() {
-  return (
-    <Suspense
-      fallback={<div className="scr flex min-h-0 flex-1 flex-col" />}
-    >
-      <ConfirmContent />
-    </Suspense>
   );
 }

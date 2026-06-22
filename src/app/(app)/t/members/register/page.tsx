@@ -10,6 +10,7 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { createMember } from "@/lib/data/groups/owner-ops-actions";
 import type { Gender } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -24,6 +25,28 @@ export default function MemberRegisterPage() {
   const [gender, setGender] = useState<Gender>("female");
   const [days, setDays] = useState<Set<number>>(new Set([3, 6]));
   const [timeIdx, setTimeIdx] = useState(1); // 19시
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit() {
+    if (pending) return;
+    setPending(true);
+    const res = await createMember({
+      name,
+      phone,
+      birth,
+      gender,
+      weekdays: [...days].sort((a, b) => a - b),
+      hour: TIME_OPTIONS[timeIdx],
+    });
+    if (!res.ok) {
+      setPending(false);
+      toast(res.error ?? "회원 등록에 실패했어요");
+      return;
+    }
+    toast("회원을 등록했어요");
+    router.push("/t");
+    router.refresh();
+  }
 
   function toggleDay(i: number) {
     setDays((prev) => {
@@ -138,13 +161,7 @@ export default function MemberRegisterPage() {
       </Body>
 
       <Footer>
-        <PrimaryButton
-          icon="person-plus"
-          onClick={() => {
-            toast("회원을 등록했어요");
-            router.push("/t");
-          }}
-        >
+        <PrimaryButton icon="person-plus" onClick={onSubmit}>
           회원 등록
         </PrimaryButton>
       </Footer>

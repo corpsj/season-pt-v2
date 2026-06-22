@@ -1,16 +1,32 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Field, TextInput } from "@/components/ui/Field";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
+import { memberLogin } from "@/lib/auth/member-actions";
 
 export default function MemberLoginPage() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [birth, setBirth] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      const res = await memberLogin(phone, birth);
+      if (res.ok) {
+        router.push("/m");
+        router.refresh();
+      } else {
+        setError(res.error ?? "로그인에 실패했어요");
+      }
+    });
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -49,10 +65,16 @@ export default function MemberLoginPage() {
         <Banner className="mt-4">
           처음 로그인할 땐 생년월일 6자리(YYMMDD)가 초기 비밀번호예요.
         </Banner>
+
+        {error ? (
+          <p className="mt-3 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
       </Body>
 
       <Footer pad="form" className="flex flex-col gap-3">
-        <PrimaryButton onClick={() => router.push("/m")}>로그인</PrimaryButton>
+        <PrimaryButton onClick={submit} disabled={pending}>
+          로그인
+        </PrimaryButton>
         <button
           type="button"
           className="tappable mx-auto text-[13px] font-medium text-sage-deep"
