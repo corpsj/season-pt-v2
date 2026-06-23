@@ -10,6 +10,7 @@ export default async function MemberChatPage() {
       initial={room.initial}
       sub={room.sub}
       messages={room.messages}
+      cursor={room.cursor}
     />
   );
 }

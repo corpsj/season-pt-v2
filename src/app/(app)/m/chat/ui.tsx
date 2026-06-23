@@ -1,37 +1,77 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Avatar } from "@/components/ui/Avatar";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { ChatInput } from "@/components/ui/ChatInput";
 import { Icon } from "@/components/ui/icon";
-import { sendMemberChat } from "@/lib/data/groups/member-actions";
-
-type Msg = { id: string; mine: boolean; text: string; time?: string };
+import { useToast } from "@/components/ui/Toast";
+import { sendMemberChat, pollMemberMessages } from "@/lib/data/groups/member-actions";
+import { mergeMessages, latestCursor, TEMP_PREFIX } from "@/lib/chat/merge";
+import { usePolling } from "@/lib/hooks/usePolling";
+import type { ChatMessageView } from "@/lib/types";
 
 export function MemberChatClient({
   trainerName,
   initial,
   messages: initialMessages,
+  cursor: initialCursor,
 }: {
   trainerName: string;
   initial: string;
   sub: string;
-  messages: Msg[];
+  messages: ChatMessageView[];
+  cursor: string | null;
 }) {
-  const router = useRouter();
-  const [messages, setMessages] = useState<Msg[]>(initialMessages);
+  const showToast = useToast();
+  const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
   const [draft, setDraft] = useState("");
+  const cursorRef = useRef<string | null>(
+    latestCursor(initialMessages, initialCursor)
+  );
+  const tempSeq = useRef(0);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }
+
+  usePolling(async () => {
+    let incoming: ChatMessageView[] = [];
+    try {
+      incoming = await pollMemberMessages(cursorRef.current);
+    } catch {
+      return;
+    }
+    if (!incoming.length) return;
+    setMessages((prev) => {
+      const merged = mergeMessages(prev, incoming);
+      cursorRef.current = latestCursor(merged, cursorRef.current);
+      return merged;
+    });
+    scrollToBottom();
+  }, 3000);
 
   async function send() {
     const text = draft.trim();
     if (!text) return;
-    setMessages((prev) => [...prev, { id: String(prev.length + 1), mine: true, text }]);
+    const tempId = `${TEMP_PREFIX}${tempSeq.current++}`;
+    setMessages((prev) => [...prev, { id: tempId, mine: true, text }]);
     setDraft("");
+    scrollToBottom();
     const res = await sendMemberChat(text);
-    if (res.ok) router.refresh();
+    if (res.ok && res.message) {
+      const real = res.message;
+      setMessages((prev) => {
+        const merged = mergeMessages(prev, [real]);
+        cursorRef.current = latestCursor(merged, cursorRef.current);
+        return merged;
+      });
+    } else {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      showToast(res.error ?? "메시지를 보내지 못했어요");
+    }
   }
 
   return (
@@ -57,6 +97,7 @@ export function MemberChatClient({
         {messages.map((m) => (
           <ChatBubble key={m.id} mine={m.mine} text={m.text} time={m.time} />
         ))}
+        <div ref={bottomRef} />
       </Body>
 
       <ChatInput value={draft} onChange={setDraft} onSend={send} />
