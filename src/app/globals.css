@@ -104,6 +104,19 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+/* Mobile (the product) is a fixed app shell: lock the document so ONLY the inner
+   screen Body scrolls. Without this the whole page — including the bottom tab bar —
+   scrolls with the content. Desktop keeps normal scrolling to view the phone frame.
+   Pairs with layout.tsx (no h-full/min-h-full on html/body) so 100dvh wins here. */
+@media (max-width: 639px) {
+  html,
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
 .serif {
   font-family: var(--font-serif);
 }

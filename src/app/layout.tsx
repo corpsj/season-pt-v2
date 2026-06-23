@@ -35,8 +35,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ko" className={`${cormorant.variable} h-full`}>
-      <body className="min-h-full">{children}</body>
+    <html lang="ko" className={cormorant.variable}>
+      <body>{children}</body>
     </html>
   );
 }
