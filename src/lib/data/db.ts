@@ -1,5 +1,6 @@
 import "server-only";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { monthBoundsFromKst, weekBoundsFromKst, monthLabelFromKst } from "./kst-bounds";
 
 /** Shared server-side data helpers for the Supabase-backed repository. */
 export { getTrainerContext, getMemberContext } from "@/lib/auth/context";
@@ -54,4 +55,19 @@ export function dayDiff(aISO: string, bISO: string): number {
   const a = new Date(aISO + "T00:00:00Z").getTime();
   const b = new Date(bISO + "T00:00:00Z").getTime();
   return Math.round((b - a) / 86400000);
+}
+
+/** 현재 KST 월 경계 [1일 00:00, 다음달 1일 00:00) — 실제 UTC instant. */
+export function monthBoundsKst(): { startISO: string; endISO: string } {
+  return monthBoundsFromKst(nowKstParts());
+}
+
+/** 현재 KST 주 경계 (월~토 커버) — 실제 UTC instant. */
+export function weekBoundsKst(): { startISO: string; endISO: string } {
+  return weekBoundsFromKst(nowKstParts());
+}
+
+/** "YYYY년 M월" (현재 KST 월). */
+export function currentMonthLabel(): string {
+  return monthLabelFromKst(nowKstParts());
 }
