@@ -299,7 +299,8 @@ export async function loadNewTrainerMessages(
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
   if (sinceISO) q = q.gte("created_at", sinceISO);
-  const { data: msgRows } = await q;
+  const { data: msgRows, error: qErr } = await q;
+  if (qErr) return [];
 
   // Mark incoming (member) messages as read now that they're delivered.
   await sb
