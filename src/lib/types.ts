@@ -333,6 +333,7 @@ export interface ChatRoomView {
   avatarTone: AvatarTone;
   sub: string;
   messages: ChatMessageView[];
+  cursor?: string | null; // newest message's created_at; initial poll cursor
 }
 
 /* --------------------------- member app --------------------------- */

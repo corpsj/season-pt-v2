@@ -12,7 +12,7 @@ import type {
 /* ------------------------------ helpers ------------------------------ */
 
 /** Clock label in KST, e.g. "오후 2:14" / "오전 11:30". */
-function kstClock(iso: string | Date): string {
+export function kstClock(iso: string | Date): string {
   const d = new Date(typeof iso === "string" ? iso : iso.getTime());
   const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
   const h = kst.getUTCHours();
@@ -236,8 +236,14 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
         isTeam && !mine ? senderName.get(row.sender_id as string) : undefined,
       text: row.text as string,
       time: kstClock(row.created_at as string),
+      createdAt: row.created_at as string,
     };
   });
+
+  const cursor =
+    msgRows && msgRows.length
+      ? (msgRows[msgRows.length - 1].created_at as string)
+      : null;
 
   if (isTeam && participants.length >= 2) {
     const [a, b] = participants;
@@ -250,6 +256,7 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
       avatarTone: a.avatar_tone,
       sub,
       messages,
+      cursor,
     };
   }
   const m = participants[0];
@@ -261,7 +268,59 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
     avatarTone: m?.avatar_tone ?? "sage",
     sub,
     messages,
+    cursor,
   };
+}
+
+/** New messages in a thread at/after `sinceISO` (or all if null), marking incoming as read. */
+export async function loadNewTrainerMessages(
+  threadId: string,
+  sinceISO: string | null
+): Promise<ChatMessageView[]> {
+  const t = await getTrainerContext();
+  if (!t) return [];
+
+  const { data: thread } = await sb
+    .from("chat_threads")
+    .select("id, type")
+    .eq("id", threadId)
+    .eq("trainer_id", t.id)
+    .maybeSingle();
+  if (!thread) return [];
+
+  const isTeam = thread.type === "2on1";
+  const participants = (await loadThreadParticipants([threadId])).get(threadId) ?? [];
+  const senderName = new Map<string, string>();
+  for (const m of participants) senderName.set(m.id, m.name);
+
+  let q = sb
+    .from("chat_messages")
+    .select("id, sender_type, sender_id, text, created_at")
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true });
+  if (sinceISO) q = q.gte("created_at", sinceISO);
+  const { data: msgRows } = await q;
+
+  // Mark incoming (member) messages as read now that they're delivered.
+  await sb
+    .from("chat_messages")
+    .update({ read_by_trainer: true })
+    .eq("thread_id", threadId)
+    .eq("read_by_trainer", false)
+    .eq("sender_type", "member");
+
+  return (msgRows ?? []).map((row) => {
+    const mine = row.sender_type === "trainer";
+    return {
+      id: row.id as string,
+      mine,
+      sender:
+        isTeam && !mine ? senderName.get(row.sender_id as string) : undefined,
+      text: row.text as string,
+      time: kstClock(row.created_at as string),
+      createdAt: row.created_at as string,
+    } satisfies ChatMessageView;
+  });
 }
 
 /** Subtitle like "1:1 PT · 매주 화·토 오후 8시" from the member's schedule. */
