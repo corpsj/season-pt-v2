@@ -123,11 +123,13 @@ export async function getChatThreads(): Promise<ChatThreadView[]> {
   const t = await getTrainerContext();
   if (!t) return [];
 
-  const { data: threadRows } = await sb
+  // Owner sees every thread in the gym; other trainers only their own.
+  let tq = sb
     .from("chat_threads")
     .select("id, type, last_message, last_at")
-    .eq("trainer_id", t.id)
     .order("last_at", { ascending: false, nullsFirst: false });
+  if (t.role !== "owner") tq = tq.eq("trainer_id", t.id);
+  const { data: threadRows } = await tq;
   const threads = threadRows ?? [];
   if (threads.length === 0) return [];
 
@@ -182,10 +184,9 @@ export async function getChatThreads(): Promise<ChatThreadView[]> {
 export async function getChatUnread(): Promise<number> {
   const t = await getTrainerContext();
   if (!t) return 0;
-  const { data: threadRows } = await sb
-    .from("chat_threads")
-    .select("id")
-    .eq("trainer_id", t.id);
+  let uq = sb.from("chat_threads").select("id");
+  if (t.role !== "owner") uq = uq.eq("trainer_id", t.id);
+  const { data: threadRows } = await uq;
   const ids = (threadRows ?? []).map((r) => r.id as string);
   if (ids.length === 0) return 0;
   const { count } = await sb
@@ -202,20 +203,21 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
   const t = await getTrainerContext();
   if (!t) throw new Error("no trainer context");
 
-  const { data: thread } = await sb
+  // Owner may open any thread; other trainers only their own.
+  let trq = sb
     .from("chat_threads")
     .select("id, type, trainer_id")
-    .eq("id", threadId)
-    .eq("trainer_id", t.id)
-    .maybeSingle();
+    .eq("id", threadId);
+  if (t.role !== "owner") trq = trq.eq("trainer_id", t.id);
+  const { data: thread } = await trq.maybeSingle();
   if (!thread) throw new Error("thread not found");
 
   const isTeam = thread.type === "2on1";
   const participants = (await loadThreadParticipants([threadId])).get(threadId) ?? [];
 
-  // Build a per-member schedule label for the room subtitle (1:1).
+  // Build a per-member schedule label for the room subtitle, using the thread's own trainer.
   const memberIds = participants.map((m) => m.id);
-  const sub = await scheduleSub(t.id, memberIds, isTeam);
+  const sub = await scheduleSub(thread.trainer_id as string, memberIds, isTeam);
 
   // Mark thread as read on open.
   await sb
@@ -332,42 +334,48 @@ export async function loadNewTrainerMessages(
 }
 
 /**
- * The chat group for a member under a trainer: a 2:1 duo (both class members) if they
- * share an active 2on1 schedule with this trainer, otherwise just the member (1:1).
+ * The canonical chat thread descriptor for a member: a 2:1 group under the class's trainer
+ * if the member is in an active 2on1 schedule (under ANY trainer), otherwise a 1:1 under the
+ * member's assigned trainer. Both the member side and the trainer/owner side resolve to the
+ * SAME descriptor, so their messages converge on one thread. Null if the member has no trainer.
  */
-async function chatGroupFor(
-  trainerId: string,
+async function resolveCanonicalThread(
   memberId: string
-): Promise<{ type: "1on1" | "2on1"; memberIds: string[] }> {
+): Promise<{ trainerId: string; type: "1on1" | "2on1"; memberIds: string[] } | null> {
+  // 2:1 class — owned by whichever trainer runs it.
   const { data: schedRows } = await sb
     .from("schedules")
-    .select("type, schedule_members(member_id)")
-    .eq("trainer_id", trainerId)
+    .select("trainer_id, type, schedule_members(member_id)")
     .eq("type", "2on1")
     .eq("active", true);
-  type SR = { type: string; schedule_members: { member_id: string }[] };
+  type SR = { trainer_id: string; type: string; schedule_members: { member_id: string }[] };
   for (const s of (schedRows ?? []) as unknown as SR[]) {
     const ids = (s.schedule_members ?? []).map((sm) => sm.member_id);
     if (ids.includes(memberId) && ids.length >= 2) {
-      return { type: "2on1", memberIds: [...new Set(ids)] };
+      return { trainerId: s.trainer_id, type: "2on1", memberIds: [...new Set(ids)] };
     }
   }
-  return { type: "1on1", memberIds: [memberId] };
+  // 1:1 with the member's assigned trainer.
+  const { data: link } = await sb
+    .from("member_trainers")
+    .select("trainer_id")
+    .eq("member_id", memberId)
+    .limit(1)
+    .maybeSingle();
+  if (!link) return null;
+  return { trainerId: link.trainer_id as string, type: "1on1", memberIds: [memberId] };
 }
 
 /**
- * Ensure a chat thread between a trainer and a member, matching the member's class type:
- * a 2:1 group thread (both class members) if they share an active 2on1 schedule, else 1:1.
- * Reuses an existing thread of the right type/membership; otherwise creates it (with all
- * group members as participants). Returns the thread id (null on failure).
+ * Ensure the member's canonical chat thread exists (created on first access). The thread is
+ * owned by the member's class/assigned trainer, so a member opening it and an owner opening
+ * it from the picker land on the SAME thread. Returns the thread id, or null if no trainer.
  */
-export async function ensureTrainerThread(
-  trainerId: string,
-  memberId: string
-): Promise<string | null> {
-  const group = await chatGroupFor(trainerId, memberId);
+export async function ensureChatThread(memberId: string): Promise<string | null> {
+  const canon = await resolveCanonicalThread(memberId);
+  if (!canon) return null;
 
-  // Candidate threads owned by this trainer that the member is in, of the right type.
+  // Reuse an existing thread under the canonical trainer, of the right type/membership.
   const { data: cp } = await sb
     .from("chat_participants")
     .select("thread_id, chat_threads(id, trainer_id, type, updated_at)")
@@ -381,33 +389,33 @@ export async function ensureTrainerThread(
     )
     .filter(
       (th): th is { id: string; trainer_id: string; type: string; updated_at: string } =>
-        !!th && th.trainer_id === trainerId && th.type === group.type
+        !!th && th.trainer_id === canon.trainerId && th.type === canon.type
     )
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
 
   for (const cand of candidates) {
-    if (group.type === "1on1") return cand.id;
+    if (canon.type === "1on1") return cand.id;
     // 2on1: confirm every group member participates in this thread.
     const { data: parts } = await sb
       .from("chat_participants")
       .select("member_id")
       .eq("thread_id", cand.id);
     const set = new Set((parts ?? []).map((p) => p.member_id as string));
-    if (group.memberIds.every((id) => set.has(id))) return cand.id;
+    if (canon.memberIds.every((id) => set.has(id))) return cand.id;
   }
 
-  // None — create the thread + all group participants.
+  // None — create the thread + all participants under the canonical trainer.
   const now = new Date().toISOString();
   const { data: thread, error } = await sb
     .from("chat_threads")
-    .insert({ trainer_id: trainerId, type: group.type, updated_at: now })
+    .insert({ trainer_id: canon.trainerId, type: canon.type, updated_at: now })
     .select("id")
     .single();
   if (error || !thread) return null;
   const threadId = thread.id as string;
   const { error: pErr } = await sb
     .from("chat_participants")
-    .insert(group.memberIds.map((mid) => ({ thread_id: threadId, member_id: mid })));
+    .insert(canon.memberIds.map((mid) => ({ thread_id: threadId, member_id: mid })));
   if (pErr) return null;
   return threadId;
 }

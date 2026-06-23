@@ -6,7 +6,7 @@ import {
   loadNewTrainerMessages,
   getChatThreads,
   getChatUnread,
-  ensureTrainerThread,
+  ensureChatThread,
 } from "@/lib/data/groups/chat";
 import { getMemberChatUnread } from "@/lib/data/groups/member";
 import type { ChatMessageView, ChatThreadView } from "@/lib/types";
@@ -21,13 +21,10 @@ export async function sendChat(
   const body = text.trim();
   if (!body) return { ok: false, error: "메시지를 입력해 주세요." };
 
-  // Scope: the thread must belong to this trainer.
-  const { data: thread } = await sb
-    .from("chat_threads")
-    .select("id")
-    .eq("id", threadId)
-    .eq("trainer_id", t.id)
-    .maybeSingle();
+  // Scope: the thread must belong to this trainer (owner may post to any thread).
+  let sq = sb.from("chat_threads").select("id").eq("id", threadId);
+  if (t.role !== "owner") sq = sq.eq("trainer_id", t.id);
+  const { data: thread } = await sq.maybeSingle();
   if (!thread) return { ok: false, error: "대화를 찾을 수 없어요." };
 
   const now = new Date().toISOString();
@@ -70,12 +67,9 @@ export async function markThreadRead(
 ): Promise<{ ok: boolean }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false };
-  const { data: thread } = await sb
-    .from("chat_threads")
-    .select("id")
-    .eq("id", threadId)
-    .eq("trainer_id", t.id)
-    .maybeSingle();
+  let mq = sb.from("chat_threads").select("id").eq("id", threadId);
+  if (t.role !== "owner") mq = mq.eq("trainer_id", t.id);
+  const { data: thread } = await mq.maybeSingle();
   if (!thread) return { ok: false };
 
   await sb
@@ -140,7 +134,7 @@ export async function startChatWithMember(
     if (!link) return { ok: false, error: "담당 회원이 아니에요." };
   }
 
-  const threadId = await ensureTrainerThread(t.id, memberId);
+  const threadId = await ensureChatThread(memberId);
   if (!threadId) return { ok: false, error: "대화를 시작할 수 없어요." };
 
   revalidatePath("/t/chat");
