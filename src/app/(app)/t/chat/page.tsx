@@ -33,9 +33,9 @@ export default async function TrainerChatListPage() {
             <Link
               href="/t/chat/new"
               aria-label="새 메시지"
-              className="tappable flex h-9 w-9 items-center justify-center rounded-full bg-sage text-surface active:scale-90"
+              className="tappable -mr-1 flex h-9 w-9 items-center justify-center rounded-full text-sage-deep transition-colors active:scale-90 active:bg-sage-banner2"
             >
-              <Icon name="pencil" size={17} />
+              <Icon name="write" size={21} />
             </Link>
           </div>
         </div>
