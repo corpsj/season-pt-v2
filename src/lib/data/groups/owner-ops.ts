@@ -7,6 +7,10 @@ import {
   todayISO,
   dayDiff,
   nowKstParts,
+  monthBoundsKst,
+  weekBoundsKst,
+  currentMonthLabel,
+  kstWeekday,
 } from "@/lib/data/db";
 import type {
   AvatarTone,
@@ -14,7 +18,9 @@ import type {
   Me,
   MemberDetailView,
   MembershipProduct,
+  PerfBar,
   StaffMember,
+  StudioOverview,
   TeamAvatar,
 } from "@/lib/types";
 
@@ -270,5 +276,101 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
     productLabel: ms?.product ? `${ms.product}회권` : "",
     amount: ms?.price ?? null,
     payDateLabel,
+  };
+}
+
+/* ---------------------------- studio overview ---------------------------- */
+/** 월~토 요일 막대. weekdays = sessions의 KST 요일 번호(0=일..6=토) 리스트. */
+function buildWeeklyBars(weekdays: number[]): PerfBar[] {
+  const order = [1, 2, 3, 4, 5, 6]; // 월..토
+  const labels = ["월", "화", "수", "목", "금", "토"];
+  const counts = order.map((wd) => weekdays.filter((w) => w === wd).length);
+  const max = Math.max(...counts, 0);
+  return order.map((_, i) => {
+    const c = counts[i];
+    const valuePx = Math.min(60, Math.max(8, c * 8));
+    return { label: labels[i], valuePx, emphasized: max > 0 && c === max };
+  });
+}
+
+/** 대표 전용 운영 현황: 스튜디오 전체(무필터) 집계. ₩ 미포함. */
+export async function getStudioOverview(): Promise<StudioOverview> {
+  const monthLabel = currentMonthLabel();
+  const t = await getTrainerContext();
+  if (!t) {
+    return {
+      monthLabel,
+      activeMembers: 0,
+      newThisMonth: 0,
+      weekClasses: 0,
+      attendRate: 100,
+      trainerCount: 0,
+      weeklyBars: buildWeeklyBars([]),
+      expiringCount: 0,
+    };
+  }
+
+  const { startISO: monStart, endISO: monEnd } = monthBoundsKst();
+  const { startISO: wkStart, endISO: wkEnd } = weekBoundsKst();
+  const today = todayISO();
+
+  // 활성 회원권(전체) — 활동 회원 수 + 만료 임박 둘 다에 재사용.
+  const { data: activeMs } = await sb
+    .from("memberships")
+    .select("member_id, end_date")
+    .eq("status", "active");
+  const activeRows = activeMs ?? [];
+  const activeMembers = new Set(activeRows.map((m) => m.member_id)).size;
+  const expiringCount = activeRows.filter((m) => {
+    const d = dayDiff(today, m.end_date);
+    return d >= 0 && d <= 14;
+  }).length;
+
+  // 이번 달 신규 회원(전체).
+  const { count: newCount } = await sb
+    .from("members")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", monStart)
+    .lt("created_at", monEnd);
+  const newThisMonth = newCount ?? 0;
+
+  // 이번 주(월~토) 수업(전체) — 개수 + 요일 분포.
+  const { data: weekSess } = await sb
+    .from("sessions")
+    .select("scheduled_at")
+    .gte("scheduled_at", wkStart)
+    .lt("scheduled_at", wkEnd);
+  const weekRows = weekSess ?? [];
+  const weekClasses = weekRows.length;
+  const weeklyBars = buildWeeklyBars(weekRows.map((s) => kstWeekday(s.scheduled_at)));
+
+  // 이번 달 출석률(전체).
+  const { data: monthSess } = await sb
+    .from("sessions")
+    .select("status")
+    .gte("scheduled_at", monStart)
+    .lt("scheduled_at", monEnd);
+  const msRows = monthSess ?? [];
+  const attended = msRows.filter((s) => s.status === "attended").length;
+  const noshow = msRows.filter((s) => s.status === "noshow").length;
+  const denom = attended + noshow;
+  const attendRate = denom > 0 ? Math.round((attended / denom) * 100) : 100;
+
+  // 활성 트레이너 수.
+  const { count: tCount } = await sb
+    .from("trainers")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "active");
+  const trainerCount = tCount ?? 0;
+
+  return {
+    monthLabel,
+    activeMembers,
+    newThisMonth,
+    weekClasses,
+    attendRate,
+    trainerCount,
+    weeklyBars,
+    expiringCount,
   };
 }

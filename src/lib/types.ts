@@ -225,6 +225,16 @@ export interface PerfBar {
   valuePx: number;
   emphasized: boolean;
 }
+export interface StudioOverview {
+  monthLabel: string;     // "2026년 6월"
+  activeMembers: number;  // 가게 전체 활성 회원 수
+  newThisMonth: number;   // 이번 달(KST) 신규 가입 회원 수
+  weekClasses: number;    // 이번 주(월~토, KST) 수업 타임 수 — 전체 트레이너
+  attendRate: number;     // 이번 달 전체 출석률 (%)
+  trainerCount: number;   // 활성 트레이너 수 (status='active')
+  weeklyBars: PerfBar[];  // 같은 이번 주(월~토) 수업의 요일별 분포 — 합 = weekClasses
+  expiringCount: number;  // 14일 내 만료 임박 활성 회원권 수 — 전체
+}
 export interface PerfSummary {
   monthLabel: string;
   revenue: number;
