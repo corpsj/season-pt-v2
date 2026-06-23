@@ -326,19 +326,47 @@ export async function loadNewTrainerMessages(
 }
 
 /**
- * Ensure a 1:1 chat thread between a trainer and a member, from the trainer side.
- * Reuses an existing 1:1 thread owned by this trainer in which the member participates;
- * otherwise creates the thread + participant. Returns the thread id (null on failure).
+ * The chat group for a member under a trainer: a 2:1 duo (both class members) if they
+ * share an active 2on1 schedule with this trainer, otherwise just the member (1:1).
+ */
+async function chatGroupFor(
+  trainerId: string,
+  memberId: string
+): Promise<{ type: "1on1" | "2on1"; memberIds: string[] }> {
+  const { data: schedRows } = await sb
+    .from("schedules")
+    .select("type, schedule_members(member_id)")
+    .eq("trainer_id", trainerId)
+    .eq("type", "2on1")
+    .eq("active", true);
+  type SR = { type: string; schedule_members: { member_id: string }[] };
+  for (const s of (schedRows ?? []) as unknown as SR[]) {
+    const ids = (s.schedule_members ?? []).map((sm) => sm.member_id);
+    if (ids.includes(memberId) && ids.length >= 2) {
+      return { type: "2on1", memberIds: [...new Set(ids)] };
+    }
+  }
+  return { type: "1on1", memberIds: [memberId] };
+}
+
+/**
+ * Ensure a chat thread between a trainer and a member, matching the member's class type:
+ * a 2:1 group thread (both class members) if they share an active 2on1 schedule, else 1:1.
+ * Reuses an existing thread of the right type/membership; otherwise creates it (with all
+ * group members as participants). Returns the thread id (null on failure).
  */
 export async function ensureTrainerThread(
   trainerId: string,
   memberId: string
 ): Promise<string | null> {
+  const group = await chatGroupFor(trainerId, memberId);
+
+  // Candidate threads owned by this trainer that the member is in, of the right type.
   const { data: cp } = await sb
     .from("chat_participants")
     .select("thread_id, chat_threads(id, trainer_id, type, updated_at)")
     .eq("member_id", memberId);
-  const existing = (cp ?? [])
+  const candidates = (cp ?? [])
     .map(
       (r) =>
         (r as unknown as {
@@ -347,23 +375,35 @@ export async function ensureTrainerThread(
     )
     .filter(
       (th): th is { id: string; trainer_id: string; type: string; updated_at: string } =>
-        !!th && th.trainer_id === trainerId && th.type === "1on1"
+        !!th && th.trainer_id === trainerId && th.type === group.type
     )
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
-  if (existing[0]) return existing[0].id;
 
+  for (const cand of candidates) {
+    if (group.type === "1on1") return cand.id;
+    // 2on1: confirm every group member participates in this thread.
+    const { data: parts } = await sb
+      .from("chat_participants")
+      .select("member_id")
+      .eq("thread_id", cand.id);
+    const set = new Set((parts ?? []).map((p) => p.member_id as string));
+    if (group.memberIds.every((id) => set.has(id))) return cand.id;
+  }
+
+  // None — create the thread + all group participants.
   const now = new Date().toISOString();
   const { data: thread, error } = await sb
     .from("chat_threads")
-    .insert({ trainer_id: trainerId, type: "1on1", updated_at: now })
+    .insert({ trainer_id: trainerId, type: group.type, updated_at: now })
     .select("id")
     .single();
   if (error || !thread) return null;
+  const threadId = thread.id as string;
   const { error: pErr } = await sb
     .from("chat_participants")
-    .insert({ thread_id: thread.id as string, member_id: memberId });
+    .insert(group.memberIds.map((mid) => ({ thread_id: threadId, member_id: mid })));
   if (pErr) return null;
-  return thread.id as string;
+  return threadId;
 }
 
 /**

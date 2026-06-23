@@ -15,12 +15,14 @@ import type { ChatMessageView } from "@/lib/types";
 export function MemberChatClient({
   trainerName,
   initial,
+  isTeam,
   messages: initialMessages,
   cursor: initialCursor,
 }: {
   trainerName: string;
   initial: string;
   sub: string;
+  isTeam: boolean;
   messages: ChatMessageView[];
   cursor: string | null;
 }) {
@@ -91,8 +93,8 @@ export function MemberChatClient({
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-[15px] font-bold text-ink">{trainerName} 트레이너</span>
           <span className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-chip-soft px-1.5 py-0.5 text-[10.5px] font-medium text-muted">
-            <Icon name="lock" size={11} />
-            담당 트레이너와만 대화
+            <Icon name={isTeam ? "persons" : "lock"} size={11} />
+            {isTeam ? "2:1 팀 채팅" : "담당 트레이너와만 대화"}
           </span>
         </div>
       </div>
@@ -103,7 +105,7 @@ export function MemberChatClient({
           <span className="rounded-full bg-chip-soft px-2.5 py-1 text-[11px] font-medium text-muted">오늘</span>
         </div>
         {messages.map((m) => (
-          <ChatBubble key={m.id} mine={m.mine} text={m.text} time={m.time} />
+          <ChatBubble key={m.id} mine={m.mine} sender={m.sender} text={m.text} time={m.time} />
         ))}
         <div ref={bottomRef} />
       </Body>

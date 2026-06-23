@@ -12,6 +12,7 @@ import {
   dayDiff,
   nowKstParts,
 } from "@/lib/data/db";
+import { ensureTrainerThread } from "@/lib/data/groups/chat";
 import type {
   AvatarTone,
   CalendarDay,
@@ -426,39 +427,15 @@ export async function getMemberRequestMeta(): Promise<MemberRequestMeta> {
 
 /* ----------------------------- chat (/m/chat) ----------------------------- */
 /**
- * Ensure a 1:1 chat thread exists between this member and their assigned trainer.
- * Reuses the most recently updated existing thread; otherwise creates a thread +
- * participant. Returns the thread id, or null if the member has no assigned trainer.
- * Created on first access because registration links member↔trainer but does not
- * seed a chat thread.
+ * Ensure the member's chat thread with their assigned trainer exists, created on first
+ * access (registration links member↔trainer but does not seed a chat thread). Delegates
+ * to the trainer-side ensure, which makes a 2:1 group thread if the member shares an
+ * active 2on1 schedule, else a 1:1. Returns the thread id, or null if no assigned trainer.
  */
 export async function ensureMemberThread(memberId: string): Promise<string | null> {
-  // Reuse an existing thread the member already participates in.
-  const { data: cp } = await sb
-    .from("chat_participants")
-    .select("thread_id, chat_threads(id, updated_at)")
-    .eq("member_id", memberId);
-  const existing = (cp ?? [])
-    .map((r) => (r as unknown as { chat_threads?: { id: string; updated_at: string } }).chat_threads)
-    .filter((t): t is { id: string; updated_at: string } => !!t)
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
-  if (existing[0]) return existing[0].id;
-
-  // None yet — create a 1:1 thread with the member's assigned trainer.
   const tr = await primaryTrainer(memberId);
   if (!tr) return null;
-  const now = new Date().toISOString();
-  const { data: thread, error } = await sb
-    .from("chat_threads")
-    .insert({ trainer_id: tr.id, type: "1on1", updated_at: now })
-    .select("id")
-    .single();
-  if (error || !thread) return null;
-  const { error: pErr } = await sb
-    .from("chat_participants")
-    .insert({ thread_id: thread.id as string, member_id: memberId });
-  if (pErr) return null;
-  return thread.id as string;
+  return ensureTrainerThread(tr.id, memberId);
 }
 
 export async function getMemberChatRoom() {
@@ -467,23 +444,45 @@ export async function getMemberChatRoom() {
   const tr = await primaryTrainer(me.memberId);
   const trainerName = tr?.display_name ?? "";
   const initial = trainerName ? trainerName.charAt(0) : "트";
-  const sub = "담당 트레이너";
 
-  // Ensure the member↔trainer thread exists (created on first access).
+  // Ensure the member's thread exists (1:1, or a 2:1 group if they share a 2on1 class).
   const threadId = await ensureMemberThread(me.memberId);
   if (!threadId) {
     return {
       trainerName,
       initial,
-      sub,
+      sub: "담당 트레이너",
+      isTeam: false,
       messages: [] as ChatMessageView[],
       cursor: null as string | null,
     };
   }
 
+  const { data: thread } = await sb
+    .from("chat_threads")
+    .select("type")
+    .eq("id", threadId)
+    .maybeSingle();
+  const isTeam = thread?.type === "2on1";
+
+  // Participant names, for labeling a 2:1 partner's messages.
+  const nameById = new Map<string, string>();
+  if (isTeam) {
+    const { data: parts } = await sb
+      .from("chat_participants")
+      .select("member_id, members(name)")
+      .eq("thread_id", threadId);
+    for (const p of (parts ?? []) as unknown as {
+      member_id: string;
+      members: { name: string } | null;
+    }[]) {
+      if (p.members?.name) nameById.set(p.member_id, p.members.name);
+    }
+  }
+
   const { data: msgs } = await sb
     .from("chat_messages")
-    .select("id, sender_type, text, created_at")
+    .select("id, sender_type, sender_id, text, created_at")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
@@ -495,18 +494,33 @@ export async function getMemberChatRoom() {
     .eq("sender_type", "trainer")
     .eq("read_by_member", false);
 
-  const messages: ChatMessageView[] = (msgs ?? []).map((m) => ({
-    id: m.id as string,
-    mine: m.sender_type === "member",
-    text: m.text as string,
-    time: clockLabel(m.created_at as string),
-    createdAt: m.created_at as string,
-  }));
+  const messages: ChatMessageView[] = (msgs ?? []).map((m) => {
+    const mine = m.sender_type === "member" && m.sender_id === me.memberId;
+    const sender =
+      isTeam && m.sender_type === "member" && !mine
+        ? nameById.get(m.sender_id as string)
+        : undefined;
+    return {
+      id: m.id as string,
+      mine,
+      sender,
+      text: m.text as string,
+      time: clockLabel(m.created_at as string),
+      createdAt: m.created_at as string,
+    };
+  });
 
   const cursor =
     msgs && msgs.length ? (msgs[msgs.length - 1].created_at as string) : null;
 
-  return { trainerName, initial, sub, messages, cursor };
+  return {
+    trainerName,
+    initial,
+    sub: isTeam ? "2:1 팀 채팅" : "담당 트레이너",
+    isTeam,
+    messages,
+    cursor,
+  };
 }
 
 /** New messages in the member's thread at/after `sinceISO` (or all if null), marking incoming as read. */
@@ -518,22 +532,39 @@ export async function loadNewMemberMessages(
 
   const { data: cp } = await sb
     .from("chat_participants")
-    .select("thread_id, chat_threads(id, updated_at)")
+    .select("thread_id, chat_threads(id, type, updated_at)")
     .eq("member_id", me.memberId);
   const threads = (cp ?? [])
     .map(
       (r) =>
-        (r as unknown as { chat_threads?: { id: string; updated_at: string } })
-          .chat_threads
+        (r as unknown as {
+          chat_threads?: { id: string; type: string; updated_at: string };
+        }).chat_threads
     )
-    .filter((t): t is { id: string; updated_at: string } => !!t)
+    .filter((t): t is { id: string; type: string; updated_at: string } => !!t)
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
   const thread = threads[0];
   if (!thread) return [];
+  const isTeam = thread.type === "2on1";
+
+  // Participant names, for labeling a 2:1 partner's messages.
+  const nameById = new Map<string, string>();
+  if (isTeam) {
+    const { data: parts } = await sb
+      .from("chat_participants")
+      .select("member_id, members(name)")
+      .eq("thread_id", thread.id);
+    for (const p of (parts ?? []) as unknown as {
+      member_id: string;
+      members: { name: string } | null;
+    }[]) {
+      if (p.members?.name) nameById.set(p.member_id, p.members.name);
+    }
+  }
 
   let q = sb
     .from("chat_messages")
-    .select("id, sender_type, text, created_at")
+    .select("id, sender_type, sender_id, text, created_at")
     .eq("thread_id", thread.id)
     .order("created_at", { ascending: true });
   if (sinceISO) q = q.gte("created_at", sinceISO);
@@ -547,13 +578,21 @@ export async function loadNewMemberMessages(
     .eq("sender_type", "trainer")
     .eq("read_by_member", false);
 
-  return (msgs ?? []).map((m) => ({
-    id: m.id as string,
-    mine: m.sender_type === "member",
-    text: m.text as string,
-    time: clockLabel(m.created_at as string),
-    createdAt: m.created_at as string,
-  } satisfies ChatMessageView));
+  return (msgs ?? []).map((m) => {
+    const mine = m.sender_type === "member" && m.sender_id === me.memberId;
+    const sender =
+      isTeam && m.sender_type === "member" && !mine
+        ? nameById.get(m.sender_id as string)
+        : undefined;
+    return {
+      id: m.id as string,
+      mine,
+      sender,
+      text: m.text as string,
+      time: clockLabel(m.created_at as string),
+      createdAt: m.created_at as string,
+    } satisfies ChatMessageView;
+  });
 }
 
 /* ----------------------------- tab badge ----------------------------- */

@@ -9,6 +9,7 @@ export default async function MemberChatPage() {
       trainerName={room.trainerName}
       initial={room.initial}
       sub={room.sub}
+      isTeam={room.isTeam}
       messages={room.messages}
       cursor={room.cursor}
     />
