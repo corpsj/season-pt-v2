@@ -6,7 +6,7 @@ import { Stat } from "@/components/ui/StatCard";
 import { BarChart } from "@/components/ui/BarChart";
 import { Icon } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
-import { getPerf } from "@/lib/data/groups/perf-retention";
+import { getStudioOverview } from "@/lib/data/groups/owner-ops";
 import { sb, getTrainerContext } from "@/lib/data/db";
 
 /** Unread chat count for this trainer (for the tab badge). */
@@ -26,10 +26,10 @@ async function chatUnreadFor(trainerId: string): Promise<number> {
   return count ?? 0;
 }
 
-export default async function TrainerPerfPage() {
+export default async function TrainerOpsPage() {
   const t = await getTrainerContext();
   const isOwner = t?.role === "owner";
-  const perf = await getPerf();
+  const ov = await getStudioOverview();
   const chatUnread = t ? await chatUnreadFor(t.id) : 0;
 
   return (
@@ -38,8 +38,8 @@ export default async function TrainerPerfPage() {
         {/* header */}
         <div className="mb-3.5 flex items-center justify-between">
           <div>
-            <div className="text-[13px] font-medium text-muted">{perf.monthLabel}</div>
-            <div className="text-[21px] font-bold text-ink">내 실적</div>
+            <div className="text-[13px] font-medium text-muted">{ov.monthLabel}</div>
+            <div className="text-[21px] font-bold text-ink">운영 현황</div>
           </div>
           <Link
             href="/t/settings"
@@ -50,29 +50,31 @@ export default async function TrainerPerfPage() {
           </Link>
         </div>
 
-        {/* revenue card */}
+        {/* hero — active members (people, not money) */}
         <div className="mb-2.5 rounded-[18px] bg-sage p-5">
-          <div className="text-[12px] text-surface/85">이번 달 매출 기여</div>
+          <div className="text-[12px] text-surface/85">활동 중인 회원</div>
           <div className="mt-2 flex items-end gap-2">
             <span className="serif text-[36px] leading-none text-surface">
-              ₩{perf.revenue.toLocaleString()}
+              {ov.activeMembers.toLocaleString()}명
             </span>
-            <span className="flex items-center gap-0.5 pb-0.5 text-[13px] font-semibold text-[#CDE0CF]">
-              <Icon name="arrow-up-right" size={15} />+{perf.revenueDelta}%
-            </span>
+            {ov.newThisMonth > 0 ? (
+              <span className="pb-0.5 text-[13px] font-semibold text-[#CDE0CF]">
+                이번 달 신규 {ov.newThisMonth}명
+              </span>
+            ) : null}
           </div>
         </div>
 
         {/* three stat cards */}
         <div className="mb-2.5 flex gap-2.5">
           <Card className="flex-1 px-3.5 py-3">
-            <Stat value={perf.classCount} label="수업수" />
+            <Stat value={ov.weekClasses} label="이번 주 수업" />
           </Card>
           <Card className="flex-1 px-3.5 py-3">
-            <Stat value={perf.memberCount} label="담당회원" color="text-sage-soft" />
+            <Stat value={`${ov.attendRate}%`} label="출석률" color="text-sage-deep" />
           </Card>
           <Card className="flex-1 px-3.5 py-3">
-            <Stat value={`${perf.attendRate}%`} label="출석률" color="text-sage-deep" />
+            <Stat value={`${ov.trainerCount}명`} label="트레이너" color="text-sage-soft" />
           </Card>
         </div>
 
@@ -80,25 +82,25 @@ export default async function TrainerPerfPage() {
         <Card className="mb-2.5 p-4">
           <div className="mb-3.5 flex items-center justify-between">
             <span className="text-[13.5px] font-bold text-ink">주간 수업</span>
-            <span className="text-[12px] font-medium text-muted">21타임</span>
+            <span className="text-[12px] font-medium text-muted">{ov.weekClasses}타임</span>
           </div>
-          <BarChart bars={perf.weeklyBars} />
+          <BarChart bars={ov.weeklyBars} />
         </Card>
 
-        {/* retention banner */}
-        <Link
-          href="/t/retention"
-          className="tappable flex items-center gap-2.5 rounded-[16px] border border-terracotta/[0.18] bg-warm-banner px-4 py-[15px]"
-        >
-          <Icon name="refresh" size={20} className="text-terracotta" />
-          <div className="flex-1">
-            <div className="text-[13.5px] font-bold text-terracotta-deep">재등록 전환 관리</div>
-            <div className="mt-0.5 text-[12px] text-terracotta-text">
-              만료 임박 {perf.expiringCount}명 · 예상 ₩4.2M
+        {/* retention banner — people-centric, no ₩ */}
+        {ov.expiringCount > 0 ? (
+          <Link
+            href="/t/retention"
+            className="tappable flex items-center gap-2.5 rounded-[16px] border border-terracotta/[0.18] bg-warm-banner px-4 py-[15px]"
+          >
+            <Icon name="refresh" size={20} className="text-terracotta" />
+            <div className="flex-1">
+              <div className="text-[13.5px] font-bold text-terracotta-deep">재등록 관리가 필요한 회원</div>
+              <div className="mt-0.5 text-[12px] text-terracotta-text">만료 임박 {ov.expiringCount}명</div>
             </div>
-          </div>
-          <Icon name="chevron-right" size={16} className="text-terracotta" />
-        </Link>
+            <Icon name="chevron-right" size={16} className="text-terracotta" />
+          </Link>
+        ) : null}
 
         <div className="h-3.5" />
       </Body>
