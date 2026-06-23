@@ -9,6 +9,7 @@ import {
   NOTIF_KEYS,
   clockLabel,
   loadNewMemberMessages,
+  ensureMemberThread,
 } from "./member";
 import type { ChatMessageView } from "@/lib/types";
 
@@ -139,22 +140,15 @@ export async function sendMemberChat(
   const body = text.trim();
   if (!body) return { ok: false, error: "메시지를 입력해주세요" };
 
-  const { data: cp } = await sb
-    .from("chat_participants")
-    .select("thread_id, chat_threads(id, updated_at)")
-    .eq("member_id", me.memberId);
-  const threads = (cp ?? [])
-    .map((r) => (r as unknown as {chat_threads?: { id: string; updated_at: string } }).chat_threads)
-    .filter((t): t is { id: string; updated_at: string } => !!t)
-    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
-  const thread = threads[0];
-  if (!thread) return { ok: false, error: "대화방을 찾을 수 없어요" };
+  // Ensure the member↔trainer thread exists (created on first send if missing).
+  const threadId = await ensureMemberThread(me.memberId);
+  if (!threadId) return { ok: false, error: "담당 트레이너가 없어 대화를 시작할 수 없어요" };
 
   const now = new Date().toISOString();
   const { data: inserted, error } = await sb
     .from("chat_messages")
     .insert({
-      thread_id: thread.id,
+      thread_id: threadId,
       sender_type: "member",
       sender_id: me.memberId,
       text: body,
@@ -168,7 +162,7 @@ export async function sendMemberChat(
   await sb
     .from("chat_threads")
     .update({ last_message: body, last_at: now, updated_at: now })
-    .eq("id", thread.id);
+    .eq("id", threadId);
 
   revalidatePath("/m/chat");
   return {

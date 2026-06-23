@@ -425,26 +425,53 @@ export async function getMemberRequestMeta(): Promise<MemberRequestMeta> {
 }
 
 /* ----------------------------- chat (/m/chat) ----------------------------- */
-export async function getMemberChatRoom() {
-  const me = await requireMember();
-
-  // The member's thread (via chat_participants).
+/**
+ * Ensure a 1:1 chat thread exists between this member and their assigned trainer.
+ * Reuses the most recently updated existing thread; otherwise creates a thread +
+ * participant. Returns the thread id, or null if the member has no assigned trainer.
+ * Created on first access because registration links member↔trainer but does not
+ * seed a chat thread.
+ */
+export async function ensureMemberThread(memberId: string): Promise<string | null> {
+  // Reuse an existing thread the member already participates in.
   const { data: cp } = await sb
     .from("chat_participants")
-    .select("thread_id, chat_threads(id, trainer_id, type, updated_at)")
-    .eq("member_id", me.memberId);
-  const threads = (cp ?? [])
-    .map((r) => (r as unknown as {chat_threads?: { id: string; trainer_id: string; type: string; updated_at: string } }).chat_threads)
-    .filter((t): t is { id: string; trainer_id: string; type: string; updated_at: string } => !!t)
+    .select("thread_id, chat_threads(id, updated_at)")
+    .eq("member_id", memberId);
+  const existing = (cp ?? [])
+    .map((r) => (r as unknown as { chat_threads?: { id: string; updated_at: string } }).chat_threads)
+    .filter((t): t is { id: string; updated_at: string } => !!t)
     .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
-  const thread = threads[0];
+  if (existing[0]) return existing[0].id;
+
+  // None yet — create a 1:1 thread with the member's assigned trainer.
+  const tr = await primaryTrainer(memberId);
+  if (!tr) return null;
+  const now = new Date().toISOString();
+  const { data: thread, error } = await sb
+    .from("chat_threads")
+    .insert({ trainer_id: tr.id, type: "1on1", updated_at: now })
+    .select("id")
+    .single();
+  if (error || !thread) return null;
+  const { error: pErr } = await sb
+    .from("chat_participants")
+    .insert({ thread_id: thread.id as string, member_id: memberId });
+  if (pErr) return null;
+  return thread.id as string;
+}
+
+export async function getMemberChatRoom() {
+  const me = await requireMember();
 
   const tr = await primaryTrainer(me.memberId);
   const trainerName = tr?.display_name ?? "";
   const initial = trainerName ? trainerName.charAt(0) : "트";
   const sub = "담당 트레이너";
 
-  if (!thread) {
+  // Ensure the member↔trainer thread exists (created on first access).
+  const threadId = await ensureMemberThread(me.memberId);
+  if (!threadId) {
     return {
       trainerName,
       initial,
@@ -457,14 +484,14 @@ export async function getMemberChatRoom() {
   const { data: msgs } = await sb
     .from("chat_messages")
     .select("id, sender_type, text, created_at")
-    .eq("thread_id", thread.id)
+    .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
   // Mark trainer messages as read by this member.
   await sb
     .from("chat_messages")
     .update({ read_by_member: true })
-    .eq("thread_id", thread.id)
+    .eq("thread_id", threadId)
     .eq("sender_type", "trainer")
     .eq("read_by_member", false);
 
