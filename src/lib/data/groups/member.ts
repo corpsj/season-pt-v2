@@ -15,6 +15,7 @@ import {
 import type {
   AvatarTone,
   CalendarDay,
+  ChatMessageView,
   MemberCalendarView,
   MemberMyView,
   MemberNotice,
@@ -57,7 +58,7 @@ function agoLabel(iso: string): string {
 }
 
 /** "오후 2:14" — chat message clock time (KST). */
-function clockLabel(iso: string): string {
+export function clockLabel(iso: string): string {
   const d = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000);
   const h = d.getUTCHours();
   const m = d.getUTCMinutes();
@@ -449,7 +450,8 @@ export async function getMemberChatRoom() {
       trainerName,
       initial,
       sub,
-      messages: [] as { id: string; mine: boolean; text: string; time?: string }[],
+      messages: [] as ChatMessageView[],
+      cursor: null as string | null,
     };
   }
 
@@ -467,17 +469,65 @@ export async function getMemberChatRoom() {
     .eq("sender_type", "trainer")
     .eq("read_by_member", false);
 
-  return {
-    trainerName,
-    initial,
-    sub,
-    messages: (msgs ?? []).map((m) => ({
-      id: m.id,
-      mine: m.sender_type === "member",
-      text: m.text,
-      time: clockLabel(m.created_at),
-    })),
-  };
+  const messages: ChatMessageView[] = (msgs ?? []).map((m) => ({
+    id: m.id as string,
+    mine: m.sender_type === "member",
+    text: m.text as string,
+    time: clockLabel(m.created_at as string),
+    createdAt: m.created_at as string,
+  }));
+
+  const cursor =
+    msgs && msgs.length ? (msgs[msgs.length - 1].created_at as string) : null;
+
+  return { trainerName, initial, sub, messages, cursor };
+}
+
+/** New messages in the member's thread at/after `sinceISO` (or all if null), marking incoming as read. */
+export async function loadNewMemberMessages(
+  sinceISO: string | null
+): Promise<ChatMessageView[]> {
+  const me = await getMemberContext();
+  if (!me) return [];
+
+  const { data: cp } = await sb
+    .from("chat_participants")
+    .select("thread_id, chat_threads(id, updated_at)")
+    .eq("member_id", me.memberId);
+  const threads = (cp ?? [])
+    .map(
+      (r) =>
+        (r as unknown as { chat_threads?: { id: string; updated_at: string } })
+          .chat_threads
+    )
+    .filter((t): t is { id: string; updated_at: string } => !!t)
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  const thread = threads[0];
+  if (!thread) return [];
+
+  let q = sb
+    .from("chat_messages")
+    .select("id, sender_type, text, created_at")
+    .eq("thread_id", thread.id)
+    .order("created_at", { ascending: true });
+  if (sinceISO) q = q.gte("created_at", sinceISO);
+  const { data: msgs, error: qErr } = await q;
+  if (qErr) return [];
+
+  await sb
+    .from("chat_messages")
+    .update({ read_by_member: true })
+    .eq("thread_id", thread.id)
+    .eq("sender_type", "trainer")
+    .eq("read_by_member", false);
+
+  return (msgs ?? []).map((m) => ({
+    id: m.id as string,
+    mine: m.sender_type === "member",
+    text: m.text as string,
+    time: clockLabel(m.created_at as string),
+    createdAt: m.created_at as string,
+  } satisfies ChatMessageView));
 }
 
 /* ----------------------------- tab badge ----------------------------- */

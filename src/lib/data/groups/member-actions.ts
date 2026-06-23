@@ -7,7 +7,10 @@ import {
   NOTICE_UNREAD_IDS,
   NOTIF_COOKIE,
   NOTIF_KEYS,
+  clockLabel,
+  loadNewMemberMessages,
 } from "./member";
+import type { ChatMessageView } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
 
@@ -129,7 +132,9 @@ export async function sendMemberRequest(input: {
 }
 
 /** Member sends a chat message in their thread. */
-export async function sendMemberChat(text: string): Promise<Result> {
+export async function sendMemberChat(
+  text: string
+): Promise<{ ok: boolean; error?: string; message?: ChatMessageView }> {
   const me = await requireMember();
   const body = text.trim();
   if (!body) return { ok: false, error: "메시지를 입력해주세요" };
@@ -146,15 +151,19 @@ export async function sendMemberChat(text: string): Promise<Result> {
   if (!thread) return { ok: false, error: "대화방을 찾을 수 없어요" };
 
   const now = new Date().toISOString();
-  const { error } = await sb.from("chat_messages").insert({
-    thread_id: thread.id,
-    sender_type: "member",
-    sender_id: me.memberId,
-    text: body,
-    read_by_member: true,
-    read_by_trainer: false,
-  });
-  if (error) return { ok: false, error: "메시지를 보내지 못했어요" };
+  const { data: inserted, error } = await sb
+    .from("chat_messages")
+    .insert({
+      thread_id: thread.id,
+      sender_type: "member",
+      sender_id: me.memberId,
+      text: body,
+      read_by_member: true,
+      read_by_trainer: false,
+    })
+    .select("id, created_at")
+    .single();
+  if (error || !inserted) return { ok: false, error: "메시지를 보내지 못했어요" };
 
   await sb
     .from("chat_threads")
@@ -162,7 +171,23 @@ export async function sendMemberChat(text: string): Promise<Result> {
     .eq("id", thread.id);
 
   revalidatePath("/m/chat");
-  return { ok: true };
+  return {
+    ok: true,
+    message: {
+      id: inserted.id as string,
+      mine: true,
+      text: body,
+      time: clockLabel(inserted.created_at as string),
+      createdAt: inserted.created_at as string,
+    },
+  };
+}
+
+/** Client-callable poll for new messages in the member's thread. */
+export async function pollMemberMessages(
+  sinceISO: string | null
+): Promise<ChatMessageView[]> {
+  return loadNewMemberMessages(sinceISO);
 }
 
 /* ----------------------------- my page (/m/my) ----------------------------- */
