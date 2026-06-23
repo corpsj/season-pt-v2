@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Avatar } from "@/components/ui/Avatar";
@@ -37,6 +37,11 @@ export function MemberChatClient({
     bottomRef.current?.scrollIntoView({ block: "end" });
   }
 
+  // Scroll to the newest message after the DOM commits (new polls, sends, and initial open).
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   usePolling(async () => {
     let incoming: ChatMessageView[] = [];
     try {
@@ -50,7 +55,6 @@ export function MemberChatClient({
       cursorRef.current = latestCursor(merged, cursorRef.current);
       return merged;
     });
-    scrollToBottom();
   }, 3000);
 
   async function send() {
@@ -59,7 +63,6 @@ export function MemberChatClient({
     const tempId = `${TEMP_PREFIX}${tempSeq.current++}`;
     setMessages((prev) => [...prev, { id: tempId, mine: true, text }]);
     setDraft("");
-    scrollToBottom();
     const res = await sendMemberChat(text);
     if (res.ok && res.message) {
       const real = res.message;
