@@ -66,10 +66,16 @@ export async function getMe(): Promise<Me> {
   };
 }
 
-/** Count of this trainer's members (담당회원 pill). */
+/** Member count for the chat header pill — all members for an owner, else assigned. */
 export async function getMembersCount(): Promise<number> {
   const t = await getTrainerContext();
   if (!t) return 0;
+  if (t.role === "owner") {
+    const { count } = await sb
+      .from("members")
+      .select("id", { count: "exact", head: true });
+    return count ?? 0;
+  }
   const { count } = await sb
     .from("member_trainers")
     .select("member_id", { count: "exact", head: true })

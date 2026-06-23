@@ -28,7 +28,7 @@ export default async function TrainerChatListPage() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-sage-banner2 px-3 py-1.5 text-[12px] font-semibold text-[#5b6452]">
               <Icon name="persons" size={15} className="text-sage-deep" />
-              담당회원 {totalMembers}
+              {me.isOwner ? "전체 회원" : "담당회원"} {totalMembers}
             </span>
             <Link
               href="/t/chat/new"

@@ -298,18 +298,20 @@ async function memberIdsOf(trainerId: string): Promise<string[]> {
 }
 
 /** Build per-member schedule meta (type, team, weekdays, hour, schedule label) from schedules. */
-async function scheduleMetaOf(trainerId: string, memberIds: string[]) {
+async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
   const meta = new Map<
     string,
     { type: "1on1" | "2on1"; weekdays: number[]; hour: number; team?: TeamAvatar; partnerNames: string[] }
   >();
   if (memberIds.length === 0) return meta;
 
-  const { data: schedRows } = await sb
+  // Owner views all members → no trainer filter (trainerId null); otherwise scope to the trainer.
+  let sq = sb
     .from("schedules")
     .select("id, type, weekday, hour, active, schedule_members(member_id, members(name, avatar_tone))")
-    .eq("trainer_id", trainerId)
     .eq("active", true);
+  if (trainerId) sq = sq.eq("trainer_id", trainerId);
+  const { data: schedRows } = await sq;
 
   type SR = {
     id: string;
@@ -366,15 +368,22 @@ export async function getMembers(filter: MemberFilter = "all"): Promise<MembersV
   const me = await getMe();
   const trainerId = me.trainerId ?? "";
 
-  const { data: links } = await sb
-    .from("member_trainers")
-    .select("members(id, name, status, avatar_tone)")
-    .eq("trainer_id", trainerId);
-
-  type Link = { members: { id: string; name: string; status: "active" | "rest" | "inactive"; avatar_tone: string } | null };
-  const memberRows = ((links ?? []) as unknown as Link[])
-    .map((l) => l.members)
-    .filter((m): m is NonNullable<Link["members"]> => !!m);
+  type MRow = { id: string; name: string; status: "active" | "rest" | "inactive"; avatar_tone: string };
+  let memberRows: MRow[];
+  if (me.isOwner) {
+    // Owner sees every member in the gym, not just their assigned ones.
+    const { data } = await sb.from("members").select("id, name, status, avatar_tone");
+    memberRows = (data ?? []) as MRow[];
+  } else {
+    const { data: links } = await sb
+      .from("member_trainers")
+      .select("members(id, name, status, avatar_tone)")
+      .eq("trainer_id", trainerId);
+    type Link = { members: MRow | null };
+    memberRows = ((links ?? []) as unknown as Link[])
+      .map((l) => l.members)
+      .filter((m): m is MRow => !!m);
+  }
 
   const memberIds = memberRows.map((m) => m.id);
   const today = todayISO();
@@ -393,7 +402,7 @@ export async function getMembers(filter: MemberFilter = "all"): Promise<MembersV
     msByMember.set(r.member_id, { remaining: r.remaining_sessions, dDay: dayDiff(today, r.end_date) });
   }
 
-  const meta = await scheduleMetaOf(trainerId, memberIds);
+  const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, memberIds);
 
   const enriched = memberRows.map((m) => {
     const ms = msByMember.get(m.id);
@@ -459,15 +468,22 @@ export async function getMembersAll(): Promise<{
   const me = await getMe();
   const trainerId = me.trainerId ?? "";
 
-  const { data: links } = await sb
-    .from("member_trainers")
-    .select("members(id, name, status, avatar_tone)")
-    .eq("trainer_id", trainerId);
-
-  type Link = { members: { id: string; name: string; status: "active" | "rest" | "inactive"; avatar_tone: string } | null };
-  const memberRows = ((links ?? []) as unknown as Link[])
-    .map((l) => l.members)
-    .filter((m): m is NonNullable<Link["members"]> => !!m);
+  type MRow = { id: string; name: string; status: "active" | "rest" | "inactive"; avatar_tone: string };
+  let memberRows: MRow[];
+  if (me.isOwner) {
+    // Owner sees every member in the gym, not just their assigned ones.
+    const { data } = await sb.from("members").select("id, name, status, avatar_tone");
+    memberRows = (data ?? []) as MRow[];
+  } else {
+    const { data: links } = await sb
+      .from("member_trainers")
+      .select("members(id, name, status, avatar_tone)")
+      .eq("trainer_id", trainerId);
+    type Link = { members: MRow | null };
+    memberRows = ((links ?? []) as unknown as Link[])
+      .map((l) => l.members)
+      .filter((m): m is MRow => !!m);
+  }
   const memberIds = memberRows.map((m) => m.id);
   const today = todayISO();
 
@@ -483,7 +499,7 @@ export async function getMembersAll(): Promise<{
     msByMember.set(r.member_id, { remaining: r.remaining_sessions, dDay: dayDiff(today, r.end_date) });
   }
 
-  const meta = await scheduleMetaOf(trainerId, memberIds);
+  const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, memberIds);
   const statusById: Record<string, "active" | "expiring" | "rest" | "inactive"> = {};
 
   const items = memberRows.map((m) => {
@@ -555,7 +571,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     | { product: string; total_sessions: number; remaining_sessions: number; start_date: string; end_date: string }
     | undefined;
 
-  const meta = await scheduleMetaOf(trainerId, [id]);
+  const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, [id]);
   const sm = meta.get(id);
   const isTeam = sm?.type === "2on1";
 
