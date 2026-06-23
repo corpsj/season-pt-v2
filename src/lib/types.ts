@@ -322,6 +322,7 @@ export interface ChatMessageView {
   sender?: string; // for 2:1 rooms
   text: string;
   time?: string;
+  createdAt?: string; // raw ISO timestamp; absent on optimistic (temp) messages
 }
 export interface ChatRoomView {
   threadId: string;
