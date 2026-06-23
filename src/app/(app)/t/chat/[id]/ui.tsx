@@ -1,28 +1,66 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { ChatInput } from "@/components/ui/ChatInput";
-import { sendChat } from "@/lib/data/groups/chat-actions";
+import { useToast } from "@/components/ui/Toast";
+import { sendChat, pollTrainerMessages } from "@/lib/data/groups/chat-actions";
+import { mergeMessages, latestCursor, TEMP_PREFIX } from "@/lib/chat/merge";
+import { usePolling } from "@/lib/hooks/usePolling";
 import type { ChatMessageView, ChatRoomView } from "@/lib/types";
 
 export function ChatRoomClient({ room }: { room: ChatRoomView }) {
-  const router = useRouter();
+  const showToast = useToast();
   const [messages, setMessages] = useState<ChatMessageView[]>(room.messages);
   const [draft, setDraft] = useState("");
+  const cursorRef = useRef<string | null>(
+    latestCursor(room.messages, room.cursor ?? null)
+  );
+  const tempSeq = useRef(0);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  function send() {
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }
+
+  usePolling(async () => {
+    let incoming: ChatMessageView[] = [];
+    try {
+      incoming = await pollTrainerMessages(room.threadId, cursorRef.current);
+    } catch {
+      return; // transient failure — retry next tick
+    }
+    if (!incoming.length) return;
+    setMessages((prev) => {
+      const merged = mergeMessages(prev, incoming);
+      cursorRef.current = latestCursor(merged, cursorRef.current);
+      return merged;
+    });
+    scrollToBottom();
+  }, 3000);
+
+  async function send() {
     const text = draft.trim();
     if (!text) return;
-    setMessages((prev) => [...prev, { id: `me_${prev.length}`, mine: true, text }]);
+    const tempId = `${TEMP_PREFIX}${tempSeq.current++}`;
+    setMessages((prev) => [...prev, { id: tempId, mine: true, text }]);
     setDraft("");
-    void sendChat(room.threadId, text).then((res) => {
-      if (res.ok) router.refresh();
-    });
+    scrollToBottom();
+    const res = await sendChat(room.threadId, text);
+    if (res.ok && res.message) {
+      const real = res.message;
+      setMessages((prev) => {
+        const merged = mergeMessages(prev, [real]);
+        cursorRef.current = latestCursor(merged, cursorRef.current);
+        return merged;
+      });
+    } else {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      showToast(res.error ?? "전송에 실패했어요.");
+    }
   }
 
   return (
@@ -63,6 +101,7 @@ export function ChatRoomClient({ room }: { room: ChatRoomView }) {
             time={m.time}
           />
         ))}
+        <div ref={bottomRef} />
       </Body>
 
       {/* composer */}
