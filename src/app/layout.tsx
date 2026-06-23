@@ -23,7 +23,12 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#faf8f4",
-  viewportFit: "cover",
+  // NOTE: intentionally NOT "cover". On standalone PWAs, viewport-fit=cover draws
+  // content edge-to-edge behind the system bars, but Android Chrome reports
+  // env(safe-area-inset-bottom)=0 for 3-button navigation, so the bottom TabBar
+  // ends up hidden behind the OS nav bar. Letting the UA inset the viewport keeps
+  // the TabBar safely above the system navigation on every device.
+  viewportFit: "auto",
 };
 
 export default function RootLayout({
