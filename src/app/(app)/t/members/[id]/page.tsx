@@ -9,6 +9,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref } from "@/lib/data/groups/trainer-home";
+import { MessageMemberButton } from "./MessageMemberButton";
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -89,13 +90,16 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
       </Body>
 
       <Footer>
-        <div className="flex gap-2.5">
-          <OutlineButton icon="pencil" href={recordHref}>
-            기록
-          </OutlineButton>
-          <PrimaryButton icon="refresh" href="/t/retention">
-            재등록 안내
-          </PrimaryButton>
+        <div className="flex flex-col gap-2.5">
+          <MessageMemberButton memberId={id} />
+          <div className="flex gap-2.5">
+            <OutlineButton icon="pencil" href={recordHref}>
+              기록
+            </OutlineButton>
+            <PrimaryButton icon="refresh" href="/t/retention">
+              재등록 안내
+            </PrimaryButton>
+          </div>
         </div>
       </Footer>
     </div>

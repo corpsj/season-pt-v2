@@ -335,6 +335,13 @@ export interface ChatRoomView {
   messages: ChatMessageView[];
   cursor?: string | null; // newest message's created_at; initial poll cursor
 }
+/** A member a trainer can start a chat with (new-message picker). */
+export interface ChatMemberPick {
+  id: string;
+  name: string;
+  initial: string;
+  avatarTone: AvatarTone;
+}
 
 /* --------------------------- member app --------------------------- */
 export interface MemberCalendarView {

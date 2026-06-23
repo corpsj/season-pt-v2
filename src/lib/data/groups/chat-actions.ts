@@ -6,6 +6,7 @@ import {
   loadNewTrainerMessages,
   getChatThreads,
   getChatUnread,
+  ensureTrainerThread,
 } from "@/lib/data/groups/chat";
 import { getMemberChatUnread } from "@/lib/data/groups/member";
 import type { ChatMessageView, ChatThreadView } from "@/lib/types";
@@ -108,4 +109,40 @@ export async function pollChatUnread(): Promise<number> {
   const m = await getMemberContext();
   if (m) return getMemberChatUnread();
   return 0;
+}
+
+/**
+ * Start (or reopen) a chat with a member from the trainer side, returning the thread id
+ * so the client can navigate to the room. Owner may message any member; other trainers
+ * only their assigned members.
+ */
+export async function startChatWithMember(
+  memberId: string
+): Promise<{ ok: boolean; threadId?: string; error?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요." };
+  if (!memberId) return { ok: false, error: "회원을 찾을 수 없어요." };
+
+  if (t.role === "owner") {
+    const { data: m } = await sb
+      .from("members")
+      .select("id")
+      .eq("id", memberId)
+      .maybeSingle();
+    if (!m) return { ok: false, error: "회원을 찾을 수 없어요." };
+  } else {
+    const { data: link } = await sb
+      .from("member_trainers")
+      .select("member_id")
+      .eq("trainer_id", t.id)
+      .eq("member_id", memberId)
+      .maybeSingle();
+    if (!link) return { ok: false, error: "담당 회원이 아니에요." };
+  }
+
+  const threadId = await ensureTrainerThread(t.id, memberId);
+  if (!threadId) return { ok: false, error: "대화를 시작할 수 없어요." };
+
+  revalidatePath("/t/chat");
+  return { ok: true, threadId };
 }

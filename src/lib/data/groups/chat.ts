@@ -5,6 +5,7 @@ import type {
   ChatThreadView,
   ChatMessageView,
   ChatRoomView,
+  ChatMemberPick,
   Me,
   TeamAvatar,
 } from "@/lib/types";
@@ -322,6 +323,85 @@ export async function loadNewTrainerMessages(
       createdAt: row.created_at as string,
     } satisfies ChatMessageView;
   });
+}
+
+/**
+ * Ensure a 1:1 chat thread between a trainer and a member, from the trainer side.
+ * Reuses an existing 1:1 thread owned by this trainer in which the member participates;
+ * otherwise creates the thread + participant. Returns the thread id (null on failure).
+ */
+export async function ensureTrainerThread(
+  trainerId: string,
+  memberId: string
+): Promise<string | null> {
+  const { data: cp } = await sb
+    .from("chat_participants")
+    .select("thread_id, chat_threads(id, trainer_id, type, updated_at)")
+    .eq("member_id", memberId);
+  const existing = (cp ?? [])
+    .map(
+      (r) =>
+        (r as unknown as {
+          chat_threads?: { id: string; trainer_id: string; type: string; updated_at: string };
+        }).chat_threads
+    )
+    .filter(
+      (th): th is { id: string; trainer_id: string; type: string; updated_at: string } =>
+        !!th && th.trainer_id === trainerId && th.type === "1on1"
+    )
+    .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""));
+  if (existing[0]) return existing[0].id;
+
+  const now = new Date().toISOString();
+  const { data: thread, error } = await sb
+    .from("chat_threads")
+    .insert({ trainer_id: trainerId, type: "1on1", updated_at: now })
+    .select("id")
+    .single();
+  if (error || !thread) return null;
+  const { error: pErr } = await sb
+    .from("chat_participants")
+    .insert({ thread_id: thread.id as string, member_id: memberId });
+  if (pErr) return null;
+  return thread.id as string;
+}
+
+/**
+ * Members the current trainer may start a chat with.
+ * Owner → all members; other trainers → their assigned members. Sorted by name.
+ */
+export async function getMessageableMembers(): Promise<ChatMemberPick[]> {
+  const t = await getTrainerContext();
+  if (!t) return [];
+
+  if (t.role === "owner") {
+    const { data } = await sb
+      .from("members")
+      .select("id, name, avatar_tone")
+      .order("name", { ascending: true });
+    return (data ?? []).map((m) => ({
+      id: m.id as string,
+      name: m.name as string,
+      initial: initialOf(m.name as string),
+      avatarTone: (m.avatar_tone as AvatarTone) ?? "sage",
+    }));
+  }
+
+  const { data: links } = await sb
+    .from("member_trainers")
+    .select("members(id, name, avatar_tone)")
+    .eq("trainer_id", t.id);
+  type Link = { members: { id: string; name: string; avatar_tone: string } | null };
+  return ((links ?? []) as unknown as Link[])
+    .map((l) => l.members)
+    .filter((m): m is NonNullable<Link["members"]> => !!m)
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      initial: initialOf(m.name),
+      avatarTone: (m.avatar_tone as AvatarTone) ?? "sage",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Subtitle like "1:1 PT · 매주 화·토 오후 8시" from the member's schedule. */
