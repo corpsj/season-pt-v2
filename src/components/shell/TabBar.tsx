@@ -1,8 +1,11 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { pollChatUnread } from "@/lib/data/groups/chat-actions";
+import { usePolling } from "@/lib/hooks/usePolling";
 import { cn } from "@/lib/cn";
 
 export type TabDef = {
@@ -16,12 +19,33 @@ export type TabDef = {
   matchExact?: boolean;
 };
 
-export function TabBar({ tabs }: { tabs: TabDef[] }) {
+export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: boolean }) {
   const pathname = usePathname();
   const showToast = useToast();
+  const initialUnread = tabs.find((t) => t.href?.endsWith("/chat"))?.badge ?? 0;
+  const [liveUnread, setLiveUnread] = useState<number>(initialUnread);
+
+  usePolling(
+    async () => {
+      try {
+        setLiveUnread(await pollChatUnread());
+      } catch {
+        // keep last value on transient failure
+      }
+    },
+    5000,
+    liveChat
+  );
+
+  const effectiveTabs = liveChat
+    ? tabs.map((t) =>
+        t.href?.endsWith("/chat") ? { ...t, badge: liveUnread || undefined } : t
+      )
+    : tabs;
+
   return (
     <nav className="flex flex-none border-t border-ink/[0.07] bg-surface/95 px-3 pt-2.5 pb-[max(24px,env(safe-area-inset-bottom))]">
-      {tabs.map((t) => {
+      {effectiveTabs.map((t) => {
         const active = t.href
           ? t.matchExact
             ? pathname === t.href

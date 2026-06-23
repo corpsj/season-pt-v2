@@ -103,7 +103,7 @@ export default function MembersClient({
         <div className="h-3.5" />
       </Body>
 
-      <TabBar tabs={trainerTabs({ isOwner: me.isOwner, chatUnread })} />
+      <TabBar tabs={trainerTabs({ isOwner: me.isOwner, chatUnread })} liveChat />
     </div>
   );
 }

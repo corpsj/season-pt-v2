@@ -103,7 +103,7 @@ export default async function TrainerPerfPage() {
         <div className="h-3.5" />
       </Body>
 
-      <TabBar tabs={trainerTabs({ isOwner, chatUnread })} />
+      <TabBar tabs={trainerTabs({ isOwner, chatUnread })} liveChat />
     </div>
   );
 }

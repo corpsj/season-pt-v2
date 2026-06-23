@@ -190,7 +190,7 @@ export function MemberMyClient({ view, chatUnread }: { view: MemberMyView; chatU
         </div>
       </Body>
 
-      <TabBar tabs={memberTabs({ chatUnread })} />
+      <TabBar tabs={memberTabs({ chatUnread })} liveChat />
     </div>
   );
 }

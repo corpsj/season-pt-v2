@@ -95,7 +95,7 @@ export function MemberCalendarClient({
         <div className="h-3.5" />
       </Body>
 
-      <TabBar tabs={memberTabs({ chatUnread })} />
+      <TabBar tabs={memberTabs({ chatUnread })} liveChat />
     </div>
   );
 }
