@@ -41,6 +41,8 @@ export function mergeMessages(
 /**
  * Newest server timestamp held, for use as the next poll cursor.
  * Optimistic (temp) messages have no `createdAt` and are ignored.
+ * Assumes `createdAt` values are uniform UTC ISO strings (Supabase `timestamptz`,
+ * `Z`-suffixed); lexicographic comparison would be unsafe for mixed offsets.
  */
 export function latestCursor(
   messages: ChatMessageView[],

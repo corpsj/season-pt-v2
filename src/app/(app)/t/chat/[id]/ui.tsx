@@ -52,17 +52,22 @@ export function ChatRoomClient({ room }: { room: ChatRoomView }) {
     const tempId = `${TEMP_PREFIX}${tempSeq.current++}`;
     setMessages((prev) => [...prev, { id: tempId, mine: true, text }]);
     setDraft("");
-    const res = await sendChat(room.threadId, text);
-    if (res.ok && res.message) {
-      const real = res.message;
-      setMessages((prev) => {
-        const merged = mergeMessages(prev, [real]);
-        cursorRef.current = latestCursor(merged, cursorRef.current);
-        return merged;
-      });
-    } else {
+    try {
+      const res = await sendChat(room.threadId, text);
+      if (res.ok && res.message) {
+        const real = res.message;
+        setMessages((prev) => {
+          const merged = mergeMessages(prev, [real]);
+          cursorRef.current = latestCursor(merged, cursorRef.current);
+          return merged;
+        });
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        showToast(res.error ?? "전송에 실패했어요.");
+      }
+    } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showToast(res.error ?? "전송에 실패했어요.");
+      showToast("전송에 실패했어요.");
     }
   }
 

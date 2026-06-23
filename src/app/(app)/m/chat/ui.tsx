@@ -63,17 +63,22 @@ export function MemberChatClient({
     const tempId = `${TEMP_PREFIX}${tempSeq.current++}`;
     setMessages((prev) => [...prev, { id: tempId, mine: true, text }]);
     setDraft("");
-    const res = await sendMemberChat(text);
-    if (res.ok && res.message) {
-      const real = res.message;
-      setMessages((prev) => {
-        const merged = mergeMessages(prev, [real]);
-        cursorRef.current = latestCursor(merged, cursorRef.current);
-        return merged;
-      });
-    } else {
+    try {
+      const res = await sendMemberChat(text);
+      if (res.ok && res.message) {
+        const real = res.message;
+        setMessages((prev) => {
+          const merged = mergeMessages(prev, [real]);
+          cursorRef.current = latestCursor(merged, cursorRef.current);
+          return merged;
+        });
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        showToast(res.error ?? "메시지를 보내지 못했어요");
+      }
+    } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showToast(res.error ?? "메시지를 보내지 못했어요");
+      showToast("메시지를 보내지 못했어요");
     }
   }
 

@@ -68,7 +68,6 @@ export function clockLabel(iso: string): string {
   return `오후 ${h - 12}:${mm}`;
 }
 
-
 /** Member's active membership (most recent by start_date). */
 async function activeMembership(memberId: string) {
   const { data } = await sb
