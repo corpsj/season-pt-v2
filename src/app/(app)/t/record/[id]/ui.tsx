@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { Stepper } from "@/components/ui/Stepper";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import { Combobox } from "@/components/ui/Select";
 import { saveRecord } from "@/lib/data/groups/scheduling-actions";
 import type { AvatarTone } from "@/lib/types";
 
@@ -24,16 +25,23 @@ type RecordTarget = {
   exercises: Exercise[];
 };
 
-export default function RecordClient({ target: t }: { target: RecordTarget }) {
+export default function RecordClient({
+  target: t,
+  exerciseOptions,
+}: {
+  target: RecordTarget;
+  exerciseOptions: string[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [exercises, setExercises] = useState<Exercise[]>(t.exercises);
+  const [comment, setComment] = useState("");
 
   const update = (i: number, patch: Partial<Exercise>) =>
     setExercises((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
 
   const save = async () => {
-    await saveRecord(t.sessionId, exercises);
+    await saveRecord(t.sessionId, exercises, comment || undefined);
     toast("기록이 저장되었어요");
     router.push("/t");
   };
@@ -68,7 +76,24 @@ export default function RecordClient({ target: t }: { target: RecordTarget }) {
         <div className="flex flex-col gap-2.5">
           {exercises.map((ex, i) => (
             <div key={i} className="rounded-[14px] border border-ink/[0.08] bg-card p-3.5">
-              <div className="mb-2.5 text-[14px] font-bold text-ink">{ex.name || "새 종목"}</div>
+              <div className="mb-2.5 flex items-center gap-2">
+                <div className="flex-1">
+                  <Combobox
+                    value={ex.name}
+                    options={exerciseOptions}
+                    onChange={(v) => update(i, { name: v })}
+                    placeholder="종목 이름"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExercises((prev) => prev.filter((_, idx) => idx !== i))}
+                  className="tappable flex h-8 w-8 flex-none items-center justify-center rounded-full text-muted4 hover:bg-ink/[0.06]"
+                  aria-label="종목 삭제"
+                >
+                  <Icon name="close" size={16} />
+                </button>
+              </div>
               <div className="flex items-center gap-2.5">
                 <Stepper
                   value={ex.kg}
@@ -97,10 +122,17 @@ export default function RecordClient({ target: t }: { target: RecordTarget }) {
         </button>
 
         {/* comment */}
-        <div className="mt-3.5 rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3.5">
-          <span className="text-[13px] font-medium text-placeholder">
-            오늘 수업 코멘트를 남겨주세요…
-          </span>
+        <div className="mt-3.5">
+          <div className="mb-2">
+            <Kicker>코멘트</Kicker>
+          </div>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="오늘 수업 코멘트를 남겨주세요…"
+            rows={3}
+            className="w-full rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-placeholder focus:ring-2 focus:ring-sage/30 resize-none"
+          />
         </div>
       </Body>
 

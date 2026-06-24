@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
 import type { Me, MemberFilter, MembersView } from "@/lib/types";
+// ponytail: name-only search; phone not on MemberListItem — add when view exposes it
 
 const FILTERS: { value: MemberFilter; label: string }[] = [
   { value: "all", label: "전체" },
@@ -31,9 +32,12 @@ export default function MembersClient({
   chatUnread: number;
 }) {
   const [filter, setFilter] = useState<MemberFilter>("all");
+  const [query, setQuery] = useState("");
 
-  const items =
-    filter === "all" ? view.items : view.items.filter((m) => statusById[m.id] === filter);
+  const q = query.trim().toLowerCase();
+  const items = view.items
+    .filter((m) => filter === "all" || statusById[m.id] === filter)
+    .filter((m) => !q || m.name.toLowerCase().includes(q));
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -50,10 +54,26 @@ export default function MembersClient({
           />
         </div>
 
-        {/* search bar (display only) */}
+        {/* search bar */}
         <div className="mb-3 flex items-center gap-2.5 rounded-[13px] border border-ink/[0.12] bg-card px-3.5 py-3">
           <Icon name="search" size={18} className="flex-none text-muted4" />
-          <span className="text-[13px] text-placeholder">이름 · 연락처 검색</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="이름 검색"
+            className="flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-placeholder"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="tappable flex-none text-muted4"
+              aria-label="검색어 지우기"
+            >
+              <Icon name="close" size={15} />
+            </button>
+          )}
         </div>
 
         {/* filter chips */}
