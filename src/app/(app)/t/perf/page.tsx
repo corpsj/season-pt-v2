@@ -1,7 +1,8 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { Body } from "@/components/shell/Body";
 import { TabBar } from "@/components/shell/TabBar";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
 import { getStudioOps } from "@/lib/data/groups/owner-ops";
 import { sb } from "@/lib/data/db";
@@ -29,6 +30,40 @@ async function chatUnreadFor(trainerId: string): Promise<number> {
   return count ?? 0;
 }
 
+/** Read-only KPI tile (display only — actions live in the lists below). */
+function Metric({ label, value, sub, subTone }: { label: string; value: ReactNode; sub: string; subTone?: "warn" }) {
+  return (
+    <div className="rounded-[16px] border border-ink/[0.07] bg-card p-4">
+      <div className="text-[12px] font-medium text-muted2">{label}</div>
+      <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">{value}</div>
+      <div className={`mt-1.5 text-[11.5px] font-medium ${subTone === "warn" ? "text-terracotta" : "text-muted2"}`}>{sub}</div>
+    </div>
+  );
+}
+
+/** Tappable action row used by both 오늘 할 일 and 빠른 작업. */
+function ActionRow({ href, icon, title, sub, tone }: { href: string; icon: IconName; title: string; sub: string; tone?: "warn" }) {
+  return (
+    <Link
+      href={href}
+      className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
+    >
+      <span
+        className={`flex h-9 w-9 flex-none items-center justify-center rounded-full ${
+          tone === "warn" ? "bg-warm-banner text-terracotta" : "bg-chip-soft text-sage-deep"
+        }`}
+      >
+        <Icon name={icon} size={18} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] font-semibold text-ink">{title}</div>
+        <div className="mt-0.5 text-[12px] text-muted2">{sub}</div>
+      </div>
+      <Icon name="chevron-right" size={15} className="flex-none text-chevron" />
+    </Link>
+  );
+}
+
 export default async function TrainerOpsPage() {
   const t = await requireOwnerPage(); // 대표 전용 — 강사는 /t 로 리다이렉트
   const isOwner = true;
@@ -39,7 +74,8 @@ export default async function TrainerOpsPage() {
     chatUnreadFor(t.id),
   ]);
 
-  const todoCount = (ops.pendingRequests > 0 ? 1 : 0) + (chatUnread > 0 ? 1 : 0);
+  const todoCount =
+    (ops.pendingRequests > 0 ? 1 : 0) + (chatUnread > 0 ? 1 : 0) + (ops.expiringCount > 0 ? 1 : 0);
   const deltaLabel =
     ops.revenueDeltaPct != null
       ? `전월 대비 ${ops.revenueDeltaPct >= 0 ? "+" : ""}${ops.revenueDeltaPct}%`
@@ -65,94 +101,73 @@ export default async function TrainerOpsPage() {
           </Link>
         </div>
 
-        {/* 운영 지표 — 매출 / 활성 / 신규 / 만료 임박 */}
+        {/* 운영 지표 (표시 전용) — 매출 / 활성 / 신규 / 만료 임박 */}
         <div className="grid grid-cols-2 gap-2.5">
-          <Link href="/t/revenue" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
-            <div className="text-[12px] font-medium text-muted2">이번 달 매출</div>
-            <div className="serif mt-1.5 text-[20px] font-semibold leading-none text-ink">
-              {won(ops.revenueThisMonth)}
-            </div>
-            <div
-              className={`mt-1.5 text-[11.5px] font-medium ${
-                ops.revenueDeltaPct != null && ops.revenueDeltaPct < 0 ? "text-terracotta" : "text-sage-deep"
-              }`}
-            >
-              {deltaLabel}
-            </div>
-          </Link>
-
-          <Link href="/t/members" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
-            <div className="text-[12px] font-medium text-muted2">활성 회원</div>
-            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
-              {ops.activeMembers}
-              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
-            </div>
-            <div className="mt-1.5 text-[11.5px] font-medium text-muted2">전체 회원</div>
-          </Link>
-
-          <div className="rounded-[16px] border border-ink/[0.07] bg-card p-4">
-            <div className="text-[12px] font-medium text-muted2">이번 달 신규</div>
-            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
-              {ops.newMembers}
-              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
-            </div>
-            <div className="mt-1.5 text-[11.5px] font-medium text-muted2">신규 가입</div>
-          </div>
-
-          <Link href="/t/retention" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[12px] font-medium text-muted2">만료 임박</span>
-              <Icon name="chevron-right" size={14} className="text-chevron" />
-            </div>
-            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
-              {ops.expiringCount}
-              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
-            </div>
-            <div
-              className={`mt-1.5 text-[11.5px] font-medium ${
-                ops.expiringCount > 0 ? "text-terracotta" : "text-muted2"
-              }`}
-            >
-              {ops.expiringCount > 0 ? "재등록 챙기기" : "없음"}
-            </div>
-          </Link>
+          <Metric
+            label="이번 달 매출"
+            value={<span className="text-[20px]">{won(ops.revenueThisMonth)}</span>}
+            sub={deltaLabel}
+            subTone={ops.revenueDeltaPct != null && ops.revenueDeltaPct < 0 ? "warn" : undefined}
+          />
+          <Metric
+            label="활성 회원"
+            value={<>{ops.activeMembers}<span className="ml-0.5 text-[13px] font-medium text-muted2">명</span></>}
+            sub="전체 회원"
+          />
+          <Metric
+            label="이번 달 신규"
+            value={<>{ops.newMembers}<span className="ml-0.5 text-[13px] font-medium text-muted2">명</span></>}
+            sub="신규 가입"
+          />
+          <Metric
+            label="만료 임박"
+            value={<>{ops.expiringCount}<span className="ml-0.5 text-[13px] font-medium text-muted2">명</span></>}
+            sub={ops.expiringCount > 0 ? "재등록 대상" : "없음"}
+            subTone={ops.expiringCount > 0 ? "warn" : undefined}
+          />
         </div>
 
-        {/* 확인할 일 — 없으면 섹션 자체를 숨김 */}
+        {/* 오늘 할 일 — 항상 표시, 없으면 빈 상태 */}
+        <div className="mb-2 mt-6 px-0.5 text-[12px] font-semibold text-muted">
+          오늘 할 일{todoCount > 0 ? ` · ${todoCount}건` : ""}
+        </div>
         {todoCount > 0 ? (
           <>
-            <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">
-              확인할 일 · {todoCount}건
-            </div>
-            {ops.pendingRequests > 0 ? (
-              <Link
-                href="/t/inbox"
-                className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
-              >
-                <Icon name="clock" size={20} className="flex-none text-sage-deep" />
-                <div className="flex-1">
-                  <div className="text-[13.5px] font-semibold text-ink">처리 대기 요청</div>
-                  <div className="mt-0.5 text-[12px] text-muted2">일정 변경·취소 {ops.pendingRequests}건</div>
-                </div>
-                <Icon name="chevron-right" size={15} className="text-chevron" />
-              </Link>
+            {ops.expiringCount > 0 ? (
+              <ActionRow
+                href="/t/retention"
+                icon="refresh"
+                title="만료 임박 재등록"
+                sub={`${ops.expiringCount}명 · 재등록 안내`}
+                tone="warn"
+              />
             ) : null}
-
+            {ops.pendingRequests > 0 ? (
+              <ActionRow
+                href="/t/inbox"
+                icon="clock"
+                title="처리 대기 요청"
+                sub={`일정 변경·취소 ${ops.pendingRequests}건`}
+              />
+            ) : null}
             {chatUnread > 0 ? (
-              <Link
-                href="/t/chat"
-                className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
-              >
-                <Icon name="message" size={20} className="flex-none text-sage-deep" />
-                <div className="flex-1">
-                  <div className="text-[13.5px] font-semibold text-ink">답장 안 한 채팅</div>
-                  <div className="mt-0.5 text-[12px] text-muted2">미답 {chatUnread}건</div>
-                </div>
-                <Icon name="chevron-right" size={15} className="text-chevron" />
-              </Link>
+              <ActionRow href="/t/chat" icon="message" title="답장 안 한 채팅" sub={`미답 ${chatUnread}건`} />
             ) : null}
           </>
-        ) : null}
+        ) : (
+          <div className="mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]">
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-sage-banner text-sage-deep">
+              <Icon name="check-bold" size={18} />
+            </span>
+            <div className="text-[13.5px] font-medium text-muted">오늘은 처리할 일이 없어요</div>
+          </div>
+        )}
+
+        {/* 빠른 작업 */}
+        <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">빠른 작업</div>
+        <ActionRow href="/t/members/register" icon="person-plus" title="회원 등록" sub="신규 회원 + 회원권 발급" />
+        <ActionRow href="/t/members" icon="persons" title="회원 관리" sub="회원 조회·상세" />
+        <ActionRow href="/t/revenue" icon="coins" title="매출 장부" sub="결제 내역·월 합계" />
 
         <div className="h-3.5" />
       </Body>
