@@ -20,11 +20,14 @@ export const metadata: Metadata = {
   title: "계절 PT & 필라테스",
   description: "균형 있게, 꾸준하게 — 계절 PT 트레이너·회원 앱",
   applicationName: "계절 PT",
-  // "black-translucent" is the ONLY iOS style that lets the webview fill the whole
-  // screen (cream bg draws behind the notch / Dynamic Island). "default"/"black" keep
-  // content below the status bar → black notch strip + env(safe-area-inset-top)=0.
-  // Trade-off: iOS forces the clock/battery glyphs WHITE (low contrast on cream).
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "계절 PT" },
+  // MEASURED iPhone 15 Pro standalone: the webview is inset BELOW the status bar
+  // (env-top 0, innerHeight 793 = screen 852 − 59). iOS owns that bar; web content
+  // can't paint it. "default" makes iOS render it matching the SYSTEM appearance —
+  // light bar + dark text in Light Mode (matches the cream app), dark bar in Dark Mode.
+  // "black-translucent" forced it solid BLACK, so the notch read as black. (True
+  // under-notch fullscreen would need dropping the manifest display mode → breaks
+  // Android install + forces a permanently white, low-contrast clock.)
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "계절 PT" },
   // Next 16 emits only the generic `mobile-web-app-capable` for capable:true. iOS
   // honors statusBarStyle ONLY when the apple-prefixed tag is present — without it
   // black-translucent is ignored and the notch stays black. Inject it explicitly.
