@@ -13,6 +13,14 @@ import { useToast } from "@/components/ui/Toast";
 import { issueMembership } from "@/lib/data/groups/owner-ops-actions";
 import type { MemberDetailView, MembershipProduct } from "@/lib/types";
 
+// ponytail: date labels computed client-side from durationDays; no timezone edge cases matter here (display only)
+function dateLabel(offsetDays = 0): string {
+  const d = new Date(Date.now() + 9 * 3600000 + offsetDays * 86400000); // KST
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  return `${m}/${day}`;
+}
+
 export function MembershipClient({
   member,
   products,
@@ -25,6 +33,8 @@ export function MembershipClient({
   const toast = useToast();
   const [selected, setSelected] = useState<string>(products[0]?.id ?? "");
   const [pending, setPending] = useState(false);
+
+  const selectedProductData = products.find((p) => p.id === selected);
 
   async function onIssue() {
     if (pending) return;
@@ -76,12 +86,14 @@ export function MembershipClient({
           ))}
         </div>
 
-        <Card className="flex items-center gap-2.5 px-[15px] py-[14px]">
-          <Icon name="calendar" size={18} className="flex-none text-sage" />
-          <span className="text-[13px] font-medium text-muted2">
-            시작 6/22 · ~9/22 · 잔여 20회 자동 생성
-          </span>
-        </Card>
+        {selectedProductData && (
+          <Card className="flex items-center gap-2.5 px-[15px] py-[14px]">
+            <Icon name="calendar" size={18} className="flex-none text-sage" />
+            <span className="text-[13px] font-medium text-muted2">
+              시작 {dateLabel()} · ~{dateLabel(selectedProductData.durationDays)} · 잔여 {selectedProductData.sessions}회 자동 생성
+            </span>
+          </Card>
+        )}
         <div className="h-3.5" />
       </Body>
 

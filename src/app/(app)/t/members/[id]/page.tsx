@@ -96,10 +96,13 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             <OutlineButton icon="pencil" href={recordHref}>
               기록
             </OutlineButton>
-            <PrimaryButton icon="refresh" href="/t/retention">
-              재등록 안내
-            </PrimaryButton>
+            <OutlineButton icon="ticket-fill" href={`/t/members/${id}/membership`}>
+              회원권 발급
+            </OutlineButton>
           </div>
+          <PrimaryButton icon="refresh" href="/t/retention">
+            재등록 안내
+          </PrimaryButton>
         </div>
       </Footer>
     </div>
