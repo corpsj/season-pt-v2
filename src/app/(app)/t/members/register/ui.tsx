@@ -114,11 +114,6 @@ export function MemberRegisterClient({
     .filter((s) => s.role !== "invited")
     .map((s) => ({ value: s.id, label: s.name }));
 
-  const productOptions = [
-    ...products.map((p) => ({ value: p.id, label: `${p.name} · ₩${p.price.toLocaleString()}` })),
-    { value: "later", label: "나중에 발급" },
-  ];
-
   const selectedProductData = products.find((p) => p.id === selectedProduct);
 
   return (
