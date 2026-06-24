@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
@@ -9,7 +10,7 @@ import { Kicker } from "@/components/ui/Kicker";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { useToast } from "@/components/ui/Toast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { trainerLogout } from "@/lib/auth/trainer-actions";
 import type { Me } from "@/lib/types";
 
@@ -17,26 +18,27 @@ type Row = {
   icon: IconName;
   label: string;
   sub: string;
-  href?: string;
-  toast?: string;
+  href: string;
   emphasized?: boolean;
 };
 
 export function SettingsClient({ me }: { me: Me }) {
-  const toast = useToast();
   const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const rows: Row[] = [
     { icon: "persons", label: "강사 관리", sub: "강사 초대·권한 관리", href: "/t/staff", emphasized: true },
     { icon: "person-plus", label: "회원 등록", sub: "신규 회원 추가", href: "/t/members/register" },
-    { icon: "ticket-fill", label: "회원권 발급", sub: "상품·결제 기록", href: "/t/members/m_iji/membership" },
-    { icon: "tune", label: "노쇼·취소 정책", sub: "차감·환불 기준", toast: "노쇼·취소 정책은 준비 중이에요" },
-    { icon: "bell", label: "알림 설정", sub: "알림톡·푸시 발송", toast: "알림 설정은 준비 중이에요" },
+    { icon: "ticket-fill", label: "회원권 상품", sub: "상품 카탈로그 관리", href: "/t/settings/products" },
+    { icon: "tag-fill", label: "운동 종목", sub: "종목 목록 관리", href: "/t/settings/exercises" },
+    { icon: "tune", label: "노쇼·취소 정책", sub: "차감·환불 기준", href: "/t/settings/policy" },
+    { icon: "bell", label: "알림 설정", sub: "알림톡·푸시 발송", href: "/t/settings/notifications" },
   ];
 
   const initial = me.name.charAt(0) || "계";
 
-  async function onLogout() {
+  async function onLogoutConfirm() {
+    setLogoutOpen(false);
     await trainerLogout();
     router.push("/");
     router.refresh();
@@ -72,30 +74,17 @@ export function SettingsClient({ me }: { me: Me }) {
               <Kicker>운영 관리 · 대표 전용</Kicker>
             </div>
             <Card className="mb-6 overflow-hidden">
-              {rows.map((r, i) =>
-                r.href ? (
-                  <Link
-                    key={r.label}
-                    href={r.href}
-                    className={`tappable flex items-center gap-3 px-4 py-[14px] ${
-                      i > 0 ? "border-t border-ink/[0.07]" : ""
-                    }`}
-                  >
-                    <RowInner row={r} />
-                  </Link>
-                ) : (
-                  <button
-                    key={r.label}
-                    type="button"
-                    onClick={() => r.toast && toast(r.toast)}
-                    className={`tappable flex w-full items-center gap-3 px-4 py-[14px] text-left ${
-                      i > 0 ? "border-t border-ink/[0.07]" : ""
-                    }`}
-                  >
-                    <RowInner row={r} />
-                  </button>
-                )
-              )}
+              {rows.map((r, i) => (
+                <Link
+                  key={r.label}
+                  href={r.href}
+                  className={`tappable flex items-center gap-3 px-4 py-[14px] ${
+                    i > 0 ? "border-t border-ink/[0.07]" : ""
+                  }`}
+                >
+                  <RowInner row={r} />
+                </Link>
+              ))}
             </Card>
           </>
         ) : (
@@ -110,7 +99,7 @@ export function SettingsClient({ me }: { me: Me }) {
         </div>
         <button
           type="button"
-          onClick={onLogout}
+          onClick={() => setLogoutOpen(true)}
           className="tappable flex w-full items-center gap-3 rounded-[13px] bg-warm-banner px-4 py-[14px] text-left"
         >
           <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-card text-terracotta">
@@ -121,6 +110,15 @@ export function SettingsClient({ me }: { me: Me }) {
         </button>
         <div className="h-3.5" />
       </Body>
+
+      <ConfirmDialog
+        open={logoutOpen}
+        title="로그아웃할까요?"
+        confirmLabel="로그아웃"
+        tone="warn"
+        onConfirm={onLogoutConfirm}
+        onCancel={() => setLogoutOpen(false)}
+      />
     </div>
   );
 }
