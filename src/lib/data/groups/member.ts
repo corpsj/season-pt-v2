@@ -82,7 +82,7 @@ async function activeMembership(memberId: string) {
   return data;
 }
 
-/** First trainer linked to this member (담당 트레이너). */
+/** First trainer linked to this member (담당 선생님). */
 async function primaryTrainer(memberId: string) {
   const { data } = await sb
     .from("member_trainers")
@@ -450,7 +450,7 @@ export async function getMemberChatRoom() {
     return {
       trainerName,
       initial,
-      sub: "담당 트레이너",
+      sub: "담당 선생님",
       isTeam: false,
       messages: [] as ChatMessageView[],
       cursor: null as string | null,
@@ -515,7 +515,7 @@ export async function getMemberChatRoom() {
   return {
     trainerName,
     initial,
-    sub: isTeam ? "2:1 팀 채팅" : "담당 트레이너",
+    sub: isTeam ? "2:1 팀 채팅" : "담당 선생님",
     isTeam,
     messages,
     cursor,
@@ -812,7 +812,7 @@ export async function getMemberMyPage(): Promise<MemberMyView> {
       { value: String(unreadNoticeCount(readIds)), unit: "건", label: "미열람 공지" },
     ],
     membership: membershipView,
-    trainer: tr ? { name: tr.display_name, sub: "담당 트레이너" } : null,
+    trainer: tr ? { name: tr.display_name, sub: "담당 선생님" } : null,
     unreadNotices: unreadNoticeCount(readIds),
   };
 }

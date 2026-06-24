@@ -92,7 +92,7 @@ export default async function MemberPaymentsPage() {
             ))}
 
             <Banner tone="warn" className="mb-6">
-              결제 영수증·증빙이 필요하면 담당 트레이너에게 메시지로 요청해 주세요.
+              결제 영수증·증빙이 필요하면 담당 선생님에게 메시지로 요청해 주세요.
             </Banner>
           </>
         )}

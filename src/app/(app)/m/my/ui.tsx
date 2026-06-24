@@ -105,7 +105,7 @@ export function MemberMyClient({ view, chatUnread }: { view: MemberMyView; chatU
               </div>
               <button
                 type="button"
-                onClick={() => toast("재등록은 트레이너에게 메시지로 문의해 주세요")}
+                onClick={() => toast("재등록은 선생님에게 메시지로 문의해 주세요")}
                 className="tappable flex items-center gap-0.5 whitespace-nowrap text-[13px] font-bold text-terracotta"
               >
                 재등록
@@ -135,7 +135,7 @@ export function MemberMyClient({ view, chatUnread }: { view: MemberMyView; chatU
         {/* assigned trainer */}
         {view.trainer ? (
           <>
-            <Kicker className="mx-1 mb-[9px]">내 담당 트레이너</Kicker>
+            <Kicker className="mx-1 mb-[9px]">내 담당 선생님</Kicker>
             <Card className="mb-[18px] flex items-center gap-[13px] px-4 py-3.5">
               <div
                 className="flex h-[46px] w-[46px] flex-none items-center justify-center rounded-full bg-sage-banner2 text-[17px] font-semibold text-[#5e6b51]"
@@ -181,7 +181,7 @@ export function MemberMyClient({ view, chatUnread }: { view: MemberMyView; chatU
         <div className="px-0 pb-[22px] pt-1 text-center">
           <button
             type="button"
-            onClick={() => toast("회원 탈퇴는 트레이너에게 문의해 주세요")}
+            onClick={() => toast("회원 탈퇴는 선생님에게 문의해 주세요")}
             className="tappable text-[12.5px] font-medium text-placeholder underline underline-offset-[3px]"
           >
             회원 탈퇴

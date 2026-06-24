@@ -91,10 +91,10 @@ export function MemberChatClient({
         <BackButton fallback="/m" />
         <Avatar initial={initial} tone="sage" size={34} />
         <div className="flex min-w-0 flex-col">
-          <span className="truncate text-[15px] font-bold text-ink">{trainerName} 트레이너</span>
+          <span className="truncate text-[15px] font-bold text-ink">{trainerName} 선생님</span>
           <span className="mt-0.5 flex w-fit items-center gap-1 rounded-full bg-chip-soft px-1.5 py-0.5 text-[10.5px] font-medium text-muted">
             <Icon name={isTeam ? "persons" : "lock"} size={11} />
-            {isTeam ? "2:1 팀 채팅" : "담당 트레이너와만 대화"}
+            {isTeam ? "2:1 팀 채팅" : "담당 선생님과만 대화"}
           </span>
         </div>
       </div>

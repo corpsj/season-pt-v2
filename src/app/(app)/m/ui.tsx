@@ -52,7 +52,7 @@ export function MemberCalendarClient({
           >
             <Icon name="refresh" size={18} className="text-terracotta" />
             <span className="flex-1 text-[12.5px] font-bold text-terracotta-deep">
-              트레이너가 일정 변경을 요청했어요
+              선생님이 일정 변경을 요청했어요
             </span>
             <Icon name="chevron-right" size={15} className="text-terracotta" />
           </Link>

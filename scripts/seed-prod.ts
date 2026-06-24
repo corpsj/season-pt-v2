@@ -166,7 +166,7 @@ async function main() {
   await db.from("chat_participants").insert({ thread_id: th1!.id, member_id: idByKey.iji });
   await db.from("chat_messages").insert([
     { thread_id: th1!.id, sender_type: "trainer", sender_id: ownerId, text: "오늘 수업 고생하셨어요! 다음 시간엔 하체 위주로 가볼게요.", read_by_member: true, read_by_trainer: true },
-    { thread_id: th1!.id, sender_type: "member", sender_id: idByKey.iji, text: "넵 감사합니다 코치님", read_by_trainer: true },
+    { thread_id: th1!.id, sender_type: "member", sender_id: idByKey.iji, text: "넵 감사합니다 선생님", read_by_trainer: true },
     { thread_id: th1!.id, sender_type: "member", sender_id: idByKey.iji, text: "네 알겠습니다! 토요일에 봬요" },
   ]);
 
@@ -180,7 +180,7 @@ async function main() {
     { thread_id: th2!.id, member_id: idByKey.kang },
   ]);
   await db.from("chat_messages").insert([
-    { thread_id: th2!.id, sender_type: "member", sender_id: idByKey.yoon, text: "코치님 다음 주 시간 조정 가능할까요?" },
+    { thread_id: th2!.id, sender_type: "member", sender_id: idByKey.yoon, text: "선생님 다음 주 시간 조정 가능할까요?" },
     { thread_id: th2!.id, sender_type: "member", sender_id: idByKey.kang, text: "저도 화요일은 괜찮습니다" },
   ]);
 

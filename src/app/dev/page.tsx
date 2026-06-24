@@ -192,7 +192,7 @@ function Catalog() {
 
       <Section title="Chat">
         <Card className="flex flex-col gap-2 p-4">
-          <ChatBubble mine={false} sender="윤지아" text="코치님 다음 주 시간 조정 가능할까요?" time="오전 11:28" />
+          <ChatBubble mine={false} sender="윤지아" text="선생님 다음 주 시간 조정 가능할까요?" time="오전 11:28" />
           <ChatBubble mine text="네 화요일 8시로 옮겨드릴게요." time="오전 11:30" />
         </Card>
         <Card className="overflow-hidden">

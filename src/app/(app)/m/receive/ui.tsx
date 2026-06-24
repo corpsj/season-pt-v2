@@ -58,7 +58,7 @@ export function MemberReceiveClient({
         {/* trainer row */}
         <div className="mb-4 flex items-center gap-2.5">
           <Avatar initial="계" tone="sage" size={36} />
-          <span className="text-[14px] font-bold text-ink">{view.trainerName} 트레이너</span>
+          <span className="text-[14px] font-bold text-ink">{view.trainerName} 선생님</span>
           <span className="text-[12px] font-medium text-muted">{view.ago}</span>
         </div>
 

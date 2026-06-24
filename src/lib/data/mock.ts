@@ -374,7 +374,7 @@ export function getChatThreads(): ChatThreadView[] {
       initial: "정",
       avatarTone: tone("m_jung"),
       isTeam: false,
-      preview: "감사합니다 코치님",
+      preview: "감사합니다 선생님",
       time: "어제",
       unread: 0,
     },
@@ -397,7 +397,7 @@ export function getChatRoom(id: string): ChatRoomView {
       avatarTone: "sage",
       sub: "2:1 PT · 매주 화·토 오후 8시",
       messages: [
-        { id: "1", mine: false, sender: "윤지아", text: "코치님 다음 주 시간 조정 가능할까요?", time: "오전 11:28" },
+        { id: "1", mine: false, sender: "윤지아", text: "선생님 다음 주 시간 조정 가능할까요?", time: "오전 11:28" },
         { id: "2", mine: false, sender: "강민", text: "저도 화요일은 괜찮습니다", time: "오전 11:29" },
         { id: "3", mine: true, text: "네 화요일 8시로 옮겨드릴게요. 일정 변경 보내드립니다.", time: "오전 11:30" },
       ],
@@ -414,7 +414,7 @@ export function getChatRoom(id: string): ChatRoomView {
     sub: `${m.type === "2on1" ? "2:1" : "1:1"} PT · ${m.scheduleLabel}`,
     messages: [
       { id: "1", mine: true, text: "오늘 수업 고생하셨어요! 다음 시간엔 하체 위주로 가볼게요.", time: "오후 1:50" },
-      { id: "2", mine: false, text: "넵 감사합니다 코치님", time: "오후 2:10" },
+      { id: "2", mine: false, text: "넵 감사합니다 선생님", time: "오후 2:10" },
       { id: "3", mine: false, text: "네 알겠습니다! 토요일에 봬요", time: "오후 2:14" },
     ],
   };
@@ -448,7 +448,7 @@ export function getMemberReceive(): MemberReceiveView {
     trainerName: ME_TRAINER.name,
     ago: "10분 전",
     before: "6/21 토 · 오후 7:00",
-    reason: "트레이너 개인 일정",
+    reason: "선생님 개인 일정",
     slots: [
       { id: "r1", label: "6/22 일 · 오후 7:00" },
       { id: "r2", label: "6/23 월 · 오후 8:00" },
@@ -487,10 +487,10 @@ export function getMemberChatRoom() {
   return {
     trainerName: ME_TRAINER.name,
     initial: "계",
-    sub: "담당 트레이너",
+    sub: "담당 선생님",
     messages: [
       { id: "1", mine: false, text: "이번 주 토요일 수업 잊지 마세요! 컨디션 어떠세요?", time: "오후 1:50" },
-      { id: "2", mine: true, text: "네 코치님, 어깨는 좀 나아졌어요", time: "오후 2:11" },
+      { id: "2", mine: true, text: "네 선생님, 어깨는 좀 나아졌어요", time: "오후 2:11" },
       { id: "3", mine: false, text: "좋아요. 토요일에 가볍게 시작할게요 :)", time: "오후 2:14" },
     ] as { id: string; mine: boolean; text: string; time?: string }[],
   };

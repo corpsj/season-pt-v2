@@ -344,24 +344,24 @@ async function main() {
   {
     const { data: th } = await db.from("chat_threads").insert({
       trainer_id: T.owner, type: "1on1",
-      last_message: "코치님 다음 주 수요일에 혹시 시간 당길 수 있을까요?", last_at: nowISO(), updated_at: nowISO(),
+      last_message: "선생님 다음 주 수요일에 혹시 시간 당길 수 있을까요?", last_at: nowISO(), updated_at: nowISO(),
     }).select("id").single();
     await db.from("chat_participants").insert({ thread_id: th!.id, member_id: idByKey.chaewon });
     await db.from("chat_messages").insert([
       { thread_id: th!.id, sender_type: "trainer", sender_id: T.owner, text: "오늘 데드리프트 폼 한결 좋아지셨어요! 다음엔 5kg 올려볼게요.", read_by_trainer: true, read_by_member: true, created_at: at("2026-06-19", 20) },
-      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.chaewon, text: "넵 감사합니다 코치님 💪", read_by_trainer: true, read_by_member: true, created_at: at("2026-06-19", 21) },
-      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.chaewon, text: "코치님 다음 주 수요일에 혹시 시간 당길 수 있을까요?", read_by_trainer: false, read_by_member: true, created_at: at("2026-06-23", 12) },
+      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.chaewon, text: "넵 감사합니다 선생님 💪", read_by_trainer: true, read_by_member: true, created_at: at("2026-06-19", 21) },
+      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.chaewon, text: "선생님 다음 주 수요일에 혹시 시간 당길 수 있을까요?", read_by_trainer: false, read_by_member: true, created_at: at("2026-06-23", 12) },
     ]);
   }
   // 1:1 이서아 (재등록 상담 — retention narrative)
   {
     const { data: th } = await db.from("chat_threads").insert({
       trainer_id: T.owner, type: "1on1",
-      last_message: "코치님 회원권 곧 끝나가는데 재등록 상담 가능할까요?", last_at: nowISO(), updated_at: nowISO(),
+      last_message: "선생님 회원권 곧 끝나가는데 재등록 상담 가능할까요?", last_at: nowISO(), updated_at: nowISO(),
     }).select("id").single();
     await db.from("chat_participants").insert({ thread_id: th!.id, member_id: idByKey.seoa });
     await db.from("chat_messages").insert([
-      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.seoa, text: "코치님 회원권 곧 끝나가는데 재등록 상담 가능할까요?", read_by_trainer: false, read_by_member: true, created_at: at("2026-06-23", 18) },
+      { thread_id: th!.id, sender_type: "member", sender_id: idByKey.seoa, text: "선생님 회원권 곧 끝나가는데 재등록 상담 가능할까요?", read_by_trainer: false, read_by_member: true, created_at: at("2026-06-23", 18) },
     ]);
   }
   // 2:1 한소희·강태현

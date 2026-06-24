@@ -142,7 +142,7 @@ export async function sendMemberChat(
 
   // Ensure the member↔trainer thread exists (created on first send if missing).
   const threadId = await ensureMemberThread(me.memberId);
-  if (!threadId) return { ok: false, error: "담당 트레이너가 없어 대화를 시작할 수 없어요" };
+  if (!threadId) return { ok: false, error: "담당 선생님이 없어 대화를 시작할 수 없어요" };
 
   const now = new Date().toISOString();
   const { data: inserted, error } = await sb
