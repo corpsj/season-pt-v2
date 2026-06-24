@@ -118,16 +118,12 @@ export default async function TrainerOpsPage() {
           </Link>
         </div>
 
-        {/* 지금 챙길 일 */}
-        <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">
-          지금 챙길 일{todoCount > 0 ? ` · ${todoCount}건` : ""}
-        </div>
-        {todoCount === 0 ? (
-          <div className="rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px] text-[13px] font-medium text-muted">
-            지금은 챙길 일이 없어요 👍
-          </div>
-        ) : (
+        {/* 확인할 일 — 없으면 섹션 자체를 숨김 */}
+        {todoCount > 0 ? (
           <>
+            <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">
+              확인할 일 · {todoCount}건
+            </div>
             {ops.pendingRequests > 0 ? (
               <Link
                 href="/t/inbox"
