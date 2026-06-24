@@ -22,7 +22,17 @@ type Plat = "android" | "ios" | "inapp" | null;
 
 const SKIP_KEY = "spt_install_skip"; // sessionStorage → continue-in-browser for this session
 const IN_APP_RE = /KAKAOTALK|Instagram|NAVER|FBAN|FBAV|FB_IAB|Line\/|DaumApps|Band|; wv\)/i;
-const SHARE_HINT = "아이폰은 Safari로 이 링크를 열고 ‘공유 → 홈 화면에 추가’로 설치하세요.";
+const SHARE_TITLE = "계절 PT & 필라테스";
+// Readable in a KakaoTalk chat bubble: short intro + per-platform steps on their own lines.
+const SHARE_TEXT =
+  "계절 PT & 필라테스 앱이에요 🌿\n" +
+  "아래 링크로 설치하고 이용해 주세요.\n" +
+  "\n" +
+  "📱 아이폰 (Safari)\n" +
+  "  링크 열기 → 공유 → ‘홈 화면에 추가’\n" +
+  "\n" +
+  "🤖 안드로이드 (Chrome)\n" +
+  "  링크 열기 → 메뉴 ⋮ → ‘앱 설치’";
 
 export function InstallPrompt() {
   const [plat, setPlat] = useState<Plat>(null);
@@ -92,17 +102,17 @@ export function InstallPrompt() {
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const shareApp = async () => {
     const url = window.location.origin;
-    const text = `계절 PT & 필라테스\n${SHARE_HINT}`;
     if (canShare) {
       try {
-        await navigator.share({ title: "계절 PT & 필라테스", text, url });
+        // url passed separately → the messenger renders a clean link preview below the text
+        await navigator.share({ title: SHARE_TITLE, text: SHARE_TEXT, url });
         return;
       } catch {
         /* cancelled */
       }
     }
     try {
-      await navigator.clipboard.writeText(`${text}\n${url}`);
+      await navigator.clipboard.writeText(`${SHARE_TEXT}\n\n${url}`);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
