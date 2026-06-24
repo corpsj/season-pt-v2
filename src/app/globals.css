@@ -125,6 +125,9 @@ body {
    status-bar / nav-bar-sized floor ONLY in standalone; browser & desktop keep the
    raw inset (0 on desktop) so nothing changes there. */
 :root {
+  /* Light-only app: opt OUT of OS / browser forced dark mode (Android Chrome auto-dark,
+     Samsung Internet) so the warm/sage theme is preserved on dark-mode devices. */
+  color-scheme: only light;
   --safe-t: env(safe-area-inset-top);
   --safe-b: env(safe-area-inset-bottom);
 }

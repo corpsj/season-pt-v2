@@ -48,6 +48,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  colorScheme: "light",
   themeColor: "#faf8f4",
   // "cover" → true edge-to-edge so the installed PWA fills the screen like a native
   // app (background draws behind the system bars). Android 3-button nav reports
