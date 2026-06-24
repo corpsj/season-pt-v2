@@ -168,3 +168,28 @@ export async function recordPayment(input: {
   revalidatePath("/t");
   return { ok: true };
 }
+
+/** 매출 직접 추가(과거/기타 수입). membership_id 없는 payments 행. 대표 전용. */
+export async function addRevenue(input: {
+  amount: number;
+  method: PaymentMethod;
+  paidAt?: string;
+  note?: string;
+}): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  if (!input.amount || input.amount <= 0) return { ok: false, error: "금액을 입력해주세요" };
+  const { error } = await sb.from("payments").insert({
+    membership_id: null,
+    method: input.method,
+    amount: Math.round(input.amount),
+    paid_at: input.paidAt || todayISO(),
+    note: input.note?.trim() || null,
+    recorded_by: t.id,
+  });
+  if (error) return { ok: false, error: "매출 추가에 실패했어요" };
+  revalidatePath("/t/revenue");
+  revalidatePath("/t/perf");
+  return { ok: true };
+}

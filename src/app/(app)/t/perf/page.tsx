@@ -136,6 +136,19 @@ export default async function TrainerOpsPage() {
           </span>
         </div>
 
+        {/* 매출 장부 */}
+        <Link
+          href="/t/revenue"
+          className="tappable mt-3 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
+        >
+          <Icon name="coins-fill" size={20} className="flex-none text-sage-deep" />
+          <div className="flex-1">
+            <div className="text-[13.5px] font-semibold text-ink">매출 장부</div>
+            <div className="mt-0.5 text-[12px] text-muted2">전체 매출 관리 · 내보내기</div>
+          </div>
+          <Icon name="chevron-right" size={15} className="text-chevron" />
+        </Link>
+
         <div className="h-3.5" />
       </Body>
 

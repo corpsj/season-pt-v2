@@ -146,6 +146,80 @@ export async function getStaffMember(id: string): Promise<StaffMemberDetail | nu
   };
 }
 
+/* ------------------------------ revenue ------------------------------ */
+export interface RevenueEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  dateLabel: string; // MM.DD
+  amount: number;
+  methodLabel: string;
+  label: string; // 회원명·상품 or note
+}
+export interface RevenueMonth {
+  key: string; // YYYY-MM
+  label: string; // "2026년 6월"
+  total: number;
+  count: number;
+  items: RevenueEntry[];
+}
+export interface RevenueView {
+  totalAmount: number;
+  totalCount: number;
+  months: RevenueMonth[];
+}
+
+const METHOD_LABEL: Record<string, string> = { card: "카드", cash: "현금", account: "계좌이체" };
+
+/** 매출 장부: 모든 결제(회원권 + 수동/과거)를 월별로 묶어 합계. 대표 전용. */
+export async function getRevenue(): Promise<RevenueView> {
+  const { data: pays } = await sb
+    .from("payments")
+    .select("id, amount, method, paid_at, membership_id, note")
+    .order("paid_at", { ascending: false });
+  const rows = (pays ?? []) as {
+    id: string; amount: number | null; method: string; paid_at: string;
+    membership_id: string | null; note: string | null;
+  }[];
+
+  const msIds = [...new Set(rows.map((r) => r.membership_id).filter((x): x is string => !!x))];
+  const labelByMs = new Map<string, string>();
+  if (msIds.length) {
+    const { data: ms } = await sb.from("memberships").select("id, product, member_id").in("id", msIds);
+    const memberIds = [...new Set((ms ?? []).map((m) => m.member_id))];
+    const nameById = new Map<string, string>();
+    if (memberIds.length) {
+      const { data: mem } = await sb.from("members").select("id, name").in("id", memberIds);
+      for (const m of mem ?? []) nameById.set(m.id, m.name);
+    }
+    for (const m of ms ?? []) labelByMs.set(m.id, `${nameById.get(m.member_id) ?? "회원"} · ${m.product}회권`);
+  }
+
+  const byMonth = new Map<string, RevenueMonth>();
+  let totalAmount = 0;
+  for (const r of rows) {
+    const amount = r.amount ?? 0;
+    totalAmount += amount;
+    const key = r.paid_at.slice(0, 7);
+    let m = byMonth.get(key);
+    if (!m) {
+      m = { key, label: `${key.slice(0, 4)}년 ${Number(key.slice(5, 7))}월`, total: 0, count: 0, items: [] };
+      byMonth.set(key, m);
+    }
+    m.total += amount;
+    m.count += 1;
+    m.items.push({
+      id: r.id,
+      date: r.paid_at,
+      dateLabel: `${r.paid_at.slice(5, 7)}.${r.paid_at.slice(8, 10)}`,
+      amount,
+      methodLabel: METHOD_LABEL[r.method] ?? "기타",
+      label: r.membership_id ? labelByMs.get(r.membership_id) ?? "회원권" : r.note || "기타 매출",
+    });
+  }
+  const months = [...byMonth.values()].sort((a, b) => b.key.localeCompare(a.key));
+  return { totalAmount, totalCount: rows.length, months };
+}
+
 /* ------------------------- membership products ------------------------ */
 /** Static catalogue (matches mock values). */
 export function getMembershipProducts(): MembershipProduct[] {
