@@ -3,8 +3,7 @@ import {
   sb,
   getTrainerContext,
   kstDateISO,
-  kstHour,
-  hourLabel,
+  clockHM,
   weekdayKo,
   todayISO,
 } from "@/lib/data/db";
@@ -90,7 +89,7 @@ function slotLabel(iso: string): string {
   const dISO = kstDateISO(iso);
   const [, mo, da] = dISO.split("-").map(Number);
   const wd = new Date(dISO + "T00:00:00Z").getUTCDay();
-  return `${mo}/${da} ${weekdayKo(wd)} · ${hourLabel(kstHour(iso))}`;
+  return `${mo}/${da} ${weekdayKo(wd)} · ${clockHM(iso)}`;
 }
 
 /* ------------------------------------------------------------ attend / record */
@@ -102,7 +101,7 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
   const first = members[0];
   // remaining shown reflects the (first) member's active membership
   const remaining = first ? await remainingFor(first.id) : 0;
-  const hour = session ? kstHour(session.scheduled_at) : 0;
+  const timeLbl = session ? clockHM(session.scheduled_at) : "";
   const name = members.length ? sessionName(members) : "";
   return {
     sessionId,
@@ -111,7 +110,7 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
     avatarTone: first ? tone(first.avatar_tone) : "sage",
     isTeam,
     team: isTeam && members.length >= 2 ? teamAvatarFrom(members) : undefined,
-    meta: `${isTeam ? "2:1 PT" : "1:1 PT"} · ${hourLabel(hour)} · 잔여 ${remaining}회`,
+    meta: `${isTeam ? "2:1 PT" : "1:1 PT"} · ${timeLbl} · 잔여 ${remaining}회`,
     type: isTeam ? "2on1" : "1on1",
     remaining,
   };
@@ -146,7 +145,9 @@ export async function getClassDetail(sessionId: string) {
   const dISO = session ? kstDateISO(session.scheduled_at) : todayISO();
   const [, mo, da] = dISO.split("-").map(Number);
   const wd = new Date(dISO + "T00:00:00Z").getUTCDay();
-  const startH = session ? kstHour(session.scheduled_at) : 0;
+  const timeRange = session
+    ? `${clockHM(session.scheduled_at)}–${clockHM(new Date(new Date(session.scheduled_at).getTime() + 3600000))}`
+    : "";
   return {
     sessionId,
     name: members.length ? sessionName(members) : "",
@@ -155,7 +156,7 @@ export async function getClassDetail(sessionId: string) {
     isTeam,
     team: isTeam && members.length >= 2 ? teamAvatarFrom(members) : undefined,
     typeLabel: `${isTeam ? "2:1" : "1:1"} PT · 잔여 ${remaining}회`,
-    dateLabel: `${mo}월 ${da}일 ${weekdayKo(wd)} · ${hourLabel(startH)}–${hourLabel(startH + 1)}`,
+    dateLabel: `${mo}월 ${da}일 ${weekdayKo(wd)} · ${timeRange}`,
   };
 }
 
@@ -166,21 +167,14 @@ export async function getProposeSlots(sessionId: string) {
   const members = session ? await sessionMembers(sessionId) : [];
   const before = session ? slotLabel(session.scheduled_at) : "";
   // Generate a few upcoming candidate times from the session's hour.
-  const baseHour = session ? kstHour(session.scheduled_at) : 19;
-  const baseISO = session ? kstDateISO(session.scheduled_at) : todayISO();
-  const baseDate = new Date(baseISO + "T00:00:00Z");
+  // candidate times preserve the session's exact time-of-day (incl. minutes)
+  const baseMs = session ? new Date(session.scheduled_at).getTime() : Date.now();
   const slots = Array.from({ length: 4 }, (_, i) => {
-    const d = new Date(baseDate.getTime() + (i + 1) * 86400000);
-    const mo = d.getUTCMonth() + 1;
-    const da = d.getUTCDate();
-    const wd = d.getUTCDay();
-    // ISO at the session's KST hour (subtract the +9h offset baked into baseDate math).
-    const isoMs = d.getTime() + baseHour * 3600000 - 9 * 3600000;
-    return {
-      id: `p${i + 1}`,
-      label: `${mo}/${da} ${weekdayKo(wd)} · ${hourLabel(baseHour)}`,
-      iso: new Date(isoMs).toISOString(),
-    };
+    const iso = new Date(baseMs + (i + 1) * 86400000).toISOString();
+    const dISO = kstDateISO(iso);
+    const [, mo, da] = dISO.split("-").map(Number);
+    const wd = new Date(dISO + "T00:00:00Z").getUTCDay();
+    return { id: `p${i + 1}`, label: `${mo}/${da} ${weekdayKo(wd)} · ${clockHM(iso)}`, iso };
   });
   return {
     before,

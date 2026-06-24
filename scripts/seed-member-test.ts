@@ -16,15 +16,15 @@ const db = createClient(url, service, { auth: { persistSession: false } });
 const TODAY = "2026-06-24";
 const addDays = (iso: string, n: number) =>
   new Date(new Date(iso + "T00:00:00Z").getTime() + n * 86400000).toISOString().slice(0, 10);
-const at = (d: string, h: number) => {
+const at = (d: string, h: number, min = 0) => {
   const [y, m, dd] = d.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, dd, h - 9, 0, 0)).toISOString();
+  return new Date(Date.UTC(y, m - 1, dd, h - 9, min, 0)).toISOString();
 };
 
 const PHONE = "01097830027";
 const NAME = "박성주";
 const BIRTH = "1999-03-25"; // pw 990325 (YYMMDD)
-const SCHEDS = [{ weekday: 2, hour: 20 }, { weekday: 4, hour: 20 }]; // 화·목 오후 8시
+const SCHEDS = [{ weekday: 1, hour: 21, minute: 30 }, { weekday: 3, hour: 21, minute: 0 }]; // 월 9:30 · 수 9:00
 const SINCE = "2026-05-15";
 
 async function main() {
@@ -70,7 +70,7 @@ async function main() {
       const [y, mo, d] = cur.split("-").map(Number);
       if (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() === s.weekday) {
         const status = cur < TODAY ? "attended" : "scheduled";
-        const ss = (await db.from("sessions").insert({ trainer_id: owner.id, scheduled_at: at(cur, s.hour), type: "1on1", status, source_schedule_id: sch.id }).select("id").single()).data!;
+        const ss = (await db.from("sessions").insert({ trainer_id: owner.id, scheduled_at: at(cur, s.hour, s.minute), type: "1on1", status, source_schedule_id: sch.id }).select("id").single()).data!;
         await db.from("session_members").insert({ session_id: ss.id, member_id: m.id });
         sess++;
       }

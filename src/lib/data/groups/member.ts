@@ -4,9 +4,7 @@ import {
   sb,
   getMemberContext,
   kstDateISO,
-  kstHour,
   kstWeekday,
-  hourLabel,
   weekdayKo,
   todayISO,
   dayDiff,
@@ -44,7 +42,7 @@ function slotLabel(iso: string): string {
   const mon = Number(date.slice(5, 7));
   const day = Number(date.slice(8, 10));
   const wd = weekdayKo(kstWeekday(iso));
-  return `${mon}/${day} ${wd} · ${hourLabel(kstHour(iso))}`;
+  return `${mon}/${day} ${wd} · ${clockLabel(iso)}`;
 }
 
 /** Relative "N분 전 / N시간 전 / N일 전" from a created_at ISO. */
@@ -179,7 +177,7 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     dayClass: sessionOnDay
       ? {
           sessionId: sessionOnDay.id,
-          time: hourLabel(kstHour(sessionOnDay.scheduled_at)),
+          time: clockLabel(sessionOnDay.scheduled_at),
           trainerName: tr?.display_name ?? "",
         }
       : undefined,
@@ -239,7 +237,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     days[dISO] = {
       selDateLabel: `${month}월 ${n}일 ${weekdayKo(wd)}`,
       dayClass: sess
-        ? { sessionId: sess.id, time: hourLabel(kstHour(sess.scheduled_at)), trainerName }
+        ? { sessionId: sess.id, time: clockLabel(sess.scheduled_at), trainerName }
         : undefined,
     };
   }
@@ -379,7 +377,6 @@ export async function getMemberRequest(): Promise<MemberRequestView> {
   const dISO = kstDateISO(upcoming.scheduled_at);
   const day = Number(dISO.slice(8, 10));
   const weekday = weekdayKo(kstWeekday(upcoming.scheduled_at));
-  const hour = kstHour(upcoming.scheduled_at);
 
   // Proposed alternatives: same hour, next two of the same weekday window (next 2 days +1/+2 wk style mirrors mock).
   const base = new Date(upcoming.scheduled_at);
@@ -392,7 +389,7 @@ export async function getMemberRequest(): Promise<MemberRequestView> {
   return {
     sessionId: upcoming.id,
     dateBox: { weekday, day },
-    time: hourLabel(hour),
+    time: clockLabel(upcoming.scheduled_at),
     trainerName,
     slots: proposals,
   };

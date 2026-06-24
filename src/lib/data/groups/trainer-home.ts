@@ -3,8 +3,8 @@ import {
   sb,
   getTrainerContext,
   kstDateISO,
-  kstHour,
   hourLabel,
+  clockHM,
   todayISO,
   dayDiff,
   nowKstParts,
@@ -151,7 +151,7 @@ export async function getTrainerCalendar(iso?: string): Promise<TrainerCalendarV
   // selected day's classes
   const dayClasses: TrainerDayClass[] = sessions
     .filter((s) => kstDateISO(s.scheduled_at) === selectedISO)
-    .sort((a, b) => kstHour(a.scheduled_at) - kstHour(b.scheduled_at))
+    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
     .map((s) => mapDayClass(s, today));
 
   return {
@@ -255,7 +255,7 @@ function mapDayClass(
   const href = isTeam ? `/t/attend/${s.id}` : `/t/class/${s.id}`;
   return {
     sessionId: s.id,
-    time: hourLabel(kstHour(s.scheduled_at)),
+    time: clockHM(s.scheduled_at),
     name,
     type: s.type,
     status: s.status,

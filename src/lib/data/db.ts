@@ -40,6 +40,16 @@ export function hourLabel(h: number): string {
   return `오후 ${h - 12}:00`;
 }
 
+/** Minute-aware KST clock from a timestamptz (e.g. "오후 9:30") — use for session times. */
+export function clockHM(iso: string | Date): string {
+  const k = new Date((typeof iso === "string" ? new Date(iso) : iso).getTime() + KST_OFFSET_MS);
+  const h = k.getUTCHours();
+  const mm = String(k.getUTCMinutes()).padStart(2, "0");
+  if (h < 12) return `오전 ${h === 0 ? 12 : h}:${mm}`;
+  if (h === 12) return `오후 12:${mm}`;
+  return `오후 ${h - 12}:${mm}`;
+}
+
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 export function weekdayKo(wd: number): string {
   return WD[wd];
