@@ -16,6 +16,7 @@ export function StaffInviteClient() {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
   const [pending, setPending] = useState(false);
@@ -23,7 +24,7 @@ export function StaffInviteClient() {
   async function onSubmit() {
     if (pending) return;
     setPending(true);
-    const res = await inviteInstructor(name, phone);
+    const res = await inviteInstructor(name, phone, username);
     setPending(false);
     if (!res.ok || !res.username || !res.tempPassword) {
       toast(res.error ?? "강사 계정 발급에 실패했어요");
@@ -43,12 +44,21 @@ export function StaffInviteClient() {
           <span className="text-[19px] font-bold text-ink">강사 초대</span>
         </div>
         <p className="mb-6 text-[13.5px] leading-[1.6] text-muted2">
-          강사 정보를 입력하면 로그인 계정과 임시 비밀번호가 발급돼요.
+          이름·아이디를 입력하면 임시 비밀번호(숫자 6자리)가 발급돼요.
         </p>
 
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="강사 이름">
             <TextInput placeholder="정하늘" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field icon="person-fill" label="아이디 (로그인 ID)" hint="영문·숫자">
+            <TextInput
+              placeholder="instructor01"
+              autoCapitalize="none"
+              autoCorrect="off"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
           </Field>
           <Field icon="phone" label="연락처">
             <TextInput
@@ -68,12 +78,12 @@ export function StaffInviteClient() {
           <div className="flex items-center gap-2.5 px-4 py-[14px]">
             <Icon name="person" size={18} className="flex-none text-sage" />
             <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
-            <span className="text-[14px] font-bold text-ink">{issued?.username ?? "gyeaul.haneul"}</span>
+            <span className="text-[14px] font-bold text-ink">{issued?.username ?? (username || "instructor01")}</span>
           </div>
           <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
             <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
             <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
-            <span className="text-[14px] font-bold text-ink">{issued?.tempPassword ?? "ptss-7390"}</span>
+            <span className="text-[14px] font-bold text-ink">{issued?.tempPassword ?? "482910"}</span>
           </div>
         </Card>
 

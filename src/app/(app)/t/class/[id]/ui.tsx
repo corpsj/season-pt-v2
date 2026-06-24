@@ -67,7 +67,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
             className="tappable flex w-full items-center gap-3 px-4 py-[15px] text-left"
           >
             <span className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-sage-banner2">
-              <Icon name="refresh" size={18} className="text-sage-deep" />
+              <Icon name="clock" size={18} className="text-sage-deep" />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-[14px] font-bold text-ink">일정 변경 요청</span>

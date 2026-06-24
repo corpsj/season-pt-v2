@@ -46,7 +46,7 @@ export default function TrainerLoginPage() {
         <div className="mt-7 flex flex-col gap-3.5">
           <Field icon="person" label="아이디">
             <TextInput
-              placeholder="gyeaul.master"
+              placeholder="season.master"
               value={id}
               onChange={(e) => setId(e.target.value)}
             />

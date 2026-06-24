@@ -64,7 +64,7 @@ export default function TrainerCalendarClient({
               aria-label="조율 인박스"
               className="tappable relative flex h-[42px] w-[42px] items-center justify-center rounded-[13px] border border-ink/[0.07] bg-card text-sage-deep"
             >
-              <Icon name="refresh" size={20} />
+              <Icon name="clock" size={20} />
               {base.hasInbox ? (
                 <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-[1.5px] border-surface bg-terracotta px-1 text-[10px] font-bold text-surface">
                   {base.inboxCount}

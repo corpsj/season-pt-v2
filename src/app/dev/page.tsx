@@ -176,7 +176,7 @@ function Catalog() {
         </div>
         <Kicker>섹션 라벨</Kicker>
         <Field icon="person" label="아이디">
-          <TextInput placeholder="gyeaul.master" />
+          <TextInput placeholder="season.master" />
         </Field>
       </Section>
 

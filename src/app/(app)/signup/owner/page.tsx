@@ -50,7 +50,7 @@ export default function OwnerSignupPage() {
         <div className="mt-5 flex flex-col gap-3.5">
           <Field icon="person" label="아이디">
             <TextInput
-              placeholder="gyeaul.master"
+              placeholder="season.master"
               value={id}
               onChange={(e) => setId(e.target.value)}
             />

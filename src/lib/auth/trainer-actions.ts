@@ -60,29 +60,33 @@ export async function setTrainerPassword(newPassword: string): Promise<Result> {
 
 export async function inviteInstructor(
   name: string,
-  phone: string
+  phone: string,
+  username: string
 ): Promise<Result & { username?: string; tempPassword?: string }> {
   if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
+  const uname = username.trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,20}$/.test(uname))
+    return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
   const admin = createSupabaseAdmin();
-  const suffix = Math.floor(1000 + Math.random() * 9000);
-  const username = `gyeaul.t${suffix}`;
-  const tempPassword = `ptss-${Math.floor(1000 + Math.random() * 9000)}`;
+  const { data: exists } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
+  if (exists) return { ok: false, error: "이미 사용 중인 아이디예요" };
+  const tempPassword = String(Math.floor(100000 + Math.random() * 900000)); // 랜덤 6자리 숫자
   const { data: created, error } = await admin.auth.admin.createUser({
-    email: toEmail(username),
+    email: toEmail(uname),
     password: tempPassword,
     email_confirm: true,
   });
-  if (error || !created.user) return { ok: false, error: "강사 계정 생성에 실패했어요" };
+  if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 생성에 실패했어요" };
   await admin.from("trainers").insert({
     auth_user_id: created.user.id,
-    username,
-    display_name: name.trim() || username,
+    username: uname,
+    display_name: name.trim() || uname,
     role: "instructor",
     status: "invited",
     must_change_password: true,
     phone: phone.trim() || null,
   });
-  return { ok: true, username, tempPassword };
+  return { ok: true, username: uname, tempPassword };
 }
 
 export async function trainerLogout(): Promise<void> {

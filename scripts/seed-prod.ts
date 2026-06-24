@@ -12,7 +12,7 @@ const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 if (!url || !serviceKey) throw new Error("missing supabase env");
 
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
-const OWNER_PW = "gyeaul1234";
+const OWNER_PW = "season1234";
 
 async function createTrainerUser(username: string, password: string) {
   const email = `${username}@${DOMAIN}`;
@@ -23,20 +23,20 @@ async function createTrainerUser(username: string, password: string) {
 
 async function main() {
   // ---- trainers (Supabase Auth) ----
-  const ownerUid = await createTrainerUser("gyeaul.master", OWNER_PW);
-  const suminUid = await createTrainerUser("gyeaul.sumin", OWNER_PW);
-  const jihunUid = await createTrainerUser("gyeaul.jihun", OWNER_PW);
-  const haneulUid = await createTrainerUser("gyeaul.haneul", "ptss-7390");
+  const ownerUid = await createTrainerUser("season.master", OWNER_PW);
+  const suminUid = await createTrainerUser("season.sumin", OWNER_PW);
+  const jihunUid = await createTrainerUser("season.jihun", OWNER_PW);
+  const haneulUid = await createTrainerUser("season.haneul", "ptss-7390");
 
   const trainers = [
-    { auth_user_id: ownerUid, username: "gyeaul.master", display_name: "김계절", role: "owner", status: "active", must_change_password: false },
-    { auth_user_id: suminUid, username: "gyeaul.sumin", display_name: "이수민", role: "instructor", status: "active", must_change_password: false },
-    { auth_user_id: jihunUid, username: "gyeaul.jihun", display_name: "박지훈", role: "instructor", status: "active", must_change_password: false },
-    { auth_user_id: haneulUid, username: "gyeaul.haneul", display_name: "정하늘", role: "instructor", status: "invited", must_change_password: true },
+    { auth_user_id: ownerUid, username: "season.master", display_name: "김계절", role: "owner", status: "active", must_change_password: false },
+    { auth_user_id: suminUid, username: "season.sumin", display_name: "이수민", role: "instructor", status: "active", must_change_password: false },
+    { auth_user_id: jihunUid, username: "season.jihun", display_name: "박지훈", role: "instructor", status: "active", must_change_password: false },
+    { auth_user_id: haneulUid, username: "season.haneul", display_name: "정하늘", role: "instructor", status: "invited", must_change_password: true },
   ];
   const { data: tRows, error: tErr } = await db.from("trainers").insert(trainers).select("id, username");
   if (tErr) throw tErr;
-  const ownerId = tRows!.find((t) => t.username === "gyeaul.master")!.id;
+  const ownerId = tRows!.find((t) => t.username === "season.master")!.id;
 
   // ---- members (custom auth) ----
   const memberDefs = [

@@ -1,9 +1,14 @@
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
+import { getTrainerContext, getMemberContext } from "@/lib/data/db";
 
-export default function StartPage() {
+export default async function StartPage() {
+  // Stay logged in: a returning user with a live session skips the chooser.
+  if (await getTrainerContext()) redirect("/t");
+  if (await getMemberContext()) redirect("/m");
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body pad="wide">

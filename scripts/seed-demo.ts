@@ -2,7 +2,7 @@
  * Demo seed for the owner (정호진) studio — rich, realistic data for a live demo.
  *
  * Idempotent: re-running deletes the demo members (by phone) + the schedules/sessions/chats
- * owned by 정호진/이수민/박지훈, then rebuilds. It does NOT touch the legacy gyeaul.master
+ * owned by 정호진/이수민/박지훈, then rebuilds. It does NOT touch the legacy season.master
  * roster (that owner is converted to a senior instructor so 정호진 is the sole 대표).
  *
  * Run:  bun run scripts/seed-demo.ts
@@ -205,9 +205,9 @@ async function main() {
   };
   const T = {
     owner: tid("owner"),
-    sumin: tid("gyeaul.sumin"),
-    jihun: tid("gyeaul.jihun"),
-    master: tid("gyeaul.master"),
+    sumin: tid("season.sumin"),
+    jihun: tid("season.jihun"),
+    master: tid("season.master"),
   };
   const demoTrainerIds = [T.owner, T.sumin, T.jihun];
 
@@ -222,9 +222,9 @@ async function main() {
   // ── roster: 정호진 대표, 김계절→senior 강사 (single owner) ──────────
   await db.from("trainers").update({ display_name: "정호진" }).eq("id", T.owner);
   await db.from("trainers").update({ role: "instructor" }).eq("id", T.master);
-  console.log("roster updated: owner→정호진, gyeaul.master→instructor");
+  console.log("roster updated: owner→정호진, season.master→instructor");
 
-  // backdate legacy (gyeaul.master) members' join dates so "이번 달 신규" isn't inflated
+  // backdate legacy (season.master) members' join dates so "이번 달 신규" isn't inflated
   const legacyJoin: Record<string, string> = {
     "01030010001": "2026-01-12", "01030020002": "2026-02-03", "01023456789": "2026-02-20",
     "01030040004": "2026-03-15", "01030050005": "2026-04-08", "01030060006": "2026-04-08",

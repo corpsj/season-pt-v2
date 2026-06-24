@@ -50,7 +50,7 @@ export function MemberCalendarClient({
             href="/m/receive"
             className="tappable mb-3.5 flex items-center gap-2.5 rounded-[13px] border border-terracotta/[0.18] bg-warm-banner px-3.5 py-[11px]"
           >
-            <Icon name="refresh" size={18} className="text-terracotta" />
+            <Icon name="clock" size={18} className="text-terracotta" />
             <span className="flex-1 text-[12.5px] font-bold text-terracotta-deep">
               선생님이 일정 변경을 요청했어요
             </span>
@@ -85,7 +85,7 @@ export function MemberCalendarClient({
               href="/m/request"
               className="tappable flex flex-none items-center gap-1 rounded-[9px] bg-sage-banner2 px-[11px] py-[7px] text-[11.5px] font-bold text-sage-deep"
             >
-              <Icon name="refresh" size={13} />
+              <Icon name="clock" size={13} />
               변경
             </Link>
           </Card>
