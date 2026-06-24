@@ -28,7 +28,7 @@ export function InstallPrompt() {
   const [plat, setPlat] = useState<Plat>(null);
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [androidManual, setAndroidManual] = useState(false);
+  const [canPrompt, setCanPrompt] = useState(false);
   const deferred = useRef<BIPEvent | null>(null);
 
   useEffect(() => {
@@ -49,6 +49,7 @@ export function InstallPrompt() {
     const onBIP = (e: Event) => {
       e.preventDefault();
       deferred.current = e as BIPEvent;
+      setCanPrompt(true);
     };
     const onInstalled = () => {
       sessionStorage.setItem(SKIP_KEY, "1");
@@ -79,10 +80,7 @@ export function InstallPrompt() {
   };
   const androidInstall = async () => {
     const ev = deferred.current;
-    if (!ev) {
-      setAndroidManual(true);
-      return;
-    }
+    if (!ev) return;
     ev.prompt();
     try {
       await ev.userChoice;
@@ -139,19 +137,50 @@ export function InstallPrompt() {
         <div className="mt-7 w-full max-w-[360px]">
           {plat === "android" ? (
             <>
-              <button
-                type="button"
-                onClick={androidInstall}
-                className="tappable flex w-full items-center justify-center gap-2 rounded-[15px] bg-sage py-[15px] text-[15px] font-bold text-surface shadow-[0_6px_18px_rgba(118,140,106,0.4)] active:scale-[0.98]"
+              {canPrompt ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={androidInstall}
+                    className="tappable flex w-full items-center justify-center gap-2 rounded-[15px] bg-sage py-[15px] text-[15px] font-bold text-surface shadow-[0_6px_18px_rgba(118,140,106,0.4)] active:scale-[0.98]"
+                  >
+                    <Icon name="plus-bold" size={18} />
+                    홈 화면에 추가
+                  </button>
+                  <p className="mt-2.5 text-[12px] leading-[1.55] text-muted2">
+                    버튼을 누른 뒤 뜨는 창에서 <b className="font-bold text-ink">‘설치’</b>를 한 번 더
+                    눌러주세요.
+                  </p>
+                </>
+              ) : null}
+              <div
+                className={cn(
+                  "rounded-[16px] border border-ink/[0.08] bg-card p-4 text-left shadow-[0_6px_18px_rgba(38,35,30,0.08)]",
+                  canPrompt && "mt-3.5"
+                )}
               >
-                <Icon name="plus-bold" size={18} />
-                홈 화면에 추가
-              </button>
-              <p className="mt-3 text-[12px] leading-[1.55] text-muted2">
-                {androidManual
-                  ? "설치 버튼이 안 보이면 브라우저 메뉴 ⋮ → ‘앱 설치’ 또는 ‘홈 화면에 추가’를 눌러주세요."
-                  : "버튼을 누르면 바로 설치돼요."}
-              </p>
+                <div className="mb-2.5 text-[12px] font-bold text-sage-deep">
+                  {canPrompt ? "버튼이 안 되면, 크롬 메뉴로 설치하세요" : "크롬에서 설치하는 방법"}
+                </div>
+                <ol className="flex flex-col gap-2.5">
+                  <Step n={1}>
+                    오른쪽 위{" "}
+                    <Icon
+                      name="more-vertical"
+                      size={15}
+                      className="inline-block -translate-y-px align-text-bottom text-ink"
+                    />{" "}
+                    <b className="font-bold text-ink">더보기</b> 버튼을 누르세요
+                  </Step>
+                  <Step n={2}>
+                    <b className="font-bold text-ink">‘앱 설치’</b> 또는{" "}
+                    <b className="font-bold text-ink">‘홈 화면에 추가’</b>를 누르세요
+                  </Step>
+                  <Step n={3}>
+                    마지막으로 <b className="font-bold text-ink">‘설치’</b>를 누르면 홈 화면에 추가돼요
+                  </Step>
+                </ol>
+              </div>
             </>
           ) : plat === "ios" ? (
             <>
