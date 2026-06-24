@@ -20,13 +20,7 @@ function parseBirth(yymmdd: string): string | null {
   return `${century}${d.slice(0, 2)}-${mm}-${dd}`;
 }
 
-const PRODUCT_PRICE: Record<string, number> = {
-  "10": 750000,
-  "20": 1400000,
-  "30": 1980000,
-};
-
-/** 신규 회원 등록 + 담당(대표) 연결 + 정기 수업 스케줄 생성. */
+/** 신규 회원 등록 + 담당 트레이너 연결 + 정기 수업 스케줄 생성. 옵션으로 회원권 발급·결제 기록. */
 export async function createMember(input: {
   name: string;
   phone: string;
@@ -34,7 +28,10 @@ export async function createMember(input: {
   gender: Gender;
   weekdays: number[];
   hour: number;
-}): Promise<Result> {
+  trainerId?: string;
+  product?: { productId: string };
+  payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
+}): Promise<Result & { memberId?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
@@ -65,13 +62,14 @@ export async function createMember(input: {
     return { ok: false, error: "이미 등록된 연락처이거나 등록에 실패했어요" };
   }
 
-  await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: t.id });
+  const assignedTrainerId = input.trainerId ?? t.id;
+  await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: assignedTrainerId });
 
   // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결.
   for (const wd of input.weekdays) {
     const { data: sched } = await sb
       .from("schedules")
-      .insert({ trainer_id: t.id, type: "1on1", weekday: wd, hour: input.hour, active: true })
+      .insert({ trainer_id: assignedTrainerId, type: "1on1", weekday: wd, hour: input.hour, active: true })
       .select("id")
       .single();
     if (sched) {
@@ -79,36 +77,57 @@ export async function createMember(input: {
     }
   }
 
+  // 회원권 발급 (옵션)
+  if (input.product?.productId) {
+    const issued = await issueMembership(member.id, input.product.productId);
+    if (issued.ok && issued.membershipId && input.payment) {
+      await recordPayment({
+        membershipId: issued.membershipId,
+        method: input.payment.method,
+        amount: input.payment.amount,
+        paidAt: input.payment.paidAt,
+      });
+    }
+  }
+
   revalidatePath("/t");
   revalidatePath("/t/members");
-  return { ok: true };
+  return { ok: true, memberId: member.id };
 }
 
-/** 회원권 발급: memberships insert (총/잔여 = 상품, 시작 오늘, 종료 +90일, 가격). */
+/** 회원권 발급: membership_products에서 상품 조회, memberships insert. */
 export async function issueMembership(
   memberId: string,
-  product: "10" | "20" | "30"
+  productId: string,
 ): Promise<Result & { membershipId?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
 
-  const total = Number(product);
+  const { data: prod } = await sb
+    .from("membership_products")
+    .select("id, sessions, price, duration_days, name")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!prod) return { ok: false, error: "상품을 찾을 수 없어요" };
+
   const start = todayISO();
-  const end = new Date(new Date(start + "T00:00:00Z").getTime() + 90 * 86400000)
+  const end = new Date(new Date(start + "T00:00:00Z").getTime() + prod.duration_days * 86400000)
     .toISOString()
     .slice(0, 10);
 
+  // ponytail: product column stores display label (legacy compat for getRevenue label)
   const { data: ms, error } = await sb
     .from("memberships")
     .insert({
       member_id: memberId,
-      product,
-      total_sessions: total,
-      remaining_sessions: total,
+      product: String(prod.sessions),
+      product_id: prod.id,
+      total_sessions: prod.sessions,
+      remaining_sessions: prod.sessions,
       start_date: start,
       end_date: end,
-      price: PRODUCT_PRICE[product] ?? null,
+      price: prod.price,
       status: "active",
       guided: false,
     })
@@ -121,18 +140,20 @@ export async function issueMembership(
   return { ok: true, membershipId: ms.id };
 }
 
-/** 결제 기록: 회원의 최신 활성 회원권에 payment insert. */
+/** 결제 기록: 회원의 최신 활성 회원권에 payment insert. amount/paidAt 미지정 시 상품가/오늘 사용. */
 export async function recordPayment(input: {
   memberId?: string;
   membershipId?: string;
   method: PaymentMethod;
+  amount?: number;
+  paidAt?: string;
 }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
 
   let membershipId = input.membershipId;
-  let amount: number | null = null;
+  let amount: number | null = input.amount ?? null;
 
   if (!membershipId && input.memberId) {
     const { data: ms } = await sb
@@ -144,8 +165,8 @@ export async function recordPayment(input: {
       .limit(1)
       .maybeSingle();
     membershipId = ms?.id;
-    amount = ms?.price ?? null;
-  } else if (membershipId) {
+    if (amount === null) amount = ms?.price ?? null;
+  } else if (membershipId && amount === null) {
     const { data: ms } = await sb
       .from("memberships")
       .select("price")
@@ -160,7 +181,7 @@ export async function recordPayment(input: {
     membership_id: membershipId,
     method: input.method,
     amount,
-    paid_at: todayISO(),
+    paid_at: input.paidAt ?? todayISO(),
     recorded_by: t.id,
   });
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
