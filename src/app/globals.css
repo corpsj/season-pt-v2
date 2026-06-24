@@ -118,17 +118,20 @@ body {
   }
 }
 
-/* Bottom inset for fixed bars (TabBar / Footer / ChatInput).
-   In a STANDALONE PWA on Android 3-button navigation, env(safe-area-inset-bottom)
-   reports 0 while 100dvh overshoots behind the system nav bar — clipping the bottom
-   bar (labels/buttons hidden behind the nav). Reserve a nav-bar-sized floor ONLY in
-   standalone; browser & desktop keep the raw inset so nothing changes there. */
+/* Safe-area insets for the edge-to-edge (viewport-fit=cover) shell.
+   --safe-t pads the top below the status bar (Frame header), --safe-b pads the
+   bottom fixed bars (TabBar / Footer / ChatInput) above the nav bar. In a STANDALONE
+   PWA on Android 3-button navigation env(safe-area-inset-*) reports 0, so reserve a
+   status-bar / nav-bar-sized floor ONLY in standalone; browser & desktop keep the
+   raw inset (0 on desktop) so nothing changes there. */
 :root {
+  --safe-t: env(safe-area-inset-top);
   --safe-b: env(safe-area-inset-bottom);
 }
 @media (display-mode: standalone) {
   :root {
-    --safe-b: max(env(safe-area-inset-bottom), 40px);
+    --safe-t: max(env(safe-area-inset-top), 32px);
+    --safe-b: max(env(safe-area-inset-bottom), 52px);
   }
 }
 .serif {

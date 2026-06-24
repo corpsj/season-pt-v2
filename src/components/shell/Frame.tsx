@@ -13,7 +13,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
           {/* dynamic island (preview chrome) */}
           <div className="absolute left-1/2 top-3 z-30 hidden h-[30px] w-[106px] -translate-x-1/2 rounded-2xl bg-island sm:block" />
           <StatusBar />
-          <div className="flex min-h-0 flex-1 flex-col pt-[env(safe-area-inset-top)] sm:pt-0">
+          <div className="flex min-h-0 flex-1 flex-col pt-[var(--safe-t)] sm:pt-0">
             {children}
           </div>
           <HomeIndicator />
