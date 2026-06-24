@@ -13,13 +13,33 @@ const cormorant = Cormorant_Garamond({
   display: "swap",
 });
 
+const OG_DESC = "아이폰은 Safari, 안드로이드는 Chrome으로 열어 ‘설치’하세요. 홈 화면에서 앱처럼 빠르게 이용해요.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL("https://season-pt.vercel.app"),
   title: "계절 PT & 필라테스",
   description: "균형 있게, 꾸준하게 — 계절 PT 트레이너·회원 앱",
   applicationName: "계절 PT",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "계절 PT" },
   icons: {
     apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  openGraph: {
+    type: "website",
+    siteName: "계절 PT & 필라테스",
+    title: "계절 PT & 필라테스 · 앱 설치",
+    description: OG_DESC,
+    url: "https://season-pt.vercel.app",
+    locale: "ko_KR",
+    images: [
+      { url: "/brand/og.png", width: 1200, height: 630, alt: "계절 PT & 필라테스 앱 설치 안내" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "계절 PT & 필라테스 · 앱 설치",
+    description: OG_DESC,
+    images: ["/brand/og.png"],
   },
 };
 
