@@ -1,5 +1,3 @@
-"use client";
-
 type Tone = "default" | "warn";
 
 export function ConfirmDialog({
