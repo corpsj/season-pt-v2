@@ -4,31 +4,31 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 
 /**
- * Mobile-only "add to home screen" nudge. This app is meant to be installed.
- * - Android (Chromium): captures `beforeinstallprompt` → one-tap 설치 (menu-instruction
- *   fallback if the event never fires).
- * - iOS: Apple exposes NO install API, so a focused guided overlay (dimmed backdrop +
- *   numbered steps + share glyph + bouncing arrow toward the toolbar) is the best UX.
- * - In-app browsers (KakaoTalk/Instagram/…): A2HS isn't available → direct to the real
- *   browser, with a Web-Share/copy action that bakes in the "open in Safari" hint.
- * Hidden when standalone or on desktop. Dismissible (7-day snooze). No service worker.
+ * Full-screen INSTALL GATE. This app is meant to be installed, so on a mobile browser
+ * (not yet installed) we cover the app and strongly push "add to home screen".
+ * - Android (Chromium): one-tap 설치 via `beforeinstallprompt` (needs the network-only
+ *   SW from ServiceWorkerRegister); menu-instruction fallback if the event is absent.
+ * - iOS: Apple has no install API → guided steps + share glyph + arrow (manual A2HS).
+ * - In-app browsers (KakaoTalk/IG/…): A2HS impossible → open in Safari/Chrome + share
+ *   (the share/copy text bakes in the "open in Safari" hint).
+ * Hidden when already installed (standalone) or on desktop. Re-shown every session;
+ * a discreet "그냥 브라우저에서 볼게요" escape (session-only) avoids trapping users.
  */
 type BIPEvent = Event & {
   prompt: () => void;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
+type Plat = "android" | "ios" | "inapp" | null;
 
-type Mode = "android-prompt" | "android-manual" | "ios" | "inapp" | null;
-const SNOOZE_KEY = "spt_a2hs_dismissed_at";
-const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+const SKIP_KEY = "spt_install_skip"; // sessionStorage → continue-in-browser for this session
 const IN_APP_RE = /KAKAOTALK|Instagram|NAVER|FBAN|FBAV|FB_IAB|Line\/|DaumApps|Band|; wv\)/i;
-// Baked into every share/copy so links opened in an in-app/Chrome land in Safari.
 const SHARE_HINT = "아이폰은 Safari로 이 링크를 열고 ‘공유 → 홈 화면에 추가’로 설치하세요.";
 
 export function InstallPrompt() {
-  const [mode, setMode] = useState<Mode>(null);
-  const [shown, setShown] = useState(false);
+  const [plat, setPlat] = useState<Plat>(null);
+  const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [androidManual, setAndroidManual] = useState(false);
   const deferred = useRef<BIPEvent | null>(null);
 
   useEffect(() => {
@@ -36,6 +36,7 @@ export function InstallPrompt() {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches || nav.standalone === true;
     if (standalone) return;
+    if (sessionStorage.getItem(SKIP_KEY)) return;
 
     const ua = navigator.userAgent;
     const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
@@ -43,56 +44,45 @@ export function InstallPrompt() {
     if (!isIOS && !isAndroid) return; // mobile only
     const isInApp = IN_APP_RE.test(ua);
 
-    const last = Number(localStorage.getItem(SNOOZE_KEY) || 0);
-    if (last && Date.now() - last < SNOOZE_MS) return;
+    setPlat(isInApp ? "inapp" : isIOS ? "ios" : "android");
 
-    const fired = { current: false };
     const onBIP = (e: Event) => {
       e.preventDefault();
       deferred.current = e as BIPEvent;
-      fired.current = true;
-      setMode("android-prompt");
     };
     const onInstalled = () => {
-      localStorage.setItem(SNOOZE_KEY, String(Date.now()));
-      setShown(false);
-      setTimeout(() => setMode(null), 250);
+      sessionStorage.setItem(SKIP_KEY, "1");
+      setReady(false);
+      setTimeout(() => setPlat(null), 250);
     };
     window.addEventListener("beforeinstallprompt", onBIP);
     window.addEventListener("appinstalled", onInstalled);
-
-    const t = setTimeout(
-      () => {
-        if (fired.current) return;
-        setMode(isInApp ? "inapp" : isIOS ? "ios" : "android-manual");
-      },
-      isAndroid && !isInApp ? 2500 : 1000
-    );
-
     return () => {
-      clearTimeout(t);
       window.removeEventListener("beforeinstallprompt", onBIP);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
   useEffect(() => {
-    if (mode) {
-      const r = requestAnimationFrame(() => setShown(true));
+    if (plat) {
+      const r = requestAnimationFrame(() => setReady(true));
       return () => cancelAnimationFrame(r);
     }
-  }, [mode]);
+  }, [plat]);
 
-  if (!mode) return null;
+  if (!plat) return null;
 
-  const close = (snooze: boolean) => {
-    if (snooze) localStorage.setItem(SNOOZE_KEY, String(Date.now()));
-    setShown(false);
-    setTimeout(() => setMode(null), 250);
+  const skip = () => {
+    sessionStorage.setItem(SKIP_KEY, "1");
+    setReady(false);
+    setTimeout(() => setPlat(null), 250);
   };
-  const install = async () => {
+  const androidInstall = async () => {
     const ev = deferred.current;
-    if (!ev) return;
+    if (!ev) {
+      setAndroidManual(true);
+      return;
+    }
     ev.prompt();
     try {
       await ev.userChoice;
@@ -100,7 +90,6 @@ export function InstallPrompt() {
       /* ignore */
     }
     deferred.current = null;
-    close(true);
   };
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
   const shareApp = async () => {
@@ -111,7 +100,7 @@ export function InstallPrompt() {
         await navigator.share({ title: "계절 PT & 필라테스", text, url });
         return;
       } catch {
-        /* user cancelled */
+        /* cancelled */
       }
     }
     try {
@@ -119,139 +108,117 @@ export function InstallPrompt() {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      /* clipboard blocked */
+      /* blocked */
     }
   };
-  const shareLabel = copied ? "복사됨!" : canShare ? "링크 보내기" : "링크 복사";
-
-  const focus = mode === "ios" || mode === "inapp";
 
   return (
-    <>
-      {/* dimmed backdrop focuses attention on the guide (iOS / in-app) */}
-      {focus ? (
-        <div
-          onClick={() => close(true)}
-          aria-hidden="true"
-          className={cn(
-            "fixed inset-0 z-[55] bg-ink/45 transition-opacity duration-300",
-            shown ? "opacity-100" : "opacity-0"
-          )}
+    <div
+      className={cn(
+        "fixed inset-0 z-[100] flex flex-col bg-surface transition-opacity duration-300",
+        ready ? "opacity-100" : "opacity-0"
+      )}
+      style={{ paddingTop: "var(--safe-t, 0px)", paddingBottom: "var(--safe-b, 0px)" }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="앱 설치"
+    >
+      <div className="flex flex-1 flex-col items-center justify-center px-7 text-center">
+        <img
+          src="/brand/icon-512.png"
+          alt=""
+          className="h-[88px] w-[88px] rounded-[22px] border border-ink/[0.06] shadow-[0_8px_28px_rgba(38,35,30,0.16)]"
         />
-      ) : null}
+        <h1 className="mt-5 text-[21px] font-bold text-ink">계절 PT &amp; 필라테스</h1>
+        <p className="mt-2 text-[13.5px] leading-[1.6] text-muted2">
+          앱을 <b className="font-bold text-ink">설치</b>하고 이용해 주세요.
+          <br />
+          홈 화면에서 전체화면 앱처럼 빠르게 열려요.
+        </p>
 
-      <div
-        className="fixed inset-x-0 z-[60] flex flex-col items-center px-3"
-        style={{ bottom: "calc(var(--safe-b, 0px) + 10px)" }}
-        role="dialog"
-        aria-label="앱 설치 안내"
-      >
-        <div
-          className={cn(
-            "w-full max-w-[420px] overflow-hidden rounded-[18px] border border-ink/[0.08] bg-card",
-            "shadow-[0_10px_40px_rgba(38,35,30,0.28)] transition-all duration-300",
-            shown ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
-          )}
-        >
-          {/* header */}
-          <div className="flex items-center gap-3 px-3.5 pt-3.5">
-            <img
-              src="/brand/icon-192.png"
-              alt=""
-              className="h-11 w-11 flex-none rounded-[12px] border border-ink/[0.06]"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-bold text-ink">
-                {mode === "inapp" ? "브라우저에서 설치하기" : "홈 화면에 추가"}
-              </div>
-              <div className="mt-0.5 text-[12px] leading-[1.5] text-muted2">
-                앱처럼 전체화면으로 더 빠르게 열려요.
-              </div>
-            </div>
-            {mode === "android-prompt" ? (
+        <div className="mt-7 w-full max-w-[360px]">
+          {plat === "android" ? (
+            <>
               <button
                 type="button"
-                onClick={install}
-                className="tappable flex-none rounded-[11px] bg-sage px-3.5 py-2 text-[13px] font-bold text-surface active:scale-95"
+                onClick={androidInstall}
+                className="tappable flex w-full items-center justify-center gap-2 rounded-[15px] bg-sage py-[15px] text-[15px] font-bold text-surface shadow-[0_6px_18px_rgba(118,140,106,0.4)] active:scale-[0.98]"
               >
-                설치
+                <Icon name="plus-bold" size={18} />
+                홈 화면에 추가
               </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => close(true)}
-              aria-label="닫기"
-              className="tappable -mr-1 flex-none self-start rounded-full p-1 text-chevron active:scale-90"
-            >
-              <Icon name="close" size={18} />
-            </button>
-          </div>
-
-          {/* body per mode */}
-          {mode === "ios" ? (
+              <p className="mt-3 text-[12px] leading-[1.55] text-muted2">
+                {androidManual
+                  ? "설치 버튼이 안 보이면 브라우저 메뉴 ⋮ → ‘앱 설치’ 또는 ‘홈 화면에 추가’를 눌러주세요."
+                  : "버튼을 누르면 바로 설치돼요."}
+              </p>
+            </>
+          ) : plat === "ios" ? (
             <>
-              <ol className="mt-2.5 flex flex-col gap-2 border-t border-ink/[0.06] px-3.5 py-3">
-                <Step n={1}>
-                  하단 <ShareGlyph /> <b className="font-bold text-ink">공유</b> 버튼을 누르세요
-                </Step>
-                <Step n={2}>
-                  <b className="font-bold text-ink">‘홈 화면에 추가’</b>를 선택하세요
-                </Step>
-                <Step n={3}>
-                  오른쪽 위 <b className="font-bold text-ink">‘추가’</b>를 누르면 끝!
-                </Step>
-              </ol>
+              <div className="rounded-[16px] border border-ink/[0.08] bg-card p-4 text-left shadow-[0_6px_18px_rgba(38,35,30,0.08)]">
+                <ol className="flex flex-col gap-2.5">
+                  <Step n={1}>
+                    하단 <ShareGlyph /> <b className="font-bold text-ink">공유</b> 버튼을 누르세요
+                  </Step>
+                  <Step n={2}>
+                    <b className="font-bold text-ink">‘홈 화면에 추가’</b>를 선택하세요
+                  </Step>
+                  <Step n={3}>
+                    오른쪽 위 <b className="font-bold text-ink">‘추가’</b>를 누르면 끝!
+                  </Step>
+                </ol>
+              </div>
+              <div className="mt-3 flex flex-col items-center text-[12px] text-muted2">
+                <span>아래 공유 버튼을 찾아보세요</span>
+                <Icon name="chevron-down" size={26} className="mt-1 animate-bounce text-sage-deep" />
+              </div>
               <button
                 type="button"
                 onClick={shareApp}
-                className="tappable w-full border-t border-ink/[0.06] py-2.5 text-[12px] font-semibold text-sage-deep active:bg-sage-banner2/50"
+                className="tappable mt-1 text-[12px] font-semibold text-sage-deep underline underline-offset-2"
               >
                 {copied ? "복사됨!" : "다른 사람에게 보내기 (Safari 안내 포함)"}
               </button>
             </>
-          ) : mode === "android-manual" ? (
-            <div className="mt-2.5 border-t border-ink/[0.06] px-3.5 py-3 text-[12.5px] leading-[1.55] text-muted2">
-              브라우저 메뉴 <b className="font-bold text-ink">⋮</b> →{" "}
-              <b className="font-bold text-ink">‘앱 설치’</b> 또는{" "}
-              <b className="font-bold text-ink">‘홈 화면에 추가’</b>를 눌러주세요.
-            </div>
-          ) : mode === "inapp" ? (
-            <div className="mt-2.5 flex items-center gap-2.5 border-t border-ink/[0.06] px-3.5 py-3">
-              <div className="flex-1 text-[12.5px] leading-[1.55] text-muted2">
-                이 화면에선 설치할 수 없어요. 메뉴에서{" "}
-                <b className="font-bold text-ink">‘다른 브라우저(Safari/Chrome)로 열기’</b> 후
+          ) : (
+            <>
+              <div className="rounded-[16px] border border-ink/[0.08] bg-card p-4 text-left text-[13px] leading-[1.6] text-muted2">
+                지금 화면(앱 안의 브라우저)에서는 설치할 수 없어요. 오른쪽 위{" "}
+                <b className="font-bold text-ink">⋯</b> 메뉴에서{" "}
+                <b className="font-bold text-ink">‘다른 브라우저(Safari/Chrome)로 열기’</b>를 누른 뒤
                 설치해 주세요.
               </div>
               <button
                 type="button"
                 onClick={shareApp}
-                className={cn(
-                  "tappable flex-none rounded-[11px] px-3 py-2 text-[12.5px] font-bold active:scale-95",
-                  copied ? "bg-sage-banner2 text-sage-deep" : "bg-sage text-surface"
-                )}
+                className="tappable mt-3 w-full rounded-[15px] bg-sage py-[14px] text-[14.5px] font-bold text-surface active:scale-[0.98]"
               >
-                {shareLabel}
+                {copied ? "복사됨!" : canShare ? "링크 보내기" : "링크 복사"}
               </button>
-            </div>
-          ) : null}
+            </>
+          )}
         </div>
-
-        {/* bouncing arrow → Safari/Chrome toolbar (iOS guided only) */}
-        {mode === "ios" ? (
-          <Icon name="chevron-down" size={30} className="mt-1.5 animate-bounce text-surface drop-shadow" />
-        ) : null}
       </div>
-    </>
+
+      {/* discreet escape — re-prompts next session */}
+      <button
+        type="button"
+        onClick={skip}
+        className="tappable mx-auto mb-2 px-4 py-2 text-[12px] font-medium text-placeholder underline underline-offset-[3px]"
+      >
+        그냥 브라우저에서 볼게요
+      </button>
+    </div>
   );
 }
 
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-2.5">
-      <span className="mt-px flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full bg-sage text-[11px] font-bold text-surface">
+      <span className="mt-px flex h-[19px] w-[19px] flex-none items-center justify-center rounded-full bg-sage text-[11px] font-bold text-surface">
         {n}
       </span>
-      <span className="text-[12.5px] leading-[1.5] text-muted2">{children}</span>
+      <span className="text-[13px] leading-[1.5] text-muted2">{children}</span>
     </li>
   );
 }
