@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext } from "@/lib/data/db";
+import { getStudioSettings } from "@/lib/data/groups/owner-ops";
+import { shouldDeduct } from "@/lib/data/deduction";
 import type { AttendanceAction, WorkoutExercise } from "@/lib/types";
 
 type ActionResult = { ok: boolean; error?: string };
@@ -44,7 +46,16 @@ export async function confirmAttendance(
     noshow: "noshow",
     cancel: "cancelled",
   };
-  const deducted = action !== "cancel";
+
+  const { data: session } = await sb
+    .from("sessions")
+    .select("scheduled_at")
+    .eq("id", sessionId)
+    .maybeSingle();
+  const scheduledAt = session?.scheduled_at ?? new Date().toISOString();
+
+  const settings = await getStudioSettings();
+  const deducted = shouldDeduct(action, scheduledAt, settings);
 
   const memberIds = await memberIdsForSession(sessionId);
   for (const memberId of memberIds) {
@@ -145,7 +156,39 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
       await sb.from("sessions").update({ scheduled_at: slots[0] }).eq("id", req.session_id);
     }
   } else {
+    // cancel request: mark session cancelled, apply deduction policy
+    const { data: session } = await sb
+      .from("sessions")
+      .select("scheduled_at")
+      .eq("id", req.session_id)
+      .maybeSingle();
+    const scheduledAt = session?.scheduled_at ?? new Date().toISOString();
+    const settings = await getStudioSettings();
+    const deducted = shouldDeduct("cancel", scheduledAt, settings);
+
     await sb.from("sessions").update({ status: "cancelled" }).eq("id", req.session_id);
+
+    if (deducted) {
+      const memberIds = await memberIdsForSession(req.session_id);
+      for (const memberId of memberIds) {
+        const ms = await activeMembership(memberId);
+        const before = ms?.remaining_sessions ?? null;
+        let after = before;
+        if (ms) {
+          after = Math.max(0, (ms.remaining_sessions ?? 0) - 1);
+          await sb.from("memberships").update({ remaining_sessions: after }).eq("id", ms.id);
+        }
+        await sb.from("attendance_ledger").insert({
+          session_id: req.session_id,
+          member_id: memberId,
+          action: "cancel",
+          deducted: true,
+          remaining_before: before,
+          remaining_after: after,
+          created_by: t.id,
+        });
+      }
+    }
   }
 
   await sb
