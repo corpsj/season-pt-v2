@@ -421,24 +421,22 @@ export async function getStudioOps(): Promise<StudioOps> {
       ? Math.round(((revenueThisMonth - revenuePrev) / revenuePrev) * 100)
       : null;
 
-  // 이번 달 신규 회원 (members.created_at: timestamptz → 월 경계 instant).
+  // 신규 회원 / 재등록 / 처리 대기 — 서로 독립이라 동시 실행.
   const { startISO, endISO } = monthBoundsKst();
-  const { count: nm } = await sb
-    .from("members")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", startISO)
-    .lt("created_at", endISO);
+  const [{ count: nm }, ret, { count: pend }] = await Promise.all([
+    sb
+      .from("members")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", startISO)
+      .lt("created_at", endISO),
+    getRetention(), // owner 전체 범위 — 재등록 임박 + 예상 매출
+    sb
+      .from("schedule_change_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("requester_type", "member"),
+  ]);
   const newMembers = nm ?? 0;
-
-  // 재등록 임박 + 예상 매출 (owner 전체 범위 — getRetention 재사용).
-  const ret = await getRetention();
-
-  // 처리 대기: 스튜디오 전체 미처리(회원 발신) 일정 변경/취소 요청.
-  const { count: pend } = await sb
-    .from("schedule_change_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "pending")
-    .eq("requester_type", "member");
   const pendingRequests = pend ?? 0;
 
   return {

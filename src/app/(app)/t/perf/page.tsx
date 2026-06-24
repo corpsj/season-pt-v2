@@ -31,8 +31,12 @@ async function chatUnreadFor(trainerId: string): Promise<number> {
 export default async function TrainerOpsPage() {
   const t = await getTrainerContext();
   const isOwner = t?.role === "owner";
-  const ops = await getStudioOps();
-  const chatUnread = t ? await chatUnreadFor(t.id) : 0;
+  // getStudioOps re-reads the (cached) trainer context internally; overlap it with the
+  // unread-count query instead of stacking them.
+  const [ops, chatUnread] = await Promise.all([
+    getStudioOps(),
+    t ? chatUnreadFor(t.id) : Promise.resolve(0),
+  ]);
 
   const todoCount =
     (ops.expiringCount > 0 ? 1 : 0) +

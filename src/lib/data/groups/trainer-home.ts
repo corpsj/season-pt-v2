@@ -322,8 +322,18 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
   };
   const scheds = (schedRows ?? []) as unknown as SR[];
 
+  // Index schedules by member once (O(S)) so the per-member loop is O(1) lookups, not O(M×S).
+  const byMember = new Map<string, SR[]>();
+  for (const s of scheds) {
+    for (const sm of s.schedule_members) {
+      const arr = byMember.get(sm.member_id);
+      if (arr) arr.push(s);
+      else byMember.set(sm.member_id, [s]);
+    }
+  }
+
   for (const mid of memberIds) {
-    const mine = scheds.filter((s) => s.schedule_members.some((sm) => sm.member_id === mid));
+    const mine = byMember.get(mid) ?? [];
     if (mine.length === 0) continue;
     const weekdays = Array.from(new Set(mine.map((s) => s.weekday))).sort((a, b) => a - b);
     const hour = mine[0].hour;

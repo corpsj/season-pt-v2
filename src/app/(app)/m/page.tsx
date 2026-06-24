@@ -6,9 +6,12 @@ import {
 import { MemberCalendarClient } from "./ui";
 
 export default async function MemberCalendarPage() {
-  const view = await getMemberCalendar();
-  const dayMap = await getMemberCalendarDayMap();
-  const chatUnread = await getMemberChatUnread();
+  // Independent getters → run concurrently (each is its own Supabase round-trip chain).
+  const [view, dayMap, chatUnread] = await Promise.all([
+    getMemberCalendar(),
+    getMemberCalendarDayMap(),
+    getMemberChatUnread(),
+  ]);
   const initialSelected = view.calDays.find((d) => d.selected)?.dateISO ?? view.calDays[0]?.dateISO ?? "";
 
   return (

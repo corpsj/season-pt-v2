@@ -38,19 +38,14 @@ const initialOf = (name: string): string => name.slice(0, 1);
 
 /** Members attached to a session, ordered for stable team rendering. */
 async function sessionMembers(sessionId: string): Promise<MemberRow[]> {
-  const { data: links } = await sb
+  // Single embedded join (was 2 serial round-trips: session_members then members).
+  const { data } = await sb
     .from("session_members")
-    .select("member_id")
+    .select("member_id, members(id, name, avatar_tone)")
     .eq("session_id", sessionId);
-  const ids = (links ?? []).map((l) => l.member_id as string);
-  if (ids.length === 0) return [];
-  const { data: members } = await sb
-    .from("members")
-    .select("id, name, avatar_tone")
-    .in("id", ids);
-  // preserve the link order
-  const byId = new Map((members ?? []).map((m) => [m.id, m as MemberRow]));
-  return ids.map((id) => byId.get(id)).filter((m): m is MemberRow => !!m);
+  return (data ?? [])
+    .map((r) => (r as unknown as { members: MemberRow | null }).members)
+    .filter((m): m is MemberRow => !!m);
 }
 
 /** Active membership remaining for a member (0 when none). */
@@ -246,12 +241,20 @@ export async function getInbox(): Promise<InboxView> {
     .order("created_at", { ascending: false });
   const requests = (reqRows ?? []) as RequestRow[];
 
-  // First member of each involved session → name/avatar.
+  // First member of each involved session → name/avatar. One batched query (was N+1).
   const involved = Array.from(new Set(requests.map((r) => r.session_id)));
   const firstMemberBySession = new Map<string, MemberRow>();
-  for (const sid of involved) {
-    const ms = await sessionMembers(sid);
-    if (ms[0]) firstMemberBySession.set(sid, ms[0]);
+  if (involved.length) {
+    const { data: smRows } = await sb
+      .from("session_members")
+      .select("session_id, members(id, name, avatar_tone)")
+      .in("session_id", involved);
+    for (const row of smRows ?? []) {
+      const r = row as unknown as { session_id: string; members: MemberRow | null };
+      if (r.members && !firstMemberBySession.has(r.session_id)) {
+        firstMemberBySession.set(r.session_id, r.members);
+      }
+    }
   }
 
   const received = requests

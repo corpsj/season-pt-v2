@@ -109,11 +109,16 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const monthEndExcl = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-  // This member's sessions in the month.
-  const { data: sm } = await sb
-    .from("session_members")
-    .select("session_id, sessions(id, scheduled_at, status, trainer_id)")
-    .eq("member_id", me.memberId);
+  // Sessions + trainer/membership/legend are all independent → fetch concurrently.
+  const [{ data: sm }, tr, membership, scheduleLegend] = await Promise.all([
+    sb
+      .from("session_members")
+      .select("session_id, sessions(id, scheduled_at, status, trainer_id)")
+      .eq("member_id", me.memberId),
+    primaryTrainer(me.memberId),
+    activeMembership(me.memberId),
+    scheduleLegendFor(me.memberId),
+  ]);
   const rows = (sm ?? [])
     .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string; trainer_id: string } }).sessions)
     .filter((s): s is { id: string; scheduled_at: string; status: string; trainer_id: string } => !!s)
@@ -146,8 +151,6 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     .filter((s) => kstDateISO(s.scheduled_at) === selISO)
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0];
 
-  const tr = await primaryTrainer(me.memberId);
-  const membership = await activeMembership(me.memberId);
   const remaining = membership?.remaining_sessions ?? 0;
   const dDay = membership ? dayDiff(today, membership.end_date) : 0;
 
@@ -163,9 +166,6 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
       .in("session_id", sessionIds);
     hasTrainerReq = (count ?? 0) > 0;
   }
-
-  // Schedule legend from the member's recurring schedules.
-  const scheduleLegend = await scheduleLegendFor(me.memberId);
 
   return {
     name: me.name,
@@ -209,13 +209,14 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
   const monthEndExcl =
     month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-  const tr = await primaryTrainer(me.memberId);
+  const [tr, { data: sm }] = await Promise.all([
+    primaryTrainer(me.memberId),
+    sb
+      .from("session_members")
+      .select("session_id, sessions(id, scheduled_at, status)")
+      .eq("member_id", me.memberId),
+  ]);
   const trainerName = tr?.display_name ?? "";
-
-  const { data: sm } = await sb
-    .from("session_members")
-    .select("session_id, sessions(id, scheduled_at, status)")
-    .eq("member_id", me.memberId);
   const rows = (sm ?? [])
     .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string } }).sessions)
     .filter((s): s is { id: string; scheduled_at: string; status: string } => !!s)
@@ -715,15 +716,14 @@ async function readNotifOverrides(): Promise<Record<string, boolean>> {
   }
 }
 
-/** Number of sessions this member actually attended (누적 출석). */
+/** Number of sessions this member actually attended (누적 출석). Count-only (no row transfer). */
 async function attendedCount(memberId: string): Promise<number> {
-  const { data } = await sb
+  const { count } = await sb
     .from("session_members")
-    .select("sessions(status)")
-    .eq("member_id", memberId);
-  return (data ?? [])
-    .map((r) => (r as unknown as { sessions?: { status: string } }).sessions)
-    .filter((s): s is { status: string } => !!s && s.status === "attended").length;
+    .select("sessions!inner(status)", { count: "exact", head: true })
+    .eq("member_id", memberId)
+    .eq("sessions.status", "attended");
+  return count ?? 0;
 }
 
 /** Earliest membership start date (YYYY-MM-DD) — for 함께한 기간. */
