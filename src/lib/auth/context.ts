@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
@@ -12,8 +13,12 @@ export interface TrainerContext {
   mustChangePassword: boolean;
 }
 
-/** Resolve the logged-in trainer from the Supabase Auth session (server only). */
-export async function getTrainerContext(): Promise<TrainerContext | null> {
+/**
+ * Resolve the logged-in trainer from the Supabase Auth session (server only).
+ * Wrapped in React `cache()` so the auth.getUser() network call + trainers query
+ * run AT MOST ONCE per request, even though it's called from many data helpers.
+ */
+export const getTrainerContext = cache(async (): Promise<TrainerContext | null> => {
   const sb = await createSupabaseServer();
   const {
     data: { user },
@@ -33,10 +38,10 @@ export async function getTrainerContext(): Promise<TrainerContext | null> {
     role: data.role,
     mustChangePassword: data.must_change_password,
   };
-}
+});
 
-/** Resolve the logged-in member from the signed cookie (server only). */
-export async function getMemberContext(): Promise<MemberSession | null> {
+/** Resolve the logged-in member from the signed cookie (server only, request-cached). */
+export const getMemberContext = cache(async (): Promise<MemberSession | null> => {
   const c = await cookies();
   return verifySession(c.get(MEMBER_COOKIE)?.value);
-}
+});
