@@ -152,7 +152,7 @@ export default async function TrainerOpsPage() {
               </Link>
             ) : null}
           </>
-        )}
+        ) : null}
 
         <div className="h-3.5" />
       </Body>
