@@ -8,6 +8,6 @@ export default async function IssueMembershipPage(props: {
   await requireOwnerPage(); // 대표 전용
   const { id } = await props.params;
   const member = await getMemberDetail(id);
-  const products = getMembershipProducts();
+  const products = await getMembershipProducts();
   return <MembershipClient member={member} products={products} />;
 }

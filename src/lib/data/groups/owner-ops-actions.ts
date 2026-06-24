@@ -193,3 +193,118 @@ export async function addRevenue(input: {
   revalidatePath("/t/perf");
   return { ok: true };
 }
+
+/* ----------------------- product catalog actions ----------------------- */
+
+export async function createProduct(input: {
+  name: string;
+  sessions: number;
+  price: number;
+  durationDays: number;
+}): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("membership_products").insert({
+    name: input.name.trim(),
+    sessions: input.sessions,
+    price: input.price,
+    duration_days: input.durationDays,
+  });
+  if (error) return { ok: false, error: "상품 추가에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  return { ok: true };
+}
+
+export async function updateProduct(
+  id: string,
+  input: { name: string; sessions: number; price: number; durationDays: number },
+): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb
+    .from("membership_products")
+    .update({ name: input.name.trim(), sessions: input.sessions, price: input.price, duration_days: input.durationDays })
+    .eq("id", id);
+  if (error) return { ok: false, error: "상품 수정에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  return { ok: true };
+}
+
+export async function setProductActive(id: string, active: boolean): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("membership_products").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: "상태 변경에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  return { ok: true };
+}
+
+/* ----------------------- policy / notifications actions ----------------------- */
+
+export async function updatePolicy(input: {
+  noshowDeducts: boolean;
+  cancelCutoffHours: number;
+}): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb
+    .from("studio_settings")
+    .upsert({ id: 1, noshow_deducts: input.noshowDeducts, cancel_cutoff_hours: input.cancelCutoffHours, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) return { ok: false, error: "정책 저장에 실패했어요" };
+  revalidatePath("/t/settings/policy");
+  return { ok: true };
+}
+
+export async function updateNotifications(input: {
+  notifExpiry: boolean;
+  notifSession: boolean;
+  notifPayment: boolean;
+}): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb
+    .from("studio_settings")
+    .upsert({ id: 1, notif_expiry: input.notifExpiry, notif_session: input.notifSession, notif_payment: input.notifPayment, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+  if (error) return { ok: false, error: "알림 설정 저장에 실패했어요" };
+  revalidatePath("/t/settings/notifications");
+  return { ok: true };
+}
+
+/* ----------------------- exercise catalog actions ----------------------- */
+
+export async function createExercise(name: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("exercises").insert({ name: name.trim() });
+  if (error) return { ok: false, error: "종목 추가에 실패했어요" };
+  revalidatePath("/t/settings/exercises");
+  return { ok: true };
+}
+
+export async function renameExercise(id: string, name: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("exercises").update({ name: name.trim() }).eq("id", id);
+  if (error) return { ok: false, error: "종목 이름 변경에 실패했어요" };
+  revalidatePath("/t/settings/exercises");
+  return { ok: true };
+}
+
+export async function setExerciseActive(id: string, active: boolean): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("exercises").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: "상태 변경에 실패했어요" };
+  revalidatePath("/t/settings/exercises");
+  return { ok: true };
+}

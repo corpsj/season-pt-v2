@@ -330,7 +330,16 @@ export function getStaff(): StaffMember[] {
 }
 
 export function getMembershipProducts(): MembershipProduct[] {
-  return MEMBERSHIP_PRODUCTS.map((p) => ({ ...p }));
+  // ponytail: mock data only; real data comes from membership_products table via owner-ops.ts
+  return MEMBERSHIP_PRODUCTS.map((p, i) => ({
+    id: `mock-product-${p.product}`,
+    name: `1:1 PT ${p.label}`,
+    sessions: Number(p.product),
+    price: p.price,
+    durationDays: 90,
+    active: true,
+    sortOrder: i + 1,
+  }));
 }
 
 /* ------------------------------ chat ------------------------------ */

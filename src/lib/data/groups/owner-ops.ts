@@ -15,6 +15,7 @@ import {
 import type {
   AvatarTone,
   BadgeView,
+  ExerciseItem,
   Me,
   MemberDetailView,
   MembershipProduct,
@@ -22,6 +23,7 @@ import type {
   StaffMember,
   StudioOps,
   StudioOverview,
+  StudioSettings,
   TeamAvatar,
   TrainerRole,
 } from "@/lib/types";
@@ -221,13 +223,88 @@ export async function getRevenue(): Promise<RevenueView> {
 }
 
 /* ------------------------- membership products ------------------------ */
-/** Static catalogue (matches mock values). */
-export function getMembershipProducts(): MembershipProduct[] {
-  return [
-    { product: "10", label: "10회권", price: 750000, recommended: false },
-    { product: "20", label: "20회권", price: 1400000, recommended: true },
-    { product: "30", label: "30회권", price: 1980000, recommended: false },
-  ];
+/** Active products only, ordered by sort_order. */
+export async function getMembershipProducts(): Promise<MembershipProduct[]> {
+  const { data } = await sb
+    .from("membership_products")
+    .select("id, name, sessions, price, duration_days, active, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    sessions: r.sessions,
+    price: r.price,
+    durationDays: r.duration_days,
+    active: r.active,
+    sortOrder: r.sort_order,
+  }));
+}
+
+/** All products including inactive. */
+export async function getAllProducts(): Promise<MembershipProduct[]> {
+  const { data } = await sb
+    .from("membership_products")
+    .select("id, name, sessions, price, duration_days, active, sort_order")
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    sessions: r.sessions,
+    price: r.price,
+    durationDays: r.duration_days,
+    active: r.active,
+    sortOrder: r.sort_order,
+  }));
+}
+
+const DEFAULT_SETTINGS: StudioSettings = {
+  noshowDeducts: true,
+  cancelCutoffHours: 0,
+  notifExpiry: true,
+  notifSession: true,
+  notifPayment: true,
+};
+
+/** Studio-wide policy settings. Falls back to defaults if no row exists. */
+export async function getStudioSettings(): Promise<StudioSettings> {
+  const { data } = await sb
+    .from("studio_settings")
+    .select("noshow_deducts, cancel_cutoff_hours, notif_expiry, notif_session, notif_payment")
+    .eq("id", 1)
+    .maybeSingle();
+  if (!data) return DEFAULT_SETTINGS;
+  return {
+    noshowDeducts: data.noshow_deducts,
+    cancelCutoffHours: data.cancel_cutoff_hours,
+    notifExpiry: data.notif_expiry,
+    notifSession: data.notif_session,
+    notifPayment: data.notif_payment,
+  };
+}
+
+/** Active exercises only, ordered by sort_order. */
+export async function getExercises(): Promise<{ id: string; name: string }[]> {
+  const { data } = await sb
+    .from("exercises")
+    .select("id, name")
+    .eq("active", true)
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name }));
+}
+
+/** All exercises including inactive. */
+export async function getAllExercises(): Promise<ExerciseItem[]> {
+  const { data } = await sb
+    .from("exercises")
+    .select("id, name, active, sort_order")
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    active: r.active,
+    sortOrder: r.sort_order,
+  }));
 }
 
 /* --------------------------- member detail --------------------------- */

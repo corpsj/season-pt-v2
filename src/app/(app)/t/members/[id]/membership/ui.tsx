@@ -6,7 +6,6 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
-import { Badge } from "@/components/ui/Badge";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -24,7 +23,7 @@ export function MembershipClient({
   const id = member.id;
   const router = useRouter();
   const toast = useToast();
-  const [selected, setSelected] = useState<"10" | "20" | "30">("20");
+  const [selected, setSelected] = useState<string>(products[0]?.id ?? "");
   const [pending, setPending] = useState(false);
 
   async function onIssue() {
@@ -61,9 +60,9 @@ export function MembershipClient({
         <div className="mb-6 flex flex-col gap-2.5">
           {products.map((p) => (
             <RadioOption
-              key={p.product}
-              selected={selected === p.product}
-              onClick={() => setSelected(p.product)}
+              key={p.id}
+              selected={selected === p.id}
+              onClick={() => setSelected(p.id)}
               right={
                 <span className="flex-none text-[14px] font-bold text-ink">
                   ₩{p.price.toLocaleString()}
@@ -71,8 +70,7 @@ export function MembershipClient({
               }
             >
               <span className="flex items-center gap-2">
-                <span className="text-[14px] font-bold text-ink">{p.label}</span>
-                {p.recommended ? <Badge variant="recommended">추천</Badge> : null}
+                <span className="text-[14px] font-bold text-ink">{p.name}</span>
               </span>
             </RadioOption>
           ))}
