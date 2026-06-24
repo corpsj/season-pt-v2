@@ -26,8 +26,7 @@ export async function createMember(input: {
   phone: string;
   birth: string; // YYMMDD
   gender: Gender;
-  weekdays: number[];
-  hour: number;
+  slots: { weekday: number; hour: number; minute: number }[];
   trainerId?: string;
   product?: { productId: string };
   payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
@@ -66,10 +65,10 @@ export async function createMember(input: {
   await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: assignedTrainerId });
 
   // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결.
-  for (const wd of input.weekdays) {
+  for (const s of input.slots) {
     const { data: sched } = await sb
       .from("schedules")
-      .insert({ trainer_id: assignedTrainerId, type: "1on1", weekday: wd, hour: input.hour, active: true })
+      .insert({ trainer_id: assignedTrainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
       .select("id")
       .single();
     if (sched) {
@@ -298,21 +297,21 @@ export async function updateNotifications(input: {
 
 /* ----------------------- exercise catalog actions ----------------------- */
 
-export async function createExercise(name: string): Promise<Result> {
+export async function createExercise(name: string, category?: string): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
-  const { error } = await sb.from("exercises").insert({ name: name.trim() });
+  const { error } = await sb.from("exercises").insert({ name: name.trim(), category: category?.trim() || null });
   if (error) return { ok: false, error: "종목 추가에 실패했어요" };
   revalidatePath("/t/settings/exercises");
   return { ok: true };
 }
 
-export async function renameExercise(id: string, name: string): Promise<Result> {
+export async function renameExercise(id: string, name: string, category?: string): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
-  const { error } = await sb.from("exercises").update({ name: name.trim() }).eq("id", id);
+  const { error } = await sb.from("exercises").update({ name: name.trim(), category: category?.trim() || null }).eq("id", id);
   if (error) return { ok: false, error: "종목 이름 변경에 실패했어요" };
   revalidatePath("/t/settings/exercises");
   return { ok: true };

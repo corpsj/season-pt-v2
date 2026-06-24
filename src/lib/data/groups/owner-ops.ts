@@ -3,7 +3,7 @@ import {
   sb,
   getTrainerContext,
   weekdayKo,
-  hourLabel,
+  hmLabel,
   todayISO,
   dayDiff,
   nowKstParts,
@@ -284,24 +284,27 @@ export async function getStudioSettings(): Promise<StudioSettings> {
 }
 
 /** Active exercises only, ordered by sort_order. */
-export async function getExercises(): Promise<{ id: string; name: string }[]> {
+export async function getExercises(): Promise<{ id: string; name: string; category: string | null }[]> {
   const { data } = await sb
     .from("exercises")
-    .select("id, name")
+    .select("id, name, category")
     .eq("active", true)
+    .order("category", { ascending: true, nullsFirst: false })
     .order("sort_order", { ascending: true });
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name }));
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, category: r.category ?? null }));
 }
 
 /** All exercises including inactive. */
 export async function getAllExercises(): Promise<ExerciseItem[]> {
   const { data } = await sb
     .from("exercises")
-    .select("id, name, active, sort_order")
+    .select("id, name, category, active, sort_order")
+    .order("category", { ascending: true, nullsFirst: false })
     .order("sort_order", { ascending: true });
   return (data ?? []).map((r) => ({
     id: r.id,
     name: r.name,
+    category: r.category ?? null,
     active: r.active,
     sortOrder: r.sort_order,
   }));
@@ -353,16 +356,17 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   if (schedIds.length) {
     const { data: scheds } = await sb
       .from("schedules")
-      .select("id, type, weekday, hour")
+      .select("id, type, weekday, hour, minute")
       .in("id", schedIds)
       .eq("active", true)
       .order("weekday", { ascending: true });
     const list = scheds ?? [];
     if (list.length) {
       isTeam = list.some((s) => s.type === "2on1");
-      const days = list.map((s) => weekdayKo(s.weekday)).join("·");
-      const hr = hourLabel(list[0].hour).replace(":00", "시"); // "오후 6:00" → "오후 6시"
-      scheduleLabel = `매주 ${days} ${hr}`;
+      const allSame = list.every((s) => s.hour === list[0].hour && s.minute === list[0].minute);
+      scheduleLabel = allSame
+        ? `매주 ${list.map((s) => weekdayKo(s.weekday)).join("·")} ${hmLabel(list[0].hour, list[0].minute)}`
+        : "매주 " + list.map((s) => `${weekdayKo(s.weekday)} ${hmLabel(s.hour, s.minute)}`).join(" · ");
       // 팀(2:1) 아바타 구성
       if (isTeam) {
         const teamSched = list.find((s) => s.type === "2on1");

@@ -6,6 +6,7 @@ import {
   kstDateISO,
   kstWeekday,
   weekdayKo,
+  hmLabel,
   todayISO,
   dayDiff,
   nowKstParts,
@@ -249,17 +250,19 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
 async function scheduleLegendFor(memberId: string): Promise<string> {
   const { data } = await sb
     .from("schedule_members")
-    .select("schedule_id, schedules(weekday, hour, active)")
+    .select("schedule_id, schedules(weekday, hour, minute, active)")
     .eq("member_id", memberId);
   const scheds = (data ?? [])
-    .map((r) => (r as unknown as {schedules?: { weekday: number; hour: number; active: boolean } }).schedules)
-    .filter((s): s is { weekday: number; hour: number; active: boolean } => !!s && s.active);
+    .map((r) => (r as unknown as {schedules?: { weekday: number; hour: number; minute: number; active: boolean } }).schedules)
+    .filter((s): s is { weekday: number; hour: number; minute: number; active: boolean } => !!s && s.active)
+    .sort((a, b) => a.weekday - b.weekday);
   if (!scheds.length) return "정기 수업 없음";
-  const weekdays = [...new Set(scheds.map((s) => s.weekday))].sort((a, b) => a - b);
-  const hour = scheds[0].hour;
-  const wdLabel = weekdays.map((w) => weekdayKo(w)).join("·");
-  const ampm = hour < 12 ? `오전 ${hour}시` : hour === 12 ? "오후 12시" : `오후 ${hour - 12}시`;
-  return `정기 수업 매주 ${wdLabel} ${ampm}`;
+  const allSame = scheds.every((s) => s.hour === scheds[0].hour && s.minute === scheds[0].minute);
+  if (allSame) {
+    const wd = scheds.map((s) => weekdayKo(s.weekday)).join("·");
+    return `정기 수업 매주 ${wd} ${hmLabel(scheds[0].hour, scheds[0].minute)}`;
+  }
+  return "정기 수업 " + scheds.map((s) => `${weekdayKo(s.weekday)} ${hmLabel(s.hour, s.minute)}`).join(" · ");
 }
 
 /* ----------------------------- receive (/m/receive) ----------------------------- */

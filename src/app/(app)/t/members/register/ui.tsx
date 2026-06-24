@@ -11,13 +11,19 @@ import { Select } from "@/components/ui/Select";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
-import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
 import type { Gender, PaymentMethod, MembershipProduct, StaffMember } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
-const TIME_OPTIONS = [18, 19, 20, 21];
+
+function hourLabel(h: number) {
+  if (h < 12) return `오전 ${h}시`;
+  if (h === 12) return "오후 12시";
+  return `오후 ${h - 12}시`;
+}
+const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => ({ value: String(i + 6), label: hourLabel(i + 6) }));
+const MINUTE_OPTIONS = [{ value: "0", label: "정각" }, { value: "30", label: "30분" }];
 
 const todayStr = () => {
   const d = new Date(Date.now() + 9 * 3600000); // KST
@@ -39,8 +45,10 @@ export function MemberRegisterClient({
   const [phone, setPhone] = useState("");
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<Gender>("female");
-  const [days, setDays] = useState<Set<number>>(new Set([3, 6]));
-  const [timeIdx, setTimeIdx] = useState(1); // 19시
+  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({
+    3: { hour: 19, minute: 0 },
+    6: { hour: 19, minute: 0 },
+  });
   const [trainerId, setTrainerId] = useState(ownerId);
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
@@ -72,13 +80,15 @@ export function MemberRegisterClient({
             paidAt: payDate || undefined,
           }
         : undefined;
+    const slots = Object.entries(dayTimes)
+      .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
+      .sort((a, b) => a.weekday - b.weekday);
     const res = await createMember({
       name,
       phone,
       birth,
       gender,
-      weekdays: [...days].sort((a, b) => a - b),
-      hour: TIME_OPTIONS[timeIdx],
+      slots,
       trainerId,
       product: productArg,
       payment: paymentArg,
@@ -94,21 +104,13 @@ export function MemberRegisterClient({
   }
 
   function toggleDay(i: number) {
-    setDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) next.delete(i);
-      else next.add(i);
+    setDayTimes((prev) => {
+      const next = { ...prev };
+      if (next[i] != null) delete next[i];
+      else next[i] = { hour: 19, minute: 0 };
       return next;
     });
   }
-  function cycleTime() {
-    setTimeIdx((i) => (i + 1) % TIME_OPTIONS.length);
-  }
-
-  const regTime = `${TIME_OPTIONS[timeIdx]}시`;
-  const selectedDays = [...days].sort((a, b) => a - b).map((d) => DAYS[d]);
-  const regSummary =
-    selectedDays.length > 0 ? `${regTime} · 매주 ${selectedDays.join("·")}` : `${regTime} · 요일을 선택해 주세요`;
 
   const staffOptions = staff
     .filter((s) => s.role !== "invited")
@@ -175,7 +177,7 @@ export function MemberRegisterClient({
         </div>
         <div className="mb-3 flex gap-1.5">
           {DAYS.map((d, i) => {
-            const on = days.has(i);
+            const on = dayTimes[i] != null;
             return (
               <button
                 key={d}
@@ -194,17 +196,44 @@ export function MemberRegisterClient({
             );
           })}
         </div>
-        <button
-          type="button"
-          onClick={cycleTime}
-          className="tappable mb-4 flex w-full items-center gap-2.5 rounded-[13px] border border-ink/[0.12] bg-card px-4 py-[15px] text-left"
-        >
-          <Icon name="clock" size={19} className="flex-none text-sage-soft" />
-          <span className="flex-1 text-[14px] font-medium text-ink">{regSummary}</span>
-          <Icon name="refresh" size={16} className="flex-none text-chevron" />
-        </button>
 
-        <Banner tone="neutral">매주 같은 요일·시간에 수업이 자동 생성돼요.</Banner>
+        {/* per-day time rows */}
+        {Object.keys(dayTimes).length > 0 && (
+          <div className="mb-4 flex flex-col gap-2">
+            {Object.keys(dayTimes)
+              .map(Number)
+              .sort((a, b) => a - b)
+              .map((i) => (
+                <div key={i} className="flex items-center gap-2.5 rounded-[13px] border border-ink/[0.12] bg-card px-3.5 py-2.5">
+                  <span className={`w-7 shrink-0 text-center text-[13px] font-bold ${i === 0 ? "text-sunday" : "text-ink"}`}>
+                    {DAYS[i]}
+                  </span>
+                  <div className="flex flex-1 gap-2">
+                    <div className="flex-1">
+                      <Select
+                        value={String(dayTimes[i].hour)}
+                        options={HOUR_OPTIONS}
+                        onChange={(v) =>
+                          setDayTimes((prev) => ({ ...prev, [i]: { ...prev[i], hour: Number(v) } }))
+                        }
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <SegmentedToggle
+                        options={MINUTE_OPTIONS}
+                        value={String(dayTimes[i].minute)}
+                        onChange={(v) =>
+                          setDayTimes((prev) => ({ ...prev, [i]: { ...prev[i], minute: Number(v) } }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
+        <Banner tone="neutral">선택한 요일·시간에 매주 수업이 자동 생성돼요.</Banner>
 
         {/* 회원권 상품 선택 */}
         <div className="mb-2.5 mt-6">

@@ -488,7 +488,7 @@ export type StudioSettings = {
   notifPayment: boolean;
 };
 
-export type ExerciseItem = { id: string; name: string; active: boolean; sortOrder: number };
+export type ExerciseItem = { id: string; name: string; active: boolean; sortOrder: number; category?: string | null };
 
 /* Re-export for convenience in screen code. */
 export type { IconName };
