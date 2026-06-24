@@ -20,9 +20,11 @@ import type {
   MembershipProduct,
   PerfBar,
   StaffMember,
+  StudioOps,
   StudioOverview,
   TeamAvatar,
 } from "@/lib/types";
+import { getRetention } from "./perf-retention";
 
 export interface PaymentSummary {
   membershipId: string | null;
@@ -372,5 +374,81 @@ export async function getStudioOverview(): Promise<StudioOverview> {
     trainerCount,
     weeklyBars,
     expiringCount,
+  };
+}
+
+/**
+ * 대표 전용 운영(사업) 현황. 스튜디오 전체.
+ * 대표가 운영 탭을 여는 3가지 질문에 답한다: 이번 달 얼마 벌었나 / 들어올 돈은 / 막힌 일 있나.
+ */
+export async function getStudioOps(): Promise<StudioOps> {
+  const monthLabel = currentMonthLabel();
+  const t = await getTrainerContext();
+  if (!t) {
+    return {
+      monthLabel,
+      revenueThisMonth: 0,
+      paymentCount: 0,
+      revenueDeltaPct: null,
+      newMembers: 0,
+      expiringCount: 0,
+      expectedRevenue: 0,
+      pendingRequests: 0,
+    };
+  }
+
+  // 결제(매출): payments.paid_at은 date 컬럼 → KST 월 1일 날짜 문자열로 경계 비교.
+  const k = nowKstParts();
+  const y = k.getUTCFullYear();
+  const m = k.getUTCMonth(); // 0-based
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const firstThis = `${y}-${pad(m + 1)}-01`;
+  const firstNext = m === 11 ? `${y + 1}-01-01` : `${y}-${pad(m + 2)}-01`;
+  const pm = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 };
+  const firstPrev = `${pm.y}-${pad(pm.m + 1)}-01`;
+
+  const [{ data: payThis }, { data: payPrev }] = await Promise.all([
+    sb.from("payments").select("amount").gte("paid_at", firstThis).lt("paid_at", firstNext),
+    sb.from("payments").select("amount").gte("paid_at", firstPrev).lt("paid_at", firstThis),
+  ]);
+  const sumAmount = (rows: { amount: number | null }[] | null) =>
+    (rows ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+  const revenueThisMonth = sumAmount(payThis);
+  const paymentCount = (payThis ?? []).length;
+  const revenuePrev = sumAmount(payPrev);
+  const revenueDeltaPct =
+    revenuePrev > 0
+      ? Math.round(((revenueThisMonth - revenuePrev) / revenuePrev) * 100)
+      : null;
+
+  // 이번 달 신규 회원 (members.created_at: timestamptz → 월 경계 instant).
+  const { startISO, endISO } = monthBoundsKst();
+  const { count: nm } = await sb
+    .from("members")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startISO)
+    .lt("created_at", endISO);
+  const newMembers = nm ?? 0;
+
+  // 재등록 임박 + 예상 매출 (owner 전체 범위 — getRetention 재사용).
+  const ret = await getRetention();
+
+  // 처리 대기: 스튜디오 전체 미처리(회원 발신) 일정 변경/취소 요청.
+  const { count: pend } = await sb
+    .from("schedule_change_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .eq("requester_type", "member");
+  const pendingRequests = pend ?? 0;
+
+  return {
+    monthLabel,
+    revenueThisMonth,
+    paymentCount,
+    revenueDeltaPct,
+    newMembers,
+    expiringCount: ret.expiringCount,
+    expectedRevenue: ret.expectedRevenue,
+    pendingRequests,
   };
 }

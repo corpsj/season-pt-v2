@@ -235,6 +235,17 @@ export interface StudioOverview {
   weeklyBars: PerfBar[];  // 같은 이번 주(월~토) 수업의 요일별 분포 — 합 = weekClasses
   expiringCount: number;  // 14일 내 만료 임박 활성 회원권 수 — 전체
 }
+/** 대표 전용 운영(사업) 현황 — 이번 달 매출 + 재등록(들어올 돈) + 처리 대기. 스튜디오 전체. */
+export interface StudioOps {
+  monthLabel: string;             // "2026년 6월"
+  revenueThisMonth: number;       // 이번 달(KST) 결제 합계 ₩
+  paymentCount: number;           // 이번 달 결제 건수
+  revenueDeltaPct: number | null; // 지난달 대비 % (지난달 0이면 null → 미표시)
+  newMembers: number;             // 이번 달(KST) 신규 가입 회원 수
+  expiringCount: number;          // D-14 이내 만료 임박 활성 회원 (전체)
+  expectedRevenue: number;        // 재등록 임박 회원 예상 매출 합 ₩
+  pendingRequests: number;        // 스튜디오 전체 미처리(회원 발신) 일정 변경/취소 요청 수
+}
 export interface PerfSummary {
   monthLabel: string;
   revenue: number;
