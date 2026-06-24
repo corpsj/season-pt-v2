@@ -25,6 +25,10 @@ export const metadata: Metadata = {
   // content below the status bar → black notch strip + env(safe-area-inset-top)=0.
   // Trade-off: iOS forces the clock/battery glyphs WHITE (low contrast on cream).
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "계절 PT" },
+  // Next 16 emits only the generic `mobile-web-app-capable` for capable:true. iOS
+  // honors statusBarStyle ONLY when the apple-prefixed tag is present — without it
+  // black-translucent is ignored and the notch stays black. Inject it explicitly.
+  other: { "apple-mobile-web-app-capable": "yes" },
   icons: {
     apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
