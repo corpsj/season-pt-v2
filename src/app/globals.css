@@ -134,7 +134,10 @@ body {
 @media (display-mode: standalone) {
   :root {
     --safe-t: max(env(safe-area-inset-top), 32px);
-    --safe-b: max(env(safe-area-inset-bottom), 48px);
+    /* ponytail: bottom uses the real env inset only. A fixed floor floats the TabBar
+       above Samsung's opaque 3-button nav (gap). TabBar keeps a 24px baseline anyway.
+       Ceiling: if a device truly draws under the nav and reports env=0, the bar can clip
+       — would need a real measured inset, not a guessed floor. */
   }
 }
 .serif {

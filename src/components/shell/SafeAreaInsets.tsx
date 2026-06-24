@@ -36,7 +36,7 @@ export function SafeAreaInsets() {
       const b = readEnv("safe-area-inset-bottom");
       const t = readEnv("safe-area-inset-top");
       // > 0.5 to ignore sub-pixel noise. Fallback only for the env=0 standalone case.
-      root.style.setProperty("--safe-b", b > 0.5 ? `${b}px` : standalone ? "48px" : "0px");
+      root.style.setProperty("--safe-b", b > 0.5 ? `${b}px` : "0px"); // ponytail: env only, no floor (TabBar has 24px baseline)
       root.style.setProperty("--safe-t", t > 0.5 ? `${t}px` : standalone ? "32px" : "0px");
     };
 
