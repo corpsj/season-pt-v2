@@ -269,6 +269,7 @@ export interface AttendTarget {
   meta: string; // "1:1 PT · 오후 7:00 · 잔여 3회"
   type: SessionType;
   remaining: number;
+  scheduledAt: string; // ISO — for deduction policy check
 }
 
 export interface RetentionItem {

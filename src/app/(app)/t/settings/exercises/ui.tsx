@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
@@ -15,6 +16,7 @@ import {
 import type { ExerciseItem } from "@/lib/types";
 
 export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[] }) {
+  const router = useRouter();
   const toast = useToast();
   const [items, setItems] = useState(init);
   const [newName, setNewName] = useState("");
@@ -29,13 +31,9 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
     const res = await createExercise(name);
     setBusy(false);
     if (!res.ok) return toast(res.error ?? "추가에 실패했어요");
-    // optimistic: server revalidates, router refresh will sync; add locally too
-    setItems((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), name, active: true, sortOrder: prev.length + 1 },
-    ]);
     setNewName("");
     toast("종목이 추가되었어요");
+    router.refresh();
   }
 
   async function handleRename(id: string) {
@@ -123,7 +121,7 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
                       if (e.key === "Escape") setEditingId(null);
                     }}
                     autoFocus
-                    className="flex-1 bg-transparent text-[14px] font-medium text-ink outline-none border-b border-sage pb-0.5"
+                    className="flex-1 bg-transparent text-[14px] font-medium text-ink outline-none rounded focus:ring-2 focus:ring-sage/40"
                   />
                   <button
                     type="button"

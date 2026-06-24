@@ -246,6 +246,7 @@ export function getAttendTarget(sessionId: string): AttendTarget {
     meta: `${isTeam ? "2:1 PT" : "1:1 PT"} · ${hourLabel(m.hour)} · 잔여 ${m.remaining}회`,
     type: m.type,
     remaining: m.remaining,
+    scheduledAt: new Date().toISOString(),
   };
 }
 

@@ -131,7 +131,7 @@ export default function RecordClient({
             onChange={(e) => setComment(e.target.value)}
             placeholder="오늘 수업 코멘트를 남겨주세요…"
             rows={3}
-            className="w-full rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-placeholder focus:ring-2 focus:ring-sage/30 resize-none"
+            className="w-full rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-placeholder focus:ring-2 focus:ring-sage/40 resize-none"
           />
         </div>
       </Body>

@@ -25,12 +25,10 @@ const todayStr = () => {
 };
 
 export function MemberRegisterClient({
-  ownerName,
   ownerId,
   products,
   staff,
 }: {
-  ownerName: string;
   ownerId: string;
   products: MembershipProduct[];
   staff: StaffMember[];

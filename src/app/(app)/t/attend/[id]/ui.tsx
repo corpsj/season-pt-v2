@@ -13,24 +13,25 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { confirmAttendance } from "@/lib/data/groups/scheduling-actions";
-import type { AttendTarget } from "@/lib/types";
+import { shouldDeduct } from "@/lib/data/deduction";
+import type { AttendTarget, StudioSettings } from "@/lib/types";
 
 type Method = "attend" | "noshow" | "cancel";
 
-export default function AttendClient({ target: t }: { target: AttendTarget }) {
+export default function AttendClient({ target: t, settings }: { target: AttendTarget; settings: StudioSettings }) {
   const router = useRouter();
   const toast = useToast();
   const [method, setMethod] = useState<Method>("attend");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const after = method === "cancel" ? t.remaining : t.remaining - 1;
+  const deducted = shouldDeduct(method, t.scheduledAt, settings);
+  const after = deducted ? Math.max(0, t.remaining - 1) : t.remaining;
   const cta = method === "cancel" ? "수업 취소 기록" : "출석 처리하기";
   const confirmTitle =
     method === "cancel" ? "수업 취소를 기록할까요?" : method === "noshow" ? "노쇼로 처리할까요?" : "출석 처리할까요?";
-  const confirmDesc =
-    method === "cancel"
-      ? "차감 없이 취소 기록만 남겨요."
-      : `잔여 ${t.remaining}회 → ${after}회로 차감돼요.`;
+  const confirmDesc = deducted
+    ? `잔여 ${t.remaining}회 → ${after}회로 차감돼요.`
+    : "차감 없이 기록만 남겨요.";
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -81,10 +82,10 @@ export default function AttendClient({ target: t }: { target: AttendTarget }) {
         {/* remaining */}
         <Card className="mt-3.5 flex items-center gap-3 px-[15px] py-[13px]">
           <Icon name="ticket-fill" size={18} className="flex-none text-sage-deep" />
-          <span className="flex-1 text-[13.5px] font-medium text-ink-soft">차감 후 잔여</span>
+          <span className="flex-1 text-[13.5px] font-medium text-ink-soft">{deducted ? "차감 후 잔여" : "잔여 (차감 없음)"}</span>
           <span className="serif text-[18px] font-bold text-ink">{t.remaining}</span>
-          <Icon name="arrow-right" size={16} className="flex-none text-chevron" />
-          <span className="serif text-[18px] font-bold text-terracotta">{after}</span>
+          {deducted && <Icon name="arrow-right" size={16} className="flex-none text-chevron" />}
+          {deducted && <span className="serif text-[18px] font-bold text-terracotta">{after}</span>}
         </Card>
       </Body>
 

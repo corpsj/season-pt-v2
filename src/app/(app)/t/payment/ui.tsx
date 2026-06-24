@@ -8,7 +8,6 @@ import { Banner } from "@/components/ui/Banner";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Field, TextInput } from "@/components/ui/Field";
 import { PrimaryButton } from "@/components/ui/Button";
-import { Icon } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { recordPayment } from "@/lib/data/groups/owner-ops-actions";
@@ -29,8 +28,8 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
-  const memberName = summary.memberName || "이지수";
-  const product = summary.productLabel || "20회권";
+  const memberName = summary.memberName || "—";
+  const product = summary.productLabel || "—";
 
   async function onRecord() {
     if (pending) return;
@@ -75,7 +74,7 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
           <div className="text-[13px] font-medium text-muted">
             {memberName} · {product}
           </div>
-          <div className="serif mt-1.5 text-[34px] font-semibold leading-none text-ink">{amountDisplay}</div>
+          <div className="serif mt-1.5 text-[34px] leading-none text-ink">{amountDisplay}</div>
         </Card>
 
         <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
@@ -90,31 +89,23 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
           onChange={setMethod}
         />
 
-        <Card className="mb-4 flex flex-col gap-0 overflow-hidden">
-          <div className="flex items-center gap-2.5 px-4 py-[14px]">
-            <Icon name="calendar" size={18} className="flex-none text-sage" />
-            <span className="flex-none text-[12.5px] font-semibold text-muted5">결제일</span>
-            <div className="flex-1 pl-2">
-              <TextInput
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
-            <Icon name="coins" size={18} className="flex-none text-sage" />
-            <span className="flex-none text-[12.5px] font-semibold text-muted5">금액</span>
-            <div className="flex-1 pl-2">
-              <TextInput
-                inputMode="numeric"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
-          </div>
-        </Card>
+        <div className="mb-4 flex flex-col gap-3">
+          <Field icon="calendar" label="결제일">
+            <TextInput
+              type="date"
+              value={payDate}
+              onChange={(e) => setPayDate(e.target.value)}
+            />
+          </Field>
+          <Field icon="coins" label="금액">
+            <TextInput
+              inputMode="numeric"
+              placeholder="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
+        </div>
 
         <Banner tone="neutral">PG 연동 전이라 수기로 기록해요.</Banner>
         <div className="h-3.5" />

@@ -7,7 +7,6 @@ export default async function MemberRegisterPage() {
   const [products, staff] = await Promise.all([getMembershipProducts(), getStaff()]);
   return (
     <MemberRegisterClient
-      ownerName={t.displayName}
       ownerId={t.id}
       products={products}
       staff={staff}

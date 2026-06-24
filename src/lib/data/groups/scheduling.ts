@@ -113,6 +113,7 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
     meta: `${isTeam ? "2:1 PT" : "1:1 PT"} · ${timeLbl} · 잔여 ${remaining}회`,
     type: isTeam ? "2on1" : "1on1",
     remaining,
+    scheduledAt: session?.scheduled_at ?? new Date().toISOString(),
   };
 }
 

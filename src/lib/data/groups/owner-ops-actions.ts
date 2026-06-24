@@ -274,8 +274,7 @@ export async function updatePolicy(input: {
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
   const { error } = await sb
     .from("studio_settings")
-    .upsert({ id: 1, noshow_deducts: input.noshowDeducts, cancel_cutoff_hours: input.cancelCutoffHours, updated_at: new Date().toISOString() })
-    .eq("id", 1);
+    .upsert({ id: 1, noshow_deducts: input.noshowDeducts, cancel_cutoff_hours: input.cancelCutoffHours, updated_at: new Date().toISOString() });
   if (error) return { ok: false, error: "정책 저장에 실패했어요" };
   revalidatePath("/t/settings/policy");
   return { ok: true };
@@ -291,8 +290,7 @@ export async function updateNotifications(input: {
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
   const { error } = await sb
     .from("studio_settings")
-    .upsert({ id: 1, notif_expiry: input.notifExpiry, notif_session: input.notifSession, notif_payment: input.notifPayment, updated_at: new Date().toISOString() })
-    .eq("id", 1);
+    .upsert({ id: 1, notif_expiry: input.notifExpiry, notif_session: input.notifSession, notif_payment: input.notifPayment, updated_at: new Date().toISOString() });
   if (error) return { ok: false, error: "알림 설정 저장에 실패했어요" };
   revalidatePath("/t/settings/notifications");
   return { ok: true };
