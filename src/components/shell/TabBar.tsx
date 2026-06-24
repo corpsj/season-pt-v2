@@ -67,7 +67,7 @@ export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: 
         );
         const cls = cn("tappable flex flex-1 flex-col items-center gap-1 active:scale-90", tone);
         return t.href ? (
-          <Link key={t.label} href={t.href} className={cls}>
+          <Link key={t.label} href={t.href} prefetch className={cls}>
             {inner}
           </Link>
         ) : (
