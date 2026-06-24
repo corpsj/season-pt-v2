@@ -128,7 +128,7 @@ body {
 }
 @media (display-mode: standalone) {
   :root {
-    --safe-b: max(env(safe-area-inset-bottom), 56px);
+    --safe-b: max(env(safe-area-inset-bottom), 40px);
   }
 }
 .serif {
