@@ -469,12 +469,25 @@ export interface MemberNotifView {
 }
 
 /* --------------------------- membership issue --------------------------- */
-export interface MembershipProduct {
-  product: "10" | "20" | "30";
-  label: string;
+export type MembershipProduct = {
+  id: string;
+  name: string;
+  sessions: number;
   price: number;
-  recommended: boolean;
-}
+  durationDays: number;
+  active: boolean;
+  sortOrder: number;
+};
+
+export type StudioSettings = {
+  noshowDeducts: boolean;
+  cancelCutoffHours: number;
+  notifExpiry: boolean;
+  notifSession: boolean;
+  notifPayment: boolean;
+};
+
+export type ExerciseItem = { id: string; name: string; active: boolean; sortOrder: number };
 
 /* Re-export for convenience in screen code. */
 export type { IconName };
