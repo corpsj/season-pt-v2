@@ -145,7 +145,7 @@ export function InstallPrompt() {
                     className="tappable flex w-full items-center justify-center gap-2 rounded-[15px] bg-sage py-[15px] text-[15px] font-bold text-surface shadow-[0_6px_18px_rgba(118,140,106,0.4)] active:scale-[0.98]"
                   >
                     <Icon name="plus-bold" size={18} />
-                    홈 화면에 추가
+                    설치
                   </button>
                   <p className="mt-2.5 text-[12px] leading-[1.55] text-muted2">
                     버튼을 누른 뒤 뜨는 창에서 <b className="font-bold text-ink">‘설치’</b>를 한 번 더
