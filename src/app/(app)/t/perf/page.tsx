@@ -4,7 +4,8 @@ import { TabBar } from "@/components/shell/TabBar";
 import { Icon } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
 import { getStudioOps } from "@/lib/data/groups/owner-ops";
-import { sb, getTrainerContext } from "@/lib/data/db";
+import { sb } from "@/lib/data/db";
+import { requireOwnerPage } from "@/lib/auth/guard";
 
 /** ₩ with thousands separators. */
 function won(n: number): string {
@@ -29,13 +30,13 @@ async function chatUnreadFor(trainerId: string): Promise<number> {
 }
 
 export default async function TrainerOpsPage() {
-  const t = await getTrainerContext();
-  const isOwner = t?.role === "owner";
+  const t = await requireOwnerPage(); // 대표 전용 — 강사는 /t 로 리다이렉트
+  const isOwner = true;
   // getStudioOps re-reads the (cached) trainer context internally; overlap it with the
   // unread-count query instead of stacking them.
   const [ops, chatUnread] = await Promise.all([
     getStudioOps(),
-    t ? chatUnreadFor(t.id) : Promise.resolve(0),
+    chatUnreadFor(t.id),
   ]);
 
   const todoCount =

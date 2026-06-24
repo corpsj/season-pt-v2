@@ -11,9 +11,11 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#FAF8F4",
     theme_color: "#FAF8F4",
     icons: [
-      { src: "/brand/brand-mark.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/brand/brand-mark.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/brand/brand-mark.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/brand/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/brand/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      // maskable filled with brand cream so the install/splash icon shows the logo on
+      // cream — never the OS default dark fill behind a transparent icon.
+      { src: "/brand/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

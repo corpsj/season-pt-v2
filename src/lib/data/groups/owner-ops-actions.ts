@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
+import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -36,6 +37,7 @@ export async function createMember(input: {
 }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
 
   const name = input.name.trim();
   const phone = normPhone(input.phone);
@@ -89,6 +91,7 @@ export async function issueMembership(
 ): Promise<Result & { membershipId?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
 
   const total = Number(product);
   const start = todayISO();
@@ -126,6 +129,7 @@ export async function recordPayment(input: {
 }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
 
   let membershipId = input.membershipId;
   let amount: number | null = null;

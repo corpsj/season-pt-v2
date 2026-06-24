@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   description: "균형 있게, 꾸준하게 — 계절 PT 트레이너·회원 앱",
   applicationName: "계절 PT",
   appleWebApp: { capable: true, statusBarStyle: "default", title: "계절 PT" },
+  icons: {
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

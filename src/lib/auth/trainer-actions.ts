@@ -1,6 +1,8 @@
 "use server";
+import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
+import { ensureOwner, OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 
 const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 const toEmail = (u: string) => `${u.trim().toLowerCase()}@${DOMAIN}`;
@@ -60,6 +62,7 @@ export async function inviteInstructor(
   name: string,
   phone: string
 ): Promise<Result & { username?: string; tempPassword?: string }> {
+  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
   const admin = createSupabaseAdmin();
   const suffix = Math.floor(1000 + Math.random() * 9000);
   const username = `gyeaul.t${suffix}`;
@@ -85,4 +88,84 @@ export async function inviteInstructor(
 export async function trainerLogout(): Promise<void> {
   const sb = await createSupabaseServer();
   await sb.auth.signOut();
+}
+
+/* --------------------------- 강사 관리 (대표 전용) --------------------------- */
+
+/** Fetch a target instructor row scoped to its id. Returns null if missing. */
+async function fetchTrainer(admin: ReturnType<typeof createSupabaseAdmin>, id: string) {
+  const { data } = await admin
+    .from("trainers")
+    .select("id, role, status, auth_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  return data as { id: string; role: "owner" | "instructor"; status: string; auth_user_id: string } | null;
+}
+
+/** 강사 정보 수정 (이름·연락처). 대표 전용. */
+export async function updateInstructor(id: string, name: string, phone: string): Promise<Result> {
+  const me = await ensureOwner();
+  if (!me) return { ok: false, error: OWNER_ONLY_ERROR };
+  const display = name.trim();
+  if (!display) return { ok: false, error: "이름을 입력해주세요" };
+  const admin = createSupabaseAdmin();
+  const target = await fetchTrainer(admin, id);
+  if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
+  if (target.role === "owner") return { ok: false, error: "대표 계정은 여기서 수정할 수 없어요" };
+  const { error } = await admin
+    .from("trainers")
+    .update({ display_name: display, phone: phone.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: "수정에 실패했어요" };
+  revalidatePath("/t/staff");
+  revalidatePath(`/t/staff/${id}`);
+  return { ok: true };
+}
+
+/** 강사 활성/비활성 전환. 대표 전용. 비활성 강사는 로그인은 가능하나 운영에서 비활성으로 표시. */
+export async function setInstructorActive(id: string, active: boolean): Promise<Result> {
+  const me = await ensureOwner();
+  if (!me) return { ok: false, error: OWNER_ONLY_ERROR };
+  const admin = createSupabaseAdmin();
+  const target = await fetchTrainer(admin, id);
+  if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
+  if (target.role === "owner") return { ok: false, error: "대표 계정은 비활성화할 수 없어요" };
+  const { error } = await admin
+    .from("trainers")
+    .update({ status: active ? "active" : "inactive" })
+    .eq("id", id);
+  if (error) return { ok: false, error: "상태 변경에 실패했어요" };
+  revalidatePath("/t/staff");
+  revalidatePath(`/t/staff/${id}`);
+  return { ok: true };
+}
+
+/** 강사 삭제. 대표 전용. 담당 회원이 있으면 거부(먼저 비활성화/재배정). 계정까지 완전 삭제. */
+export async function deleteInstructor(id: string): Promise<Result> {
+  const me = await ensureOwner();
+  if (!me) return { ok: false, error: OWNER_ONLY_ERROR };
+  if (id === me.id) return { ok: false, error: "본인 계정은 삭제할 수 없어요" };
+  const admin = createSupabaseAdmin();
+  const target = await fetchTrainer(admin, id);
+  if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
+  if (target.role === "owner") return { ok: false, error: "대표 계정은 삭제할 수 없어요" };
+
+  const { count } = await admin
+    .from("member_trainers")
+    .select("member_id", { count: "exact", head: true })
+    .eq("trainer_id", id);
+  if ((count ?? 0) > 0)
+    return { ok: false, error: "담당 회원이 있어 삭제할 수 없어요. 먼저 비활성화하거나 회원을 재배정하세요." };
+
+  // null out non-cascading references so the row delete isn't blocked
+  await admin.from("payments").update({ recorded_by: null }).eq("recorded_by", id);
+  await admin.from("attendance_ledger").update({ created_by: null }).eq("created_by", id);
+  await admin.from("workout_records").update({ created_by: null }).eq("created_by", id);
+
+  // delete the auth user → cascades the trainers row (auth_user_id ON DELETE CASCADE)
+  if (target.auth_user_id) await admin.auth.admin.deleteUser(target.auth_user_id);
+  await admin.from("trainers").delete().eq("id", id); // in case the row had no auth user
+
+  revalidatePath("/t/staff");
+  return { ok: true };
 }

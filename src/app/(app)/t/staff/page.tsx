@@ -8,9 +8,11 @@ import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getStaff } from "@/lib/data/groups/owner-ops";
+import { requireOwnerPage } from "@/lib/auth/guard";
 import type { BadgeVariant } from "@/lib/types";
 
 export default async function StaffPage() {
+  await requireOwnerPage(); // 대표 전용
   const staff = await getStaff();
 
   return (
@@ -32,7 +34,7 @@ export default async function StaffPage() {
               s.role === "owner" ? "owner" : s.role === "invited" ? "invited" : "instructor";
             const text = s.role === "owner" ? "대표" : s.role === "invited" ? "초대 대기" : "강사";
             return (
-              <Link key={s.id} href="/t/staff/invite">
+              <Link key={s.id} href={`/t/staff/${s.id}`}>
                 <Card className="tappable flex items-center gap-3 px-[15px] py-[13px]">
                   <Avatar initial={s.initial} tone={s.avatarTone} size={40} />
                   <div className="min-w-0 flex-1">

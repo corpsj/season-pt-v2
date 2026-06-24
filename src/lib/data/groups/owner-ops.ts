@@ -23,6 +23,7 @@ import type {
   StudioOps,
   StudioOverview,
   TeamAvatar,
+  TrainerRole,
 } from "@/lib/types";
 import { getRetention } from "./perf-retention";
 
@@ -105,6 +106,44 @@ export async function getStaff(): Promise<StaffMember[]> {
       isMe,
     };
   });
+}
+
+export interface StaffMemberDetail {
+  id: string;
+  name: string;
+  username: string;
+  phone: string;
+  role: TrainerRole;
+  status: "active" | "invited" | "inactive";
+  memberCount: number;
+  isMe: boolean;
+  isOwner: boolean;
+}
+
+/** Single staff member for the 강사 상세/관리 screen. */
+export async function getStaffMember(id: string): Promise<StaffMemberDetail | null> {
+  const me = await getTrainerContext();
+  const { data } = await sb
+    .from("trainers")
+    .select("id, display_name, username, phone, role, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const { count } = await sb
+    .from("member_trainers")
+    .select("member_id", { count: "exact", head: true })
+    .eq("trainer_id", id);
+  return {
+    id: data.id,
+    name: data.display_name,
+    username: data.username,
+    phone: data.phone ?? "",
+    role: data.role,
+    status: data.status,
+    memberCount: count ?? 0,
+    isMe: !!me && me.id === data.id,
+    isOwner: data.role === "owner",
+  };
 }
 
 /* ------------------------- membership products ------------------------ */
