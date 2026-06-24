@@ -13,7 +13,7 @@ export function ChatInput({
 }) {
   const ready = value.trim().length > 0;
   return (
-    <div className="flex flex-none items-center gap-2 border-t border-ink/[0.06] px-3 pt-2 pb-[max(12px,env(safe-area-inset-bottom))]">
+    <div className="flex flex-none items-center gap-2 border-t border-ink/[0.06] px-3 pt-2 pb-[max(12px,var(--safe-b))]">
       <button
         type="button"
         aria-label="첨부"

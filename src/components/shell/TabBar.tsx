@@ -44,7 +44,7 @@ export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: 
     : tabs;
 
   return (
-    <nav className="flex flex-none border-t border-ink/[0.07] bg-surface/95 px-3 pt-2.5 pb-[max(24px,env(safe-area-inset-bottom))]">
+    <nav className="flex flex-none border-t border-ink/[0.07] bg-surface/95 px-3 pt-2.5 pb-[max(24px,var(--safe-b))]">
       {effectiveTabs.map((t) => {
         const active = t.href
           ? t.matchExact

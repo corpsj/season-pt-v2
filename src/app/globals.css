@@ -117,6 +117,20 @@ body {
     overscroll-behavior: none;
   }
 }
+
+/* Bottom inset for fixed bars (TabBar / Footer / ChatInput).
+   In a STANDALONE PWA on Android 3-button navigation, env(safe-area-inset-bottom)
+   reports 0 while 100dvh overshoots behind the system nav bar — clipping the bottom
+   bar (labels/buttons hidden behind the nav). Reserve a nav-bar-sized floor ONLY in
+   standalone; browser & desktop keep the raw inset so nothing changes there. */
+:root {
+  --safe-b: env(safe-area-inset-bottom);
+}
+@media (display-mode: standalone) {
+  :root {
+    --safe-b: max(env(safe-area-inset-bottom), 56px);
+  }
+}
 .serif {
   font-family: var(--font-serif);
 }

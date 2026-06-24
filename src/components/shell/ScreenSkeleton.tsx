@@ -18,7 +18,7 @@ export function ScreenSkeleton({ tabs = 4 }: { tabs?: number }) {
         <div className="h-[62px] animate-pulse rounded-[16px] bg-ink/[0.04]" />
       </div>
       {/* tab bar placeholder — keeps the bottom nav visually stable during load */}
-      <div className="flex flex-none border-t border-ink/[0.07] bg-surface/95 px-3 pt-2.5 pb-[max(24px,env(safe-area-inset-bottom))]">
+      <div className="flex flex-none border-t border-ink/[0.07] bg-surface/95 px-3 pt-2.5 pb-[max(24px,var(--safe-b))]">
         {Array.from({ length: tabs }).map((_, i) => (
           <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
             <div className="h-[22px] w-[22px] animate-pulse rounded-md bg-ink/[0.07]" />

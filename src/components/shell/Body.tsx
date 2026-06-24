@@ -42,7 +42,7 @@ export function Footer({
   pad?: Pad;
 }) {
   return (
-    <div className={cn("flex-none pt-3 pb-[max(30px,env(safe-area-inset-bottom))]", FOOTER_PAD[pad], className)}>
+    <div className={cn("flex-none pt-3 pb-[max(30px,var(--safe-b))]", FOOTER_PAD[pad], className)}>
       {children}
     </div>
   );
