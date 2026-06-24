@@ -245,6 +245,7 @@ export interface StudioOps {
   expiringCount: number;          // D-14 이내 만료 임박 활성 회원 (전체)
   expectedRevenue: number;        // 재등록 임박 회원 예상 매출 합 ₩
   pendingRequests: number;        // 스튜디오 전체 미처리(회원 발신) 일정 변경/취소 요청 수
+  activeMembers: number;          // 활성 회원권 보유 회원 수 (전체)
 }
 export interface PerfSummary {
   monthLabel: string;

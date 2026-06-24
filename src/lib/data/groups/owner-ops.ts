@@ -507,6 +507,7 @@ export async function getStudioOps(): Promise<StudioOps> {
       expiringCount: 0,
       expectedRevenue: 0,
       pendingRequests: 0,
+      activeMembers: 0,
     };
   }
 
@@ -534,9 +535,9 @@ export async function getStudioOps(): Promise<StudioOps> {
       ? Math.round(((revenueThisMonth - revenuePrev) / revenuePrev) * 100)
       : null;
 
-  // 신규 회원 / 재등록 / 처리 대기 — 서로 독립이라 동시 실행.
+  // 신규 회원 / 재등록 / 처리 대기 / 활성 회원 — 서로 독립이라 동시 실행.
   const { startISO, endISO } = monthBoundsKst();
-  const [{ count: nm }, ret, { count: pend }] = await Promise.all([
+  const [{ count: nm }, ret, { count: pend }, { data: activeMs }] = await Promise.all([
     sb
       .from("members")
       .select("id", { count: "exact", head: true })
@@ -548,9 +549,11 @@ export async function getStudioOps(): Promise<StudioOps> {
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
       .eq("requester_type", "member"),
+    sb.from("memberships").select("member_id").eq("status", "active"),
   ]);
   const newMembers = nm ?? 0;
   const pendingRequests = pend ?? 0;
+  const activeMembers = new Set((activeMs ?? []).map((r) => r.member_id)).size;
 
   return {
     monthLabel,
@@ -561,5 +564,6 @@ export async function getStudioOps(): Promise<StudioOps> {
     expiringCount: ret.expiringCount,
     expectedRevenue: ret.expectedRevenue,
     pendingRequests,
+    activeMembers,
   };
 }

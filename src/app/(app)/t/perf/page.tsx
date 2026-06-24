@@ -39,10 +39,13 @@ export default async function TrainerOpsPage() {
     chatUnreadFor(t.id),
   ]);
 
-  const todoCount =
-    (ops.expiringCount > 0 ? 1 : 0) +
-    (ops.pendingRequests > 0 ? 1 : 0) +
-    (chatUnread > 0 ? 1 : 0);
+  const todoCount = (ops.pendingRequests > 0 ? 1 : 0) + (chatUnread > 0 ? 1 : 0);
+  const deltaLabel =
+    ops.revenueDeltaPct != null
+      ? `전월 대비 ${ops.revenueDeltaPct >= 0 ? "+" : ""}${ops.revenueDeltaPct}%`
+      : ops.paymentCount > 0
+        ? `${ops.paymentCount}건`
+        : "기록 없음";
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -62,92 +65,98 @@ export default async function TrainerOpsPage() {
           </Link>
         </div>
 
-        {/* hero — 재등록으로 들어올 매출 (실데이터: membership.price). 탭하면 재등록 관리로. */}
-        {ops.expiringCount > 0 ? (
-          <Link href="/t/retention" className="tappable mb-2.5 block rounded-[18px] bg-sage p-5">
+        {/* 운영 지표 — 매출 / 활성 / 신규 / 만료 임박 */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <Link href="/t/revenue" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
+            <div className="text-[12px] font-medium text-muted2">이번 달 매출</div>
+            <div className="serif mt-1.5 text-[20px] font-semibold leading-none text-ink">
+              {won(ops.revenueThisMonth)}
+            </div>
+            <div
+              className={`mt-1.5 text-[11.5px] font-medium ${
+                ops.revenueDeltaPct != null && ops.revenueDeltaPct < 0 ? "text-terracotta" : "text-sage-deep"
+              }`}
+            >
+              {deltaLabel}
+            </div>
+          </Link>
+
+          <Link href="/t/members" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
+            <div className="text-[12px] font-medium text-muted2">활성 회원</div>
+            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
+              {ops.activeMembers}
+              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
+            </div>
+            <div className="mt-1.5 text-[11.5px] font-medium text-muted2">전체 회원</div>
+          </Link>
+
+          <div className="rounded-[16px] border border-ink/[0.07] bg-card p-4">
+            <div className="text-[12px] font-medium text-muted2">이번 달 신규</div>
+            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
+              {ops.newMembers}
+              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
+            </div>
+            <div className="mt-1.5 text-[11.5px] font-medium text-muted2">신규 가입</div>
+          </div>
+
+          <Link href="/t/retention" className="tappable rounded-[16px] border border-ink/[0.07] bg-card p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[12px] text-surface/85">재등록하면 들어올 매출</span>
-              <Icon name="chevron-right" size={16} className="text-surface/70" />
+              <span className="text-[12px] font-medium text-muted2">만료 임박</span>
+              <Icon name="chevron-right" size={14} className="text-chevron" />
             </div>
-            <div className="mt-2">
-              <span className="serif text-[34px] leading-none text-surface">
-                {won(ops.expectedRevenue)}
-              </span>
+            <div className="serif mt-1.5 text-[22px] font-semibold leading-none text-ink">
+              {ops.expiringCount}
+              <span className="ml-0.5 text-[13px] font-medium text-muted2">명</span>
             </div>
-            <div className="mt-2 text-[12.5px] font-medium text-[#CDE0CF]">
-              만료 임박 {ops.expiringCount}명 · 지금 챙기세요
+            <div
+              className={`mt-1.5 text-[11.5px] font-medium ${
+                ops.expiringCount > 0 ? "text-terracotta" : "text-muted2"
+              }`}
+            >
+              {ops.expiringCount > 0 ? "재등록 챙기기" : "없음"}
             </div>
           </Link>
-        ) : (
-          <div className="mb-2.5 rounded-[18px] bg-sage p-5">
-            <div className="text-[12px] text-surface/85">재등록 관리</div>
-            <div className="mt-2 text-[18px] font-semibold text-surface">
-              만료 임박 회원이 없어요
-            </div>
-            <div className="mt-1.5 text-[12.5px] font-medium text-[#CDE0CF]">
-              지금은 챙길 재등록이 없습니다
-            </div>
-          </div>
-        )}
-
-        {/* 챙길 일 섹션 라벨 */}
-        {todoCount > 0 ? (
-          <div className="mb-2 mt-1 px-0.5 text-[12px] font-semibold text-muted">
-            지금 챙길 일 · {todoCount}건
-          </div>
-        ) : null}
-
-        {/* action — 처리 대기 요청 */}
-        {ops.pendingRequests > 0 ? (
-          <Link
-            href="/t/inbox"
-            className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
-          >
-            <Icon name="clock" size={20} className="flex-none text-sage-deep" />
-            <div className="flex-1">
-              <div className="text-[13.5px] font-semibold text-ink">처리 대기 요청</div>
-              <div className="mt-0.5 text-[12px] text-muted2">일정 변경·취소 {ops.pendingRequests}건</div>
-            </div>
-            <Icon name="chevron-right" size={15} className="text-chevron" />
-          </Link>
-        ) : null}
-
-        {/* action — 미답 채팅 */}
-        {chatUnread > 0 ? (
-          <Link
-            href="/t/chat"
-            className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
-          >
-            <Icon name="message" size={20} className="flex-none text-sage-deep" />
-            <div className="flex-1">
-              <div className="text-[13.5px] font-semibold text-ink">답장 안 한 채팅</div>
-              <div className="mt-0.5 text-[12px] text-muted2">미답 {chatUnread}건</div>
-            </div>
-            <Icon name="chevron-right" size={15} className="text-chevron" />
-          </Link>
-        ) : null}
-
-        {/* 이번 달 요약 — 신규 회원, (결제가 찍혔으면) 매출 */}
-        <div className="mt-1 flex items-center gap-2 px-1 text-[12.5px] text-muted2">
-          <Icon name="person-plus" size={15} className="text-sage-soft" />
-          <span>
-            이번 달 신규 {ops.newMembers}명
-            {ops.paymentCount > 0 ? ` · 매출 ${won(ops.revenueThisMonth)}` : ""}
-          </span>
         </div>
 
-        {/* 매출 장부 */}
-        <Link
-          href="/t/revenue"
-          className="tappable mt-3 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
-        >
-          <Icon name="coins-fill" size={20} className="flex-none text-sage-deep" />
-          <div className="flex-1">
-            <div className="text-[13.5px] font-semibold text-ink">매출 장부</div>
-            <div className="mt-0.5 text-[12px] text-muted2">전체 매출 관리 · 내보내기</div>
+        {/* 지금 챙길 일 */}
+        <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">
+          지금 챙길 일{todoCount > 0 ? ` · ${todoCount}건` : ""}
+        </div>
+        {todoCount === 0 ? (
+          <div className="rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px] text-[13px] font-medium text-muted">
+            지금은 챙길 일이 없어요 👍
           </div>
-          <Icon name="chevron-right" size={15} className="text-chevron" />
-        </Link>
+        ) : (
+          <>
+            {ops.pendingRequests > 0 ? (
+              <Link
+                href="/t/inbox"
+                className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
+              >
+                <Icon name="clock" size={20} className="flex-none text-sage-deep" />
+                <div className="flex-1">
+                  <div className="text-[13.5px] font-semibold text-ink">처리 대기 요청</div>
+                  <div className="mt-0.5 text-[12px] text-muted2">일정 변경·취소 {ops.pendingRequests}건</div>
+                </div>
+                <Icon name="chevron-right" size={15} className="text-chevron" />
+              </Link>
+            ) : null}
+
+            {chatUnread > 0 ? (
+              <Link
+                href="/t/chat"
+                className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]"
+              >
+                <Icon name="message" size={20} className="flex-none text-sage-deep" />
+                <div className="flex-1">
+                  <div className="text-[13.5px] font-semibold text-ink">답장 안 한 채팅</div>
+                  <div className="mt-0.5 text-[12px] text-muted2">미답 {chatUnread}건</div>
+                </div>
+                <Icon name="chevron-right" size={15} className="text-chevron" />
+              </Link>
+            ) : null}
+          </>
+        )}
 
         <div className="h-3.5" />
       </Body>
