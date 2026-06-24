@@ -1,5 +1,5 @@
 /**
- * Demo seed for the test.owner (정호진) studio — rich, realistic data for a live demo.
+ * Demo seed for the owner (정호진) studio — rich, realistic data for a live demo.
  *
  * Idempotent: re-running deletes the demo members (by phone) + the schedules/sessions/chats
  * owned by 정호진/이수민/박지훈, then rebuilds. It does NOT touch the legacy gyeaul.master
@@ -204,7 +204,7 @@ async function main() {
     return r.id as string;
   };
   const T = {
-    owner: tid("test.owner"),
+    owner: tid("owner"),
     sumin: tid("gyeaul.sumin"),
     jihun: tid("gyeaul.jihun"),
     master: tid("gyeaul.master"),
@@ -222,7 +222,7 @@ async function main() {
   // ── roster: 정호진 대표, 김계절→senior 강사 (single owner) ──────────
   await db.from("trainers").update({ display_name: "정호진" }).eq("id", T.owner);
   await db.from("trainers").update({ role: "instructor" }).eq("id", T.master);
-  console.log("roster updated: test.owner→정호진, gyeaul.master→instructor");
+  console.log("roster updated: owner→정호진, gyeaul.master→instructor");
 
   // backdate legacy (gyeaul.master) members' join dates so "이번 달 신규" isn't inflated
   const legacyJoin: Record<string, string> = {

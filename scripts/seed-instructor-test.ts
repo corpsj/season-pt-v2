@@ -2,7 +2,7 @@
  * Create a 강사(instructor) TEST account + a small scoped roster so the instructor
  * experience (담당 회원만 보이는 캘린더/회원/채팅) demos cleanly next to the owner.
  *
- * Login: test.instructor / test1234   (강사, active)
+ * Login: staff / test1234   (강사, active)
  * Idempotent: re-running resets this instructor's members (by phone) + schedules/sessions/threads.
  *
  * Run: bun run scripts/seed-instructor-test.ts
@@ -26,7 +26,7 @@ const at = (dateISO: string, hour: number) => {
 };
 const nowISO = () => new Date().toISOString();
 
-const USERNAME = "test.instructor";
+const USERNAME = "staff";
 const EMAIL = `${USERNAME}@${DOMAIN}`;
 const PASSWORD = "test1234";
 const DISPLAY = "한지민";
