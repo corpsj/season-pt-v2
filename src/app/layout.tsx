@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
+import { SafeAreaInsets } from "@/components/shell/SafeAreaInsets";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -36,7 +37,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" className={cormorant.variable}>
-      <body>{children}</body>
+      <body>
+        <SafeAreaInsets />
+        {children}
+      </body>
     </html>
   );
 }
