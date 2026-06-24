@@ -10,6 +10,7 @@ import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/icon";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { confirmAttendance } from "@/lib/data/groups/scheduling-actions";
 import type { AttendTarget } from "@/lib/types";
@@ -20,9 +21,16 @@ export default function AttendClient({ target: t }: { target: AttendTarget }) {
   const router = useRouter();
   const toast = useToast();
   const [method, setMethod] = useState<Method>("attend");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const after = method === "cancel" ? t.remaining : t.remaining - 1;
   const cta = method === "cancel" ? "수업 취소 기록" : "출석 처리하기";
+  const confirmTitle =
+    method === "cancel" ? "수업 취소를 기록할까요?" : method === "noshow" ? "노쇼로 처리할까요?" : "출석 처리할까요?";
+  const confirmDesc =
+    method === "cancel"
+      ? "차감 없이 취소 기록만 남겨요."
+      : `잔여 ${t.remaining}회 → ${after}회로 차감돼요.`;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -81,20 +89,27 @@ export default function AttendClient({ target: t }: { target: AttendTarget }) {
       </Body>
 
       <Footer>
-        <PrimaryButton
-          icon="check-bold"
-          onClick={async () => {
-            await confirmAttendance(t.sessionId, method);
-            toast("출석이 기록되었어요");
-            router.push("/t");
-          }}
-        >
+        <PrimaryButton icon="check-bold" onClick={() => setConfirmOpen(true)}>
           {cta}
         </PrimaryButton>
         <p className="mt-2.5 text-center text-[12px] font-medium text-muted3">
           모든 차감·정정은 이력에 자동 기록돼요
         </p>
       </Footer>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmTitle}
+        description={confirmDesc}
+        confirmLabel="확인"
+        onConfirm={async () => {
+          setConfirmOpen(false);
+          await confirmAttendance(t.sessionId, method);
+          toast("출석이 기록되었어요");
+          router.back();
+        }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

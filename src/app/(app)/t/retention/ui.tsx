@@ -6,6 +6,7 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { PrimaryButton } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import type { RetentionView } from "@/lib/types";
@@ -27,6 +28,7 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
   const [guided, setGuided] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(view.items.map((i) => [i.memberId, i.guided])),
   );
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
 
   const pendingCount = view.items.filter((i) => !guided[i.memberId]).length;
 
@@ -106,22 +108,33 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
       <Footer>
         <PrimaryButton
           icon="megaphone"
-          onClick={() => {
-            setGuided((g) => {
-              const next = { ...g };
-              for (const i of view.items) next[i.memberId] = true;
-              return next;
-            });
-            toast("일괄 발송했어요");
-            startTransition(async () => {
-              await markAllGuided();
-              router.refresh();
-            });
-          }}
+          onClick={() => setBulkConfirmOpen(true)}
+          disabled={pendingCount === 0}
         >
           안내 전 {pendingCount}명 일괄 발송
         </PrimaryButton>
       </Footer>
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        title={`${pendingCount}명에게 일괄 발송할까요?`}
+        description="아직 안내하지 않은 회원 전원에게 알림톡을 보내요."
+        confirmLabel="발송"
+        onConfirm={() => {
+          setBulkConfirmOpen(false);
+          setGuided((g) => {
+            const next = { ...g };
+            for (const i of view.items) next[i.memberId] = true;
+            return next;
+          });
+          toast("일괄 발송했어요");
+          startTransition(async () => {
+            await markAllGuided();
+            router.refresh();
+          });
+        }}
+        onCancel={() => setBulkConfirmOpen(false)}
+      />
     </div>
   );
 }

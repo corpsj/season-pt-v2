@@ -9,17 +9,20 @@ import { Banner } from "@/components/ui/Banner";
 import { Avatar } from "@/components/ui/Avatar";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { acceptRequest, rejectRequest } from "@/lib/data/groups/scheduling-actions";
 import type { InboxView } from "@/lib/types";
 
 type Tab = "received" | "sent";
+type PendingAction = { id: string; kind: "accept" | "reject"; type: "change" | "cancel" };
 
 export default function InboxClient({ view }: { view: InboxView }) {
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("received");
+  const [pending, setPending] = useState<PendingAction | null>(null);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -88,25 +91,14 @@ export default function InboxClient({ view }: { view: InboxView }) {
                   <div className="mt-3.5 flex gap-2.5">
                     <button
                       type="button"
-                      onClick={async () => {
-                        await rejectRequest(item.id);
-                        toast("요청을 거절했어요");
-                        router.refresh();
-                      }}
+                      onClick={() => setPending({ id: item.id, kind: "reject", type: item.type })}
                       className="tappable flex-1 rounded-[10px] border border-ink/10 bg-card py-2.5 text-[12.5px] font-bold text-ink"
                     >
                       거절
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
-                        await acceptRequest(item.id);
-                        if (item.type === "change") router.push("/confirm");
-                        else {
-                          toast("요청을 처리했어요");
-                          router.refresh();
-                        }
-                      }}
+                      onClick={() => setPending({ id: item.id, kind: "accept", type: item.type })}
                       className="tappable flex-1 rounded-[10px] bg-sage py-2.5 text-[12.5px] font-bold text-surface"
                     >
                       수락
@@ -134,6 +126,44 @@ export default function InboxClient({ view }: { view: InboxView }) {
         )}
         <div className="h-3.5" />
       </Body>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={
+          pending?.kind === "reject"
+            ? "요청을 거절할까요?"
+            : pending?.type === "cancel"
+            ? "취소 요청을 수락할까요?"
+            : "변경 요청을 수락할까요?"
+        }
+        description={
+          pending?.kind === "reject"
+            ? "거절 후 회원에게 알림이 전송돼요."
+            : pending?.type === "cancel"
+            ? "수업이 취소 처리돼요."
+            : "일정이 변경 처리돼요."
+        }
+        confirmLabel={pending?.kind === "reject" ? "거절" : "수락"}
+        tone={pending?.kind === "reject" ? "warn" : "default"}
+        onConfirm={async () => {
+          if (!pending) return;
+          const { id, kind, type } = pending;
+          setPending(null);
+          if (kind === "reject") {
+            await rejectRequest(id);
+            toast("요청을 거절했어요");
+            router.refresh();
+          } else {
+            await acceptRequest(id);
+            if (type === "change") router.push("/confirm");
+            else {
+              toast("요청을 처리했어요");
+              router.refresh();
+            }
+          }
+        }}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }
