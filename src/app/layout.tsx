@@ -20,7 +20,11 @@ export const metadata: Metadata = {
   title: "계절 PT & 필라테스",
   description: "균형 있게, 꾸준하게 — 계절 PT 트레이너·회원 앱",
   applicationName: "계절 PT",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "계절 PT" },
+  // "black-translucent" is the ONLY iOS style that lets the webview fill the whole
+  // screen (cream bg draws behind the notch / Dynamic Island). "default"/"black" keep
+  // content below the status bar → black notch strip + env(safe-area-inset-top)=0.
+  // Trade-off: iOS forces the clock/battery glyphs WHITE (low contrast on cream).
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "계절 PT" },
   icons: {
     apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
