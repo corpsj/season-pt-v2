@@ -131,7 +131,7 @@ export function InstallPrompt() {
       aria-modal="true"
       aria-label="앱 설치"
     >
-      <div className="flex flex-1 flex-col items-center justify-center px-7 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center break-keep px-7 text-center">
         <img
           src="/brand/icon-512.png"
           alt=""
@@ -158,8 +158,9 @@ export function InstallPrompt() {
                     설치
                   </button>
                   <p className="mt-2.5 text-[12px] leading-[1.55] text-muted2">
-                    버튼을 누른 뒤 뜨는 창에서 <b className="font-bold text-ink">‘설치’</b>를 한 번 더
-                    눌러주세요.
+                    버튼을 누른 뒤 뜨는 창에서
+                    <br />
+                    <b className="font-bold text-ink">‘설치’</b>를 한 번 더 눌러주세요.
                   </p>
                 </>
               ) : null}
@@ -222,8 +223,9 @@ export function InstallPrompt() {
           ) : (
             <>
               <div className="rounded-[16px] border border-ink/[0.08] bg-card p-4 text-left text-[13px] leading-[1.6] text-muted2">
-                지금 화면(앱 안의 브라우저)에서는 설치할 수 없어요. 오른쪽 위{" "}
-                <b className="font-bold text-ink">⋯</b> 메뉴에서{" "}
+                지금 화면(앱 안의 브라우저)에서는 설치할 수 없어요.
+                <br />
+                오른쪽 위 <b className="font-bold text-ink">⋯</b> 메뉴에서{" "}
                 <b className="font-bold text-ink">‘다른 브라우저(Safari/Chrome)로 열기’</b>를 누른 뒤
                 설치해 주세요.
               </div>
