@@ -5,15 +5,22 @@ import { MEMBER_COOKIE, verifySession } from "@/lib/auth/session";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Trainer area + desktop owner console → Supabase Auth session required.
-  // (Owner-only gating beyond auth lives in requireOwnerPage on the console pages.)
-  if (pathname.startsWith("/t") || pathname.startsWith("/console")) {
+  // Trainer area → Supabase Auth session required.
+  if (pathname.startsWith("/t")) {
     const { response, user } = await updateSession(request);
     if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/login/trainer";
       return NextResponse.redirect(url);
     }
+    return response;
+  }
+
+  // Desktop owner console → keep the Supabase session fresh, but DON'T force-redirect:
+  // the console layout renders its own login screen when there's no owner session, so
+  // /console stays the single PC entry point. Owner-only gating lives in the layout.
+  if (pathname.startsWith("/console")) {
+    const { response } = await updateSession(request);
     return response;
   }
 

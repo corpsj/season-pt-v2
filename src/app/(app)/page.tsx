@@ -1,11 +1,29 @@
 import Image from "next/image";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getTrainerContext, getMemberContext } from "@/lib/data/db";
 
+/**
+ * Real desktop BROWSER only — routes PC visitors to the owner console. Excludes mobile
+ * UAs and link-preview/SEO crawlers (KakaoTalk/Facebook/Google …) so the root keeps
+ * serving its OG metadata to scrapers.
+ */
+function isDesktopBrowser(ua: string): boolean {
+  if (!ua) return false;
+  if (/bot|crawl|spider|facebookexternalhit|kakao|slack|discordbot|twitterbot|whatsapp|line\/|telegrambot|embed|preview|googlebot|bingbot|yandex|baidu|duckduckbot|applebot|petalbot|naver|yeti/i.test(ua)) return false;
+  if (/Mobi|Android|iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry/i.test(ua)) return false;
+  return true;
+}
+
 export default async function StartPage() {
+  // PC visitors land on the owner console (which renders its own login). Mobile devices
+  // and link-preview crawlers keep the member/trainer chooser below.
+  const ua = (await headers()).get("user-agent") ?? "";
+  if (isDesktopBrowser(ua)) redirect("/console");
+
   // Stay logged in: a returning user with a live session skips the chooser.
   if (await getTrainerContext()) redirect("/t");
   if (await getMemberContext()) redirect("/m");

@@ -1,17 +1,26 @@
-import { requireOwnerPage } from "@/lib/auth/guard";
+import { getTrainerContext } from "@/lib/data/db";
 import { sb } from "@/lib/data/db";
 import { getChatUnread } from "@/lib/data/groups/chat";
 import { getRetention } from "@/lib/data/groups/perf-retention";
 import { ConsoleProviders } from "@/components/console/ConsoleProviders";
 import { Sidebar } from "@/components/console/Sidebar";
+import { ConsoleLogin } from "./ConsoleLogin";
 
 /**
- * 대표 운영 콘솔 (PC) — desktop shell. Lives OUTSIDE the (app) group so it is
- * not wrapped in the mobile phone Frame. Owner-only (requireOwnerPage redirects
- * instructors to /t). Reuses the same Supabase data layer as the mobile app.
+ * 대표 운영 콘솔 (PC) — desktop shell. Lives OUTSIDE the (app) group so it is not
+ * wrapped in the mobile phone Frame. Single PC entry point: when there is no owner
+ * session it renders a simple login (아이디·비밀번호·로그인), otherwise the dashboard.
+ * Reuses the same Supabase data layer as the mobile app.
  */
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
-  const t = await requireOwnerPage();
+  const t = await getTrainerContext();
+
+  // Not signed in (or signed in as a non-owner) → show the login screen instead of the
+  // dashboard. Children (the section pages) are not rendered, so their getters never run.
+  if (!t || t.role !== "owner") {
+    return <ConsoleLogin notOwner={!!t} />;
+  }
+
   const [chatUnread, retention, pendingRes] = await Promise.all([
     getChatUnread(),
     getRetention(),
