@@ -76,7 +76,7 @@ export async function confirmAttendance(
       remaining_after: after,
       created_by: t.id,
     });
-    if (deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after);
+    if (deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after).catch(() => {}); // ponytail: notify is best-effort, attendance must not fail
   }
 
   await sb.from("sessions").update({ status: statusMap[action] }).eq("id", sessionId);
