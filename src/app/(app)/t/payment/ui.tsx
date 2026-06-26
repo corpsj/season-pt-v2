@@ -60,6 +60,8 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
 
   async function onRecord() {
     if (pending) return;
+    const hasAny = lines.some((l) => parseAmt(l.amount) > 0);
+    if (!hasAny) { toast("금액을 입력해 주세요"); return; }
     setPending(true);
     for (const l of lines) {
       const amt = parseAmt(l.amount);
@@ -78,6 +80,7 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
       }
     }
     toast("결제를 기록했어요");
+    setPending(false);
     if (summary.memberId) {
       router.push("/t/members/" + summary.memberId);
     } else {
