@@ -87,6 +87,12 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
           {deducted && <Icon name="arrow-right" size={16} className="flex-none text-chevron" />}
           {deducted && <span className="serif text-[18px] font-bold text-terracotta">{after}</span>}
         </Card>
+
+        {deducted && t.remaining <= 0 ? (
+          <Banner tone="warn" className="mt-3.5">
+            잔여 회차가 없어요. 이대로 처리하면 무료 수업으로 남아요 — 재등록(결제)을 먼저 확인하세요.
+          </Banner>
+        ) : null}
       </Body>
 
       <Footer>
@@ -105,9 +111,14 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
         confirmLabel="확인"
         onConfirm={async () => {
           setConfirmOpen(false);
-          await confirmAttendance(t.sessionId, method);
-          toast("출석이 기록되었어요");
+          const r = await confirmAttendance(t.sessionId, method);
+          if (!r.ok) {
+            toast(r.error ?? "처리에 실패했어요");
+            return;
+          }
+          toast(method === "cancel" ? "수업 취소를 기록했어요" : method === "noshow" ? "노쇼로 처리했어요" : "출석을 기록했어요");
           router.back();
+          router.refresh();
         }}
         onCancel={() => setConfirmOpen(false)}
       />

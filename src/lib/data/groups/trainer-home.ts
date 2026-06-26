@@ -3,7 +3,7 @@ import {
   sb,
   getTrainerContext,
   kstDateISO,
-  hourLabel,
+  hmLabel,
   clockHM,
   todayISO,
   dayDiff,
@@ -302,14 +302,14 @@ async function memberIdsOf(trainerId: string): Promise<string[]> {
 async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
   const meta = new Map<
     string,
-    { type: "1on1" | "2on1"; weekdays: number[]; hour: number; team?: TeamAvatar; partnerNames: string[] }
+    { type: "1on1" | "2on1"; weekdays: number[]; hour: number; minute: number; team?: TeamAvatar; partnerNames: string[] }
   >();
   if (memberIds.length === 0) return meta;
 
   // Owner views all members → no trainer filter (trainerId null); otherwise scope to the trainer.
   let sq = sb
     .from("schedules")
-    .select("id, type, weekday, hour, active, schedule_members(member_id, members(name, avatar_tone))")
+    .select("id, type, weekday, hour, minute, active, schedule_members(member_id, members(name, avatar_tone))")
     .eq("active", true);
   if (trainerId) sq = sq.eq("trainer_id", trainerId);
   const { data: schedRows } = await sq;
@@ -319,6 +319,7 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
     type: "1on1" | "2on1";
     weekday: number;
     hour: number;
+    minute: number;
     schedule_members: { member_id: string; members: { name: string; avatar_tone: string } | null }[];
   };
   const scheds = (schedRows ?? []) as unknown as SR[];
@@ -338,6 +339,7 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
     if (mine.length === 0) continue;
     const weekdays = Array.from(new Set(mine.map((s) => s.weekday))).sort((a, b) => a - b);
     const hour = mine[0].hour;
+    const minute = mine[0].minute ?? 0;
     const isTeam = mine.some((s) => s.type === "2on1");
     let team: TeamAvatar | undefined;
     const partnerNames: string[] = [];
@@ -354,7 +356,7 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
         tone2: asTone(otherSm?.members?.avatar_tone),
       };
     }
-    meta.set(mid, { type: isTeam ? "2on1" : "1on1", weekdays, hour, team, partnerNames });
+    meta.set(mid, { type: isTeam ? "2on1" : "1on1", weekdays, hour, minute, team, partnerNames });
   }
   return meta;
 }
@@ -424,7 +426,7 @@ export async function getMembers(filter: MemberFilter = "all"): Promise<MembersV
     const remaining = ms?.remaining ?? 0;
     const kind = isTeam ? "2:1" : "1:1";
     const days = sm ? sm.weekdays.map((w) => WD[w]).join("·") : "";
-    const time = sm ? hourLabel(sm.hour) : "";
+    const time = sm ? hmLabel(sm.hour, sm.minute) : "";
     const sub = sm ? `${kind} · ${days} ${time} · 잔여 ${remaining}회` : `${kind} · 잔여 ${remaining}회`;
     // derived status for filtering: rest stays rest; expiring overrides active
     const derivedStatus: "active" | "expiring" | "rest" | "inactive" =
@@ -522,7 +524,7 @@ export async function getMembersAll(): Promise<{
     const remaining = ms?.remaining ?? 0;
     const kind = isTeam ? "2:1" : "1:1";
     const days = sm ? sm.weekdays.map((w) => WD[w]).join("·") : "";
-    const time = sm ? hourLabel(sm.hour) : "";
+    const time = sm ? hmLabel(sm.hour, sm.minute) : "";
     const sub = sm ? `${kind} · ${days} ${time} · 잔여 ${remaining}회` : `${kind} · 잔여 ${remaining}회`;
     statusById[m.id] =
       m.status === "rest" ? "rest" : m.status === "inactive" ? "inactive" : isExpiring ? "expiring" : "active";

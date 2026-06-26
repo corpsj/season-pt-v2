@@ -112,7 +112,7 @@ export default async function TrainerOpsPage() {
           <Metric
             label="활성 회원"
             value={<>{ops.activeMembers}<span className="ml-0.5 text-[13px] font-medium text-muted2">명</span></>}
-            sub="전체 회원"
+            sub="회원권 보유"
           />
           <Metric
             label="이번 달 신규"

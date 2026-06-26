@@ -47,7 +47,7 @@ export default function MembersClient({
         <div className="mb-3.5">
           <StatTriple
             items={[
-              { value: view.totals.total, label: "담당 회원" },
+              { value: view.totals.total, label: me.isOwner ? "전체 회원" : "담당 회원" },
               { value: view.totals.expiring, label: "만료 임박", color: "text-terracotta" },
               { value: view.totals.rest, label: "휴회" },
             ]}

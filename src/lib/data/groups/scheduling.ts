@@ -123,14 +123,14 @@ export async function getRecordTarget(sessionId: string) {
   const first = members[0];
   const isTeam = (session?.type ?? "1on1") === "2on1";
   const dISO = session ? kstDateISO(session.scheduled_at) : todayISO();
-  const [, , da] = dISO.split("-").map(Number);
+  const [, mo, da] = dISO.split("-").map(Number);
   return {
     sessionId,
     memberId: first?.id ?? "",
     name: members.length ? sessionName(members) : "",
     initial: first ? initialOf(first.name) : "",
     avatarTone: first ? tone(first.avatar_tone) : ("sage" as AvatarTone),
-    dateLabel: `6월 ${da}일 · ${isTeam ? "2:1" : "1:1"} PT`,
+    dateLabel: `${mo}월 ${da}일 · ${isTeam ? "2:1" : "1:1"} PT`,
     exercises: [] as { name: string; kg: number; sets: number }[],
   };
 }

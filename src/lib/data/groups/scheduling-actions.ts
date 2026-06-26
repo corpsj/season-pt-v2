@@ -54,13 +54,15 @@ export async function confirmAttendance(
 
   // Atomic claim: flip status only if still scheduled, so re-entry / double-tap / retry
   // can't deduct the same session twice (no DB transaction available in this stack).
-  const { data: claimed } = await sb
+  // 강사는 본인 담당 세션만(대표는 전체) — 무스코프 변이 차단.
+  let claimQ = sb
     .from("sessions")
     .update({ status: statusMap[action] })
     .eq("id", sessionId)
-    .eq("status", "scheduled")
-    .select("scheduled_at");
-  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리된 수업이에요." };
+    .eq("status", "scheduled");
+  if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);
+  const { data: claimed } = await claimQ.select("scheduled_at");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리됐거나 담당 수업이 아니에요." };
   const scheduledAt = claimed[0].scheduled_at ?? new Date().toISOString();
 
   const settings = await getStudioSettings();
@@ -189,6 +191,14 @@ export async function sendCancelRequest(sessionId: string, reason?: string): Pro
 export async function acceptRequest(requestId: string): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
+
+  // 강사는 본인 담당 세션의 요청만 처리(대표는 전체).
+  if (t.role !== "owner") {
+    const { data: pre } = await sb.from("schedule_change_requests").select("session_id").eq("id", requestId).maybeSingle();
+    if (!pre) return { ok: false, error: "요청을 찾을 수 없어요." };
+    const { data: s } = await sb.from("sessions").select("trainer_id").eq("id", pre.session_id).maybeSingle();
+    if (s?.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  }
 
   // Atomic claim: accept only if still pending, so re-accepting a resolved request
   // can't move/cancel the session (and re-deduct) a second time.

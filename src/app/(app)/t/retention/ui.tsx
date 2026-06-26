@@ -85,7 +85,7 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
                     type="button"
                     onClick={() => {
                       setGuided((g) => ({ ...g, [item.memberId]: true }));
-                      toast("알림톡을 보냈어요");
+                      toast("안내 완료로 표시했어요");
                       startTransition(async () => {
                         await markGuided(item.memberId);
                         router.refresh();
@@ -94,7 +94,7 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
                     className="tappable flex flex-none items-center gap-1.5 rounded-[10px] bg-sage px-[13px] py-[7px] text-[12.5px] font-bold text-surface hover:brightness-105"
                   >
                     <Icon name="message-fill" size={14} />
-                    알림톡
+                    안내 완료
                   </button>
                 )}
               </Card>
@@ -111,15 +111,15 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
           onClick={() => setBulkConfirmOpen(true)}
           disabled={pendingCount === 0}
         >
-          안내 전 {pendingCount}명 일괄 발송
+          안내 전 {pendingCount}명 일괄 표시
         </PrimaryButton>
       </Footer>
 
       <ConfirmDialog
         open={bulkConfirmOpen}
-        title={`${pendingCount}명에게 일괄 발송할까요?`}
-        description="아직 안내하지 않은 회원 전원에게 알림톡을 보내요."
-        confirmLabel="발송"
+        title={`${pendingCount}명을 일괄 표시할까요?`}
+        description="아직 안내하지 않은 회원을 모두 '안내 완료'로 표시해요. (알림톡 연동 전이라 실제 발송은 되지 않아요.)"
+        confirmLabel="표시"
         onConfirm={() => {
           setBulkConfirmOpen(false);
           setGuided((g) => {
@@ -127,7 +127,7 @@ export default function RetentionUI({ view }: { view: RetentionView }) {
             for (const i of view.items) next[i.memberId] = true;
             return next;
           });
-          toast("일괄 발송했어요");
+          toast("일괄 표시했어요");
           startTransition(async () => {
             await markAllGuided();
             router.refresh();
