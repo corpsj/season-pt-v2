@@ -26,12 +26,14 @@ export default function TrainerCalendarClient({
   classesByDate,
   todayISO,
   chatUnread,
+  notifUnread,
 }: {
   me: Me;
   base: TrainerCalendarView;
   classesByDate: Record<string, TrainerDayClass[]>;
   todayISO: string;
   chatUnread: number;
+  notifUnread: number;
 }) {
   const [selected, setSelected] = useState(todayISO);
   const router = useRouter();
@@ -68,6 +70,18 @@ export default function TrainerCalendarClient({
               {base.hasInbox ? (
                 <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-[1.5px] border-surface bg-terracotta px-1 text-[10px] font-bold text-surface">
                   {base.inboxCount}
+                </span>
+              ) : null}
+            </Link>
+            <Link
+              href="/t/notifications"
+              aria-label="알림"
+              className="tappable relative flex h-[42px] w-[42px] items-center justify-center rounded-[13px] border border-ink/[0.07] bg-card text-sage-deep"
+            >
+              <Icon name="bell-fill" size={20} />
+              {notifUnread > 0 ? (
+                <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-[1.5px] border-surface bg-terracotta px-1 text-[10px] font-bold text-surface">
+                  {notifUnread}
                 </span>
               ) : null}
             </Link>

@@ -11,6 +11,7 @@ import {
   loadNewMemberMessages,
   ensureMemberThread,
 } from "./member";
+import { markNotificationRead } from "./notifications";
 import type { ChatMessageView } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -204,6 +205,13 @@ export async function markNoticesRead(): Promise<void> {
   c.set(NOTICE_READ_COOKIE, JSON.stringify(merged), COOKIE_OPTS);
   // Only refresh the My page (for the unread badge/stat). The notices screen
   // keeps its unread highlight for this visit; it clears on the next open.
+  revalidatePath("/m/my");
+}
+
+/** Mark a single in-app notification as read (member only). */
+export async function markNotifRead(id: string): Promise<void> {
+  await requireMember();
+  await markNotificationRead(id);
   revalidatePath("/m/my");
 }
 

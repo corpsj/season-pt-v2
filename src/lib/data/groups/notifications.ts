@@ -61,3 +61,9 @@ export async function getNotifications(recipientType: "member" | "trainer", reci
 export async function markNotificationRead(id: string): Promise<void> {
   await sb.from("notifications").update({ status: "read", read_at: new Date().toISOString() }).eq("id", id);
 }
+
+export async function countUnread(recipientType: "member" | "trainer", recipientId: string): Promise<number> {
+  const { count } = await sb.from("notifications").select("*", { count: "exact", head: true })
+    .eq("recipient_type", recipientType).eq("recipient_id", recipientId).eq("status", "unread").eq("channel", "in_app");
+  return count ?? 0;
+}
