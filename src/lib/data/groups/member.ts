@@ -484,13 +484,12 @@ export async function getMemberChatRoom() {
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
-  // Mark trainer messages as read by this member.
+  // 이 회원의 읽음 지점 갱신(참여자별 — 2:1에서 상대 배지에 영향 없음).
   await sb
-    .from("chat_messages")
-    .update({ read_by_member: true })
+    .from("chat_participants")
+    .update({ last_read_at: new Date().toISOString() })
     .eq("thread_id", threadId)
-    .eq("sender_type", "trainer")
-    .eq("read_by_member", false);
+    .eq("member_id", me.memberId);
 
   const messages: ChatMessageView[] = (msgs ?? []).map((m) => {
     const mine = m.sender_type === "member" && m.sender_id === me.memberId;
@@ -563,11 +562,10 @@ export async function loadNewMemberMessages(
   if (qErr) return [];
 
   await sb
-    .from("chat_messages")
-    .update({ read_by_member: true })
+    .from("chat_participants")
+    .update({ last_read_at: new Date().toISOString() })
     .eq("thread_id", threadId)
-    .eq("sender_type", "trainer")
-    .eq("read_by_member", false);
+    .eq("member_id", me.memberId);
 
   return (msgs ?? []).map((m) => {
     const mine = m.sender_type === "member" && m.sender_id === me.memberId;
@@ -591,19 +589,25 @@ export async function loadNewMemberMessages(
 export async function getMemberChatUnread(): Promise<number> {
   const me = await getMemberContext();
   if (!me) return 0;
+  // 참여자별 last_read_at 이후의 선생님 메시지를 스레드별로 카운트(회원 1~2 스레드라 N 작음).
   const { data: cp } = await sb
     .from("chat_participants")
-    .select("thread_id")
+    .select("thread_id, last_read_at")
     .eq("member_id", me.memberId);
-  const threadIds = (cp ?? []).map((r) => (r as unknown as {thread_id: string }).thread_id);
-  if (!threadIds.length) return 0;
-  const { count } = await sb
-    .from("chat_messages")
-    .select("id", { count: "exact", head: true })
-    .in("thread_id", threadIds)
-    .eq("sender_type", "trainer")
-    .eq("read_by_member", false);
-  return count ?? 0;
+  const rows = (cp ?? []) as { thread_id: string; last_read_at: string | null }[];
+  if (!rows.length) return 0;
+  let total = 0;
+  for (const row of rows) {
+    let q = sb
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("thread_id", row.thread_id)
+      .eq("sender_type", "trainer");
+    if (row.last_read_at) q = q.gt("created_at", row.last_read_at);
+    const { count } = await q;
+    total += count ?? 0;
+  }
+  return total;
 }
 
 /* ============================================================
