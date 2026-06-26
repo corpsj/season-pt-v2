@@ -358,14 +358,13 @@ export interface StudioInboxDone {
  * every pending request plus the most recent resolved ones, with the owning trainer's name.
  */
 export async function getStudioInbox(): Promise<{ pending: StudioInboxItem[]; done: StudioInboxDone[] }> {
-  const { data: reqRows } = await sb
-    .from("schedule_change_requests")
-    .select("id, session_id, type, status, reason, original_at, proposed_slots, created_at")
-    .eq("requester_type", "member")
-    .in("status", ["pending", "accepted", "rejected"])
-    .order("created_at", { ascending: false })
-    .limit(60);
-  const requests = (reqRows ?? []) as {
+  // pending은 누락되면 owner가 처리를 못 하므로 cap 없이 전부, done만 최근 일부만 — 배지 수와도 일치.
+  const cols = "id, session_id, type, status, reason, original_at, proposed_slots, created_at";
+  const [{ data: pendingRows }, { data: doneRows }] = await Promise.all([
+    sb.from("schedule_change_requests").select(cols).eq("requester_type", "member").eq("status", "pending").order("created_at", { ascending: false }),
+    sb.from("schedule_change_requests").select(cols).eq("requester_type", "member").in("status", ["accepted", "rejected"]).order("created_at", { ascending: false }).limit(12),
+  ]);
+  const requests = ([...(pendingRows ?? []), ...(doneRows ?? [])]) as {
     id: string; session_id: string; type: RequestType; status: "pending" | "accepted" | "rejected";
     reason: string | null; original_at: string | null; proposed_slots: string[] | null; created_at: string;
   }[];

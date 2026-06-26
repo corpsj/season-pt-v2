@@ -211,19 +211,27 @@ export async function getRevenue(): Promise<RevenueView> {
       m = { key, label: `${key.slice(0, 4)}년 ${Number(key.slice(5, 7))}월`, total: 0, count: 0, items: [] };
       byMonth.set(key, m);
     }
+    const isSale = amount > 0 && r.membership_id != null; // 건수는 실제 판매만(환불 음수·수동 매출 제외)
     m.total += amount;
-    m.count += 1;
+    m.count += isSale ? 1 : 0;
     m.items.push({
       id: r.id,
       date: r.paid_at,
       dateLabel: `${r.paid_at.slice(5, 7)}.${r.paid_at.slice(8, 10)}`,
       amount,
       methodLabel: METHOD_LABEL[r.method] ?? "기타",
-      label: r.membership_id ? labelByMs.get(r.membership_id) ?? "회원권" : r.note || "기타 매출",
+      label:
+        amount < 0
+          ? r.membership_id
+            ? `환불 · ${labelByMs.get(r.membership_id) ?? "회원권"}`
+            : r.note || "환불"
+          : r.membership_id
+            ? labelByMs.get(r.membership_id) ?? "회원권"
+            : r.note || "기타 매출",
     });
   }
   const months = [...byMonth.values()].sort((a, b) => b.key.localeCompare(a.key));
-  return { totalAmount, totalCount: rows.length, months };
+  return { totalAmount, totalCount: rows.filter((r) => (r.amount ?? 0) > 0 && r.membership_id != null).length, months };
 }
 
 /* ------------------------- membership products ------------------------ */

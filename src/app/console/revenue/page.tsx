@@ -22,8 +22,15 @@ export default async function ConsoleRevenuePage({
 
   const months = rev.months;
   const sel = months[i] ?? months[0] ?? { key: "", label: "기록 없음", total: 0, count: 0, items: [] };
-  const older = months[i + 1];
-  const delta = older && older.total > 0 ? Math.round(((sel.total - older.total) / older.total) * 100) : null;
+  const older = months[i + 1]; // 더 과거(데이터 있는) 달 — 이전달 네비게이션 활성 여부용
+  // '데이터 있는 직전 달'이 아니라 실제 직전 달력 월과 비교(없으면 0) — 대시보드 델타와 동일 기준.
+  const prevKey = (() => {
+    const [y, m] = sel.key.split("-").map(Number);
+    if (!y || !m) return "";
+    return `${m === 1 ? y - 1 : y}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
+  })();
+  const olderTotal = prevKey ? months.find((mm) => mm.key === prevKey)?.total ?? 0 : 0;
+  const delta = olderTotal > 0 ? Math.round(((sel.total - olderTotal) / olderTotal) * 100) : null;
 
   const gross = sel.items.filter((x) => x.amount > 0).reduce((s, x) => s + x.amount, 0);
   const refundSum = sel.items.filter((x) => x.amount < 0).reduce((s, x) => s + x.amount, 0);
