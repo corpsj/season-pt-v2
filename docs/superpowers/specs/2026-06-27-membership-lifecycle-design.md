@@ -4,7 +4,29 @@
 대상: 회원권/결제(`memberships`, `payments`), 출석 차감(`attendance_ledger`), 신규 등록 흐름, 알림(신규)
 권한 범위: 발급·결제·연장·환불·양도는 **대표 전용**
 
-## 배경 / 문제
+## ⚠️ 개정 (origin/main 리베이스 후)
+
+최초 설계는 `ec0c272` 기준이었으나, 그 사이 **trainer-ops 기능이 origin/main에 머지·배포**되며 이 설계의 상당 부분이 이미 구현됨을 발견. origin/main(`a8a15ae`)으로 리베이스 후 재설계. **실행 계획은 `../plans/2026-06-27-membership-lifecycle.md`(개정판)를 따른다.**
+
+**이미 구현됨 (재사용, 신규 작업 아님):**
+- 상품: `membership_products` 테이블 + 관리 화면 `/t/settings/products` + `createProduct/updateProduct/setProductActive`. `duration_days` 상품별. `issueMembership(memberId, productId)`가 테이블 기반.
+- 통합 등록: `createMember`가 `product`+`payment` 옵션으로 회원+스케줄+회원권+첫결제 일괄 처리.
+- 분할/혼합결제 plumbing: `recordPayment({amount?, paidAt?})` 금액 지정·다회 호출 가능 (멀티라인 UI만 신규).
+- 12시간 차감: `shouldDeduct(action, scheduledAt, settings)` + `studio_settings.cancel_cutoff_hours` + `/t/settings/policy`.
+- 알림 설정 토글: `studio_settings.notif_expiry/session/payment` + 설정 화면 (배달/피드만 신규).
+
+**재설계 결정 (사용자 확정):**
+1. 차감 = 기존 **자동 정책** 사용(`cancel_cutoff_hours=12` 설정), 인터뷰의 '수동 토글'은 폐기 → **Phase 2는 설정 1줄로 완료**.
+2. 대표/강사 이중단가 = **상품을 대표/강사 2벌 행으로 분리** + `unit_list_price`(1회 정상가) 컬럼 추가. 코드에 tier 로직 없음(대표가 발급 시 해당 상품 선택).
+3. 기존 10/20/30 상품 = **비활성화 + 8/16/24 신규**.
+
+**실제 남은 신규 작업:** 연장 · 환불(공식+정상가) · 양도 · 미수금+분할결제 UI · 잔여3회·만료 알림 배달(`notifications`) · `membership_events` · `status 'refunded'` · 8/16/24 상품 데이터(×대표/강사). 마이그레이션 번호 = **0005**.
+
+아래 원본 §1~§9 중 상품(코드 상수 `products.ts`)·Phase 2(차감)·통합 등록 부분은 위 내용으로 **대체**됨. 환불 공식·양도·알림·연장·미수금 설계는 유효(스키마만 실제에 맞춤). 
+
+---
+
+## 배경 / 문제 (원본 — 일부 대체됨)
 
 대표 인터뷰로 회원권 운영 규칙이 확정됐는데, 현재 코드와 여러 곳에서 충돌하거나 아예 비어 있다.
 
