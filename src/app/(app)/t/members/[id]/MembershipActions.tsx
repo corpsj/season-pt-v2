@@ -9,14 +9,18 @@ import {
   previewRefund,
   refundMembership,
   transferMembership,
+  pauseMembership,
+  resumeMembership,
 } from "@/lib/data/groups/membership-actions";
 
 export function MembershipActions({
   membershipId,
   canExtend,
+  paused = false,
 }: {
   membershipId: string;
   canExtend: boolean;
+  paused?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -56,6 +60,24 @@ export function MembershipActions({
     if (r.ok) router.refresh();
   }
 
+  async function onPause() {
+    if (busy) return;
+    setBusy(true);
+    const r = await pauseMembership(membershipId);
+    setBusy(false);
+    toast(r.ok ? "회원권을 일시정지했어요" : (r.error ?? "정지 실패"));
+    if (r.ok) router.refresh();
+  }
+
+  async function onResume() {
+    if (busy) return;
+    setBusy(true);
+    const r = await resumeMembership(membershipId);
+    setBusy(false);
+    toast(r.ok ? "회원권을 재개했어요 (정지기간만큼 연장)" : (r.error ?? "재개 실패"));
+    if (r.ok) router.refresh();
+  }
+
   async function onTransfer() {
     // 대표는 회원 UUID를 모르므로 휴대폰 번호로 양도 대상을 지정(서버에서 조회). 잔여 회차만 이전(일정 별도).
     const toPhone = prompt("양도받을 회원의 휴대폰 번호를 입력하세요 (잔여 회차만 이전됩니다)")?.trim();
@@ -69,19 +91,30 @@ export function MembershipActions({
 
   return (
     <>
-      <div className="flex gap-2.5">
-        {canExtend && (
-          <OutlineButton icon="clock" onClick={onExtend} disabled={busy}>
-            연장
-          </OutlineButton>
-        )}
-        <OutlineButton icon="arrow-right" onClick={onTransfer} disabled={busy}>
-          양도
-        </OutlineButton>
-        <PrimaryButton icon="coins" onClick={openRefund} disabled={busy}>
-          환불
+      {paused ? (
+        <PrimaryButton icon="clock" onClick={onResume} disabled={busy} className="w-full">
+          정지 해제 (재개)
         </PrimaryButton>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex gap-2.5">
+            {canExtend && (
+              <OutlineButton icon="clock" onClick={onExtend} disabled={busy}>
+                연장
+              </OutlineButton>
+            )}
+            <OutlineButton icon="arrow-right" onClick={onTransfer} disabled={busy}>
+              양도
+            </OutlineButton>
+            <PrimaryButton icon="coins" onClick={openRefund} disabled={busy}>
+              환불
+            </PrimaryButton>
+          </div>
+          <OutlineButton icon="clock" onClick={onPause} disabled={busy}>
+            일시정지 (부상·출장 등)
+          </OutlineButton>
+        </div>
+      )}
       <ConfirmDialog
         open={refundOpen}
         title="환불을 진행할까요?"

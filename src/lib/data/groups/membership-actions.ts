@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
+import { sb, getTrainerContext, todayISO, kstDateISO, dayDiff } from "@/lib/data/db";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { hashPassword } from "@/lib/auth/password";
 import { computeRefund } from "@/lib/data/refund";
@@ -37,6 +37,41 @@ export async function extendMembership(membershipId: string): Promise<Result> {
   await sb.from("memberships").update({ end_date: addDays(base, days), status: "active" }).eq("id", membershipId);
   await sb.from("membership_events").insert({ membership_id: membershipId, type: "extend", amount: days, note: `+${days}일`, created_by: t.id });
   revalidatePath("/t"); revalidatePath(`/t/members`);
+  return { ok: true };
+}
+
+/** 일시정지: 활성 회원권을 동결(차감·만료 중단). 재개 시 정지기간만큼 만료일 연장하려 paused_at 기록. */
+export async function pauseMembership(membershipId: string): Promise<Result> {
+  const { t, err } = await requireOwner();
+  if (!t) return { ok: false, error: err! };
+  const { data: ms } = await sb.from("memberships").select("status").eq("id", membershipId).maybeSingle();
+  if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
+  if (ms.status !== "active") return { ok: false, error: "활성 회원권만 정지할 수 있어요" };
+  // 원자적 전이(중복 정지 방지)
+  const { data: claimed } = await sb.from("memberships")
+    .update({ status: "paused", paused_at: new Date().toISOString() })
+    .eq("id", membershipId).eq("status", "active").select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 정지된 회원권이에요" };
+  await sb.from("membership_events").insert({ membership_id: membershipId, type: "pause", note: "일시정지", created_by: t.id });
+  revalidatePath("/t"); revalidatePath("/t/members"); revalidatePath(`/t/members`);
+  return { ok: true };
+}
+
+/** 재개: 정지 기간(일)만큼 만료일 연장 후 활성 복귀. */
+export async function resumeMembership(membershipId: string): Promise<Result> {
+  const { t, err } = await requireOwner();
+  if (!t) return { ok: false, error: err! };
+  const { data: ms } = await sb.from("memberships").select("status, paused_at, end_date").eq("id", membershipId).maybeSingle();
+  if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
+  if (ms.status !== "paused") return { ok: false, error: "정지된 회원권만 재개할 수 있어요" };
+  const pausedDays = ms.paused_at ? Math.max(0, dayDiff(kstDateISO(ms.paused_at as string), todayISO())) : 0;
+  const newEnd = addDays(String(ms.end_date), pausedDays);
+  const { data: claimed } = await sb.from("memberships")
+    .update({ status: "active", paused_at: null, end_date: newEnd })
+    .eq("id", membershipId).eq("status", "paused").select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 재개된 회원권이에요" };
+  await sb.from("membership_events").insert({ membership_id: membershipId, type: "resume", amount: pausedDays, note: `재개 (+${pausedDays}일 연장)`, created_by: t.id });
+  revalidatePath("/t"); revalidatePath("/t/members");
   return { ok: true };
 }
 

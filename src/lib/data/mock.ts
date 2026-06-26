@@ -217,6 +217,7 @@ export function getMemberDetail(id: string): MemberDetailView {
     schedule: m.scheduleLabel,
     injury: m.injury,
     activeMembershipId: null,
+    membershipPaused: false,
     events: [],
   };
 }

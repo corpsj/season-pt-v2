@@ -221,6 +221,7 @@ export interface MemberDetailView {
   schedule: string;
   injury?: string;
   activeMembershipId: string | null;
+  membershipPaused: boolean;
   events: { type: string; note: string | null; createdAt: string }[];
 }
 

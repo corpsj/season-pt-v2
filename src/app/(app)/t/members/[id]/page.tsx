@@ -13,7 +13,7 @@ import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
 import { EditMemberButton } from "./EditMemberButton";
 
-const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급" };
+const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급", pause: "일시정지", resume: "재개" };
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -57,7 +57,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <div className="flex items-center justify-between">
             <span className="text-[14px] font-bold">{m.product}</span>
             <span className="inline-flex items-center gap-1 rounded-lg bg-surface/15 px-2 py-1 text-[11px] font-semibold">
-              <Icon name="clock" size={12} />D-{m.dDay}
+              <Icon name="clock" size={12} />{m.membershipPaused ? "일시정지" : `D-${m.dDay}`}
             </span>
           </div>
           <div className="mb-3 mt-3 flex items-baseline gap-1.5">
@@ -128,7 +128,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             재등록 안내
           </PrimaryButton>
           {m.activeMembershipId && (
-            <MembershipActions membershipId={m.activeMembershipId} canExtend={m.remaining > 0} />
+            <MembershipActions
+              membershipId={m.activeMembershipId}
+              canExtend={!m.membershipPaused && m.remaining > 0}
+              paused={m.membershipPaused}
+            />
           )}
         </div>
       </Footer>

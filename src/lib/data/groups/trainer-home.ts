@@ -574,17 +574,17 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     injury_note: null,
   }) as { id: string; name: string; phone: string; gender: "female" | "male" | null; status: "active" | "rest" | "inactive"; avatar_tone: string; injury_note: string | null };
 
-  // active membership
+  // 현재 회원권: 활성 우선, 없으면 정지(paused)된 것. (정지 중엔 차감/만료 동결, 화면엔 표시)
   const { data: msRows } = await sb
     .from("memberships")
     .select("id, product, total_sessions, remaining_sessions, start_date, end_date, status")
     .eq("member_id", id)
-    .eq("status", "active")
+    .in("status", ["active", "paused"])
     .order("end_date", { ascending: false })
-    .limit(1);
-  const ms = (msRows ?? [])[0] as
-    | { id: string; product: string; total_sessions: number; remaining_sessions: number; start_date: string; end_date: string }
-    | undefined;
+    .limit(5);
+  const msAll = (msRows ?? []) as { id: string; product: string; total_sessions: number; remaining_sessions: number; start_date: string; end_date: string; status: string }[];
+  const ms = msAll.find((r) => r.status === "active") ?? msAll[0];
+  const membershipPaused = ms?.status === "paused";
 
   // membership events — most recent 5 for the active membership
   let events: { type: string; note: string | null; createdAt: string }[] = [];
@@ -649,6 +649,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     schedule: sm ? scheduleLabel(sm.weekdays, sm.hour) : "정기 일정 미설정",
     injury: m.injury_note ?? undefined,
     activeMembershipId: ms?.id ?? null,
+    membershipPaused,
     events,
   };
 }

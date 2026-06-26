@@ -448,6 +448,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     schedule: scheduleLabel,
     injury: member?.injury_note ?? undefined,
     activeMembershipId: null,
+    membershipPaused: false,
     events: [],
   };
 }
