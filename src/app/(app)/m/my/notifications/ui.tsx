@@ -59,7 +59,7 @@ export function MemberNotifClient({ view }: { view: MemberNotifView }) {
         ))}
 
         <Banner tone="neutral" className="mb-6">
-          기기 설정에서 알림이 꺼져 있으면 푸시가 오지 않을 수 있어요.
+          현재 잔여·만료 임박 알림이 제공되며, 나머지 항목은 순차 적용돼요. 설정은 저장됩니다.
         </Banner>
       </Body>
     </div>

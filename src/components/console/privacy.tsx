@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 
 /**
  * 매출 가리기 — blur money figures so they aren't read over the owner's shoulder
@@ -11,17 +11,15 @@ const PrivacyContext = createContext<{ hidden: boolean; toggle: () => void }>({
   toggle: () => {},
 });
 
-const KEY = "spt_console_priv";
+export const PRIVACY_COOKIE = "spt_console_priv";
 
-export function PrivacyProvider({ children }: { children: React.ReactNode }) {
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    setHidden(localStorage.getItem(KEY) === "1");
-  }, []);
+// 쿠키로 SSR 초기값을 받아 첫 페인트부터 올바른 blur 상태 → 실금액 깜빡 노출(FOUC) 방지.
+export function PrivacyProvider({ initialHidden = false, children }: { initialHidden?: boolean; children: React.ReactNode }) {
+  const [hidden, setHidden] = useState(initialHidden);
   const toggle = useCallback(() => {
     setHidden((h) => {
       const next = !h;
-      localStorage.setItem(KEY, next ? "1" : "0");
+      document.cookie = `${PRIVACY_COOKIE}=${next ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
       return next;
     });
   }, []);

@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { getTrainerContext } from "@/lib/data/db";
 import { sb } from "@/lib/data/db";
 import { getChatUnread } from "@/lib/data/groups/chat";
@@ -21,7 +22,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     return <ConsoleLogin notOwner={!!t} />;
   }
 
-  const [chatUnread, retention, pendingRes] = await Promise.all([
+  const [chatUnread, retention, pendingRes, ck] = await Promise.all([
     getChatUnread(),
     getRetention(),
     sb
@@ -29,10 +30,12 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
       .eq("requester_type", "member"),
+    cookies(),
   ]);
+  const privacyHidden = ck.get("spt_console_priv")?.value === "1";
 
   return (
-    <ConsoleProviders>
+    <ConsoleProviders initialHidden={privacyHidden}>
       <div className="relative flex h-screen w-full overflow-hidden bg-frame text-ink">
         <Sidebar
           ownerName={t.displayName}
