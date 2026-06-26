@@ -198,6 +198,8 @@ export function getMemberDetail(id: string): MemberDetailView {
   return {
     id: m.id,
     name: m.name,
+    phone: "",
+    gender: null,
     isTeam: m.type === "2on1",
     team: m.team,
     initial: m.initial,

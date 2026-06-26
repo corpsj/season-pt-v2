@@ -8,15 +8,16 @@ import { Stat } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { getMemberDetail, getMemberRecordHref } from "@/lib/data/groups/trainer-home";
+import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
 import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
+import { EditMemberButton } from "./EditMemberButton";
 
 const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급" };
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref] = await Promise.all([getMemberDetail(id), getMemberRecordHref(id)]);
+  const [m, recordHref, me] = await Promise.all([getMemberDetail(id), getMemberRecordHref(id), getMe()]);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -118,6 +119,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
               회원권 발급
             </OutlineButton>
           </div>
+          {me.isOwner && (
+            <div className="flex">
+              <EditMemberButton id={id} name={m.name} phone={m.phone} gender={m.gender} injury={m.injury} />
+            </div>
+          )}
           <PrimaryButton icon="refresh" href="/t/retention">
             재등록 안내
           </PrimaryButton>

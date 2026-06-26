@@ -560,17 +560,19 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
 
   const { data: member } = await sb
     .from("members")
-    .select("id, name, status, avatar_tone, injury_note")
+    .select("id, name, phone, gender, status, avatar_tone, injury_note")
     .eq("id", id)
     .maybeSingle();
 
   const m = (member ?? {
     id,
     name: "",
+    phone: "",
+    gender: null,
     status: "active" as const,
     avatar_tone: "sage",
     injury_note: null,
-  }) as { id: string; name: string; status: "active" | "rest" | "inactive"; avatar_tone: string; injury_note: string | null };
+  }) as { id: string; name: string; phone: string; gender: "female" | "male" | null; status: "active" | "rest" | "inactive"; avatar_tone: string; injury_note: string | null };
 
   // active membership
   const { data: msRows } = await sb
@@ -628,6 +630,8 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   return {
     id: m.id,
     name: m.name,
+    phone: m.phone ?? "",
+    gender: m.gender,
     isTeam: !!isTeam,
     team: sm?.team,
     initial: initialOf(m.name),

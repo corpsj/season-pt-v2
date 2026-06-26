@@ -340,7 +340,7 @@ function badgeForMember(status: string, endDate: string | null): BadgeView {
 export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const { data: member } = await sb
     .from("members")
-    .select("id, name, avatar_tone, status, injury_note")
+    .select("id, name, phone, gender, avatar_tone, status, injury_note")
     .eq("id", id)
     .maybeSingle();
 
@@ -425,6 +425,8 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   return {
     id,
     name,
+    phone: (member as { phone?: string } | null)?.phone ?? "",
+    gender: (member as { gender?: "female" | "male" | null } | null)?.gender ?? null,
     isTeam,
     team,
     initial,

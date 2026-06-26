@@ -202,6 +202,8 @@ export interface MembersView {
 export interface MemberDetailView {
   id: string;
   name: string;
+  phone: string;
+  gender: Gender | null;
   isTeam: boolean;
   team?: TeamAvatar;
   initial: string;

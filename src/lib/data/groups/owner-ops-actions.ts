@@ -98,6 +98,31 @@ export async function createMember(input: {
   return { ok: true, memberId: member.id, warn };
 }
 
+/** 회원 정보 수정(이름·연락처·성별·부상메모). 대표 전용. 연락처는 정규화 후 중복 시 거부. */
+export async function updateMember(
+  id: string,
+  input: { name: string; phone: string; gender: Gender; injuryNote?: string },
+): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  const name = input.name.trim();
+  const phone = normPhone(input.phone);
+  if (!name) return { ok: false, error: "이름을 입력해주세요" };
+  if (!phone) return { ok: false, error: "연락처를 입력해주세요" };
+
+  const { error } = await sb
+    .from("members")
+    .update({ name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null })
+    .eq("id", id);
+  if (error) return { ok: false, error: "이미 사용 중인 연락처이거나 수정에 실패했어요" };
+
+  revalidatePath(`/t/members/${id}`);
+  revalidatePath("/t/members");
+  return { ok: true };
+}
+
 /** 회원권 발급: membership_products에서 상품 조회, memberships insert. */
 export async function issueMembership(
   memberId: string,
