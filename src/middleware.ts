@@ -5,8 +5,9 @@ import { MEMBER_COOKIE, verifySession } from "@/lib/auth/session";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Trainer area → Supabase Auth session required.
-  if (pathname.startsWith("/t")) {
+  // Trainer area + desktop owner console → Supabase Auth session required.
+  // (Owner-only gating beyond auth lives in requireOwnerPage on the console pages.)
+  if (pathname.startsWith("/t") || pathname.startsWith("/console")) {
     const { response, user } = await updateSession(request);
     if (!user) {
       const url = request.nextUrl.clone();
@@ -31,5 +32,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/t/:path*", "/m/:path*"],
+  matcher: ["/t/:path*", "/m/:path*", "/console/:path*"],
 };
