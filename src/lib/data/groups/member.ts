@@ -156,16 +156,20 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
   const dDay = membership ? dayDiff(today, membership.end_date) : 0;
   const nowIso = new Date().toISOString(); // real instant — for past-session check
 
-  // Pending trainer change request on any of this member's sessions.
+  // Pending trainer change request on ANY of this member's sessions — must not be scoped to
+  // the viewed month, or a request for a session in another month leaves the member with no
+  // signal to act on it.
   let hasTrainerReq = false;
-  const sessionIds = rows.map((s) => s.id);
-  if (sessionIds.length) {
+  const allSessionIds = (sm ?? [])
+    .map((r) => (r as unknown as { sessions?: { id: string } }).sessions?.id)
+    .filter((id): id is string => !!id);
+  if (allSessionIds.length) {
     const { count } = await sb
       .from("schedule_change_requests")
       .select("id", { count: "exact", head: true })
       .eq("requester_type", "trainer")
       .eq("status", "pending")
-      .in("session_id", sessionIds);
+      .in("session_id", allSessionIds);
     hasTrainerReq = (count ?? 0) > 0;
   }
 
