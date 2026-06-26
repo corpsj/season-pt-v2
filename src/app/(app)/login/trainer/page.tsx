@@ -72,16 +72,6 @@ export default function TrainerLoginPage() {
             </span>
             <Icon name="chevron-right" size={15} className="text-chevron" />
           </Link>
-          <Link
-            href="/signup/owner"
-            className="tappable flex items-center gap-2.5 rounded-[13px] border border-ink/[0.08] bg-card px-4 py-[14px]"
-          >
-            <Icon name="crown" size={18} className="flex-none text-sage" />
-            <span className="flex-1 text-[13.5px] font-semibold text-ink">
-              대표 트레이너 가입하기
-            </span>
-            <Icon name="chevron-right" size={15} className="text-chevron" />
-          </Link>
         </div>
 
         {error ? (

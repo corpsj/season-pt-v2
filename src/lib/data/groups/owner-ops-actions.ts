@@ -30,7 +30,7 @@ export async function createMember(input: {
   trainerId?: string;
   product?: { productId: string };
   payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
-}): Promise<Result & { memberId?: string }> {
+}): Promise<Result & { memberId?: string; warn?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
@@ -76,22 +76,26 @@ export async function createMember(input: {
     }
   }
 
-  // 회원권 발급 (옵션)
+  // 회원권 발급 (옵션) — 하위 단계 실패는 회원 등록을 되돌리진 않되, 대표에게 경고로 노출(매출 누락 방지)
+  let warn: string | undefined;
   if (input.product?.productId) {
     const issued = await issueMembership(member.id, input.product.productId);
-    if (issued.ok && issued.membershipId && input.payment) {
-      await recordPayment({
+    if (!issued.ok) {
+      warn = "회원은 등록됐지만 회원권 발급에 실패했어요. 회원 상세에서 다시 발급해주세요.";
+    } else if (issued.membershipId && input.payment) {
+      const paid = await recordPayment({
         membershipId: issued.membershipId,
         method: input.payment.method,
         amount: input.payment.amount,
         paidAt: input.payment.paidAt,
       });
+      if (!paid.ok) warn = "회원·회원권은 등록됐지만 결제 기록에 실패했어요. 결제 화면에서 다시 기록해주세요.";
     }
   }
 
   revalidatePath("/t");
   revalidatePath("/t/members");
-  return { ok: true, memberId: member.id };
+  return { ok: true, memberId: member.id, warn };
 }
 
 /** 회원권 발급: membership_products에서 상품 조회, memberships insert. */
@@ -127,7 +131,8 @@ export async function issueMembership(
       start_date: start,
       end_date: end,
       price: prod.price,
-      list_unit_price: prod.unit_list_price ?? 0,
+      // 정상가 미설정(0) 시 단가로 폴백 — 0이 스냅샷되면 환불식 used×0=0이 되어 과지급됨
+      list_unit_price: prod.unit_list_price || (prod.sessions > 0 ? Math.round(prod.price / prod.sessions) : 0),
       status: "active",
       guided: false,
     })
@@ -177,11 +182,22 @@ export async function recordPayment(input: {
 
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
 
+  const paidAt = input.paidAt ?? todayISO();
+  // 더블클릭/재시도 방어: 직전 20초 내 동일 (회원권·금액·일자) 결제가 있으면 멱등 처리.
+  // 정당한 반복 결제(분 단위 간격)는 막지 않도록 창을 짧게.
+  if (amount !== null) {
+    const since = new Date(Date.now() - 20000).toISOString();
+    const { data: dup } = await sb.from("payments").select("id")
+      .eq("membership_id", membershipId).eq("amount", amount).eq("paid_at", paidAt)
+      .gte("created_at", since).limit(1).maybeSingle();
+    if (dup) return { ok: true };
+  }
+
   const { error } = await sb.from("payments").insert({
     membership_id: membershipId,
     method: input.method,
     amount,
-    paid_at: input.paidAt ?? todayISO(),
+    paid_at: paidAt,
     recorded_by: t.id,
   });
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
@@ -227,11 +243,12 @@ export async function createProduct(input: {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const unitListPrice = input.unitListPrice || (input.sessions > 0 ? Math.round(input.price / input.sessions) : 0);
   const { error } = await sb.from("membership_products").insert({
     name: input.name.trim(),
     sessions: input.sessions,
     price: input.price,
-    unit_list_price: input.unitListPrice,
+    unit_list_price: unitListPrice,
     duration_days: input.durationDays,
   });
   if (error) return { ok: false, error: "상품 추가에 실패했어요" };
@@ -246,9 +263,10 @@ export async function updateProduct(
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const unitListPrice = input.unitListPrice || (input.sessions > 0 ? Math.round(input.price / input.sessions) : 0);
   const { error } = await sb
     .from("membership_products")
-    .update({ name: input.name.trim(), sessions: input.sessions, price: input.price, unit_list_price: input.unitListPrice, duration_days: input.durationDays })
+    .update({ name: input.name.trim(), sessions: input.sessions, price: input.price, unit_list_price: unitListPrice, duration_days: input.durationDays })
     .eq("id", id);
   if (error) return { ok: false, error: "상품 수정에 실패했어요" };
   revalidatePath("/t/settings/products");

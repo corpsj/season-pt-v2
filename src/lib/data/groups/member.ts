@@ -9,7 +9,6 @@ import {
   hmLabel,
   todayISO,
   dayDiff,
-  nowKstParts,
 } from "@/lib/data/db";
 import { ensureChatThread } from "@/lib/data/groups/chat";
 import type {
@@ -351,7 +350,7 @@ export async function getMemberReceiveMeta(): Promise<MemberReceiveMeta> {
 /* ----------------------------- request (/m/request) ----------------------------- */
 export async function getMemberRequest(): Promise<MemberRequestView> {
   const me = await requireMember();
-  const nowIso = nowKstParts().toISOString();
+  const nowIso = new Date().toISOString(); // 실제 현재 UTC instant (scheduled_at도 UTC) — KST 보정 금지
 
   // Member's next upcoming scheduled session.
   const { data: sm } = await sb
@@ -407,7 +406,7 @@ export async function getMemberRequestMeta(): Promise<MemberRequestMeta> {
 
   // Recompute the same proposal ISO strings as getMemberRequest (deterministic).
   const me = await requireMember();
-  const nowIso = nowKstParts().toISOString();
+  const nowIso = new Date().toISOString(); // 실제 현재 UTC instant (scheduled_at도 UTC) — KST 보정 금지
   const { data: sm } = await sb
     .from("session_members")
     .select("session_id, sessions(id, scheduled_at, status)")

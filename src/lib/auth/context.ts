@@ -27,10 +27,11 @@ export const getTrainerContext = cache(async (): Promise<TrainerContext | null> 
   const admin = createSupabaseAdmin();
   const { data } = await admin
     .from("trainers")
-    .select("id, username, display_name, role, must_change_password")
+    .select("id, username, display_name, role, must_change_password, status")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!data) return null;
+  if (data.status === "inactive") return null; // 비활성 강사는 로그인돼 있어도 접근 차단
   return {
     id: data.id,
     username: data.username,

@@ -11,21 +11,32 @@ type Result = { ok: boolean; error?: string; mustChangePassword?: boolean };
 
 export async function ownerSignup(username: string, password: string): Promise<Result> {
   const admin = createSupabaseAdmin();
+  // 부트스트랩 전용: 이미 대표가 있으면 자가가입 거부. 단일 스튜디오라 누구나 공동대표로
+  // 탈취하는 것을 막는다(대표 추가는 강사 초대/직접 DB로만).
+  const { count } = await admin.from("trainers").select("id", { count: "exact", head: true }).eq("role", "owner");
+  if ((count ?? 0) > 0) return { ok: false, error: "이미 대표 계정이 있어요. 대표에게 강사 초대를 요청하세요." };
+  const uname = username.trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,20}$/.test(uname)) return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
+  if (!password || password.length < 8) return { ok: false, error: "비밀번호는 8자 이상이어야 해요" };
   const { data: created, error } = await admin.auth.admin.createUser({
-    email: toEmail(username),
+    email: toEmail(uname),
     password,
     email_confirm: true,
   });
   if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 가입에 실패했어요" };
-  await admin.from("trainers").insert({
+  const { error: insErr } = await admin.from("trainers").insert({
     auth_user_id: created.user.id,
-    username: username.trim().toLowerCase(),
+    username: uname,
     display_name: username.trim(),
     role: "owner",
     status: "active",
   });
+  if (insErr) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {}); // 고아 auth 계정 방지
+    return { ok: false, error: "가입에 실패했어요. 다시 시도해주세요" };
+  }
   const sb = await createSupabaseServer();
-  await sb.auth.signInWithPassword({ email: toEmail(username), password });
+  await sb.auth.signInWithPassword({ email: toEmail(uname), password });
   return { ok: true };
 }
 
@@ -39,9 +50,13 @@ export async function trainerLogin(username: string, password: string): Promise<
   const admin = createSupabaseAdmin();
   const { data } = await admin
     .from("trainers")
-    .select("must_change_password")
+    .select("must_change_password, status")
     .eq("auth_user_id", user!.id)
     .maybeSingle();
+  if (data?.status === "inactive") {
+    await sb.auth.signOut();
+    return { ok: false, error: "비활성화된 계정이에요. 대표에게 문의해주세요." };
+  }
   return { ok: true, mustChangePassword: !!data?.must_change_password };
 }
 
@@ -51,10 +66,17 @@ export async function setTrainerPassword(newPassword: string): Promise<Result> {
     data: { user },
   } = await sb.auth.getUser();
   if (!user) return { ok: false, error: "세션이 만료됐어요. 다시 로그인해주세요" };
+  if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword))
+    return { ok: false, error: "비밀번호는 8자 이상, 영문과 숫자를 포함해주세요" };
   const { error } = await sb.auth.updateUser({ password: newPassword });
   if (error) return { ok: false, error: error.message };
   const admin = createSupabaseAdmin();
-  await admin.from("trainers").update({ must_change_password: false, status: "active" }).eq("auth_user_id", user.id);
+  // 초대(invited) 강사의 첫 비번 설정만 active로 전환. 대표가 비활성(inactive)한 강사가
+  // 비번 변경으로 스스로 재활성화하는 것은 막는다.
+  const { data: tr } = await admin.from("trainers").select("status").eq("auth_user_id", user.id).maybeSingle();
+  const patch: { must_change_password: boolean; status?: string } = { must_change_password: false };
+  if (tr?.status === "invited") patch.status = "active";
+  await admin.from("trainers").update(patch).eq("auth_user_id", user.id);
   return { ok: true };
 }
 
