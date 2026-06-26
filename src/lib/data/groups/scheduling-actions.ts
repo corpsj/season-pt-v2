@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext } from "@/lib/data/db";
 import { getStudioSettings } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
+import { notifyLowSessions } from "@/lib/data/groups/notifications";
 import type { AttendanceAction, WorkoutExercise } from "@/lib/types";
 
 type ActionResult = { ok: boolean; error?: string };
@@ -75,6 +76,7 @@ export async function confirmAttendance(
       remaining_after: after,
       created_by: t.id,
     });
+    if (deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after);
   }
 
   await sb.from("sessions").update({ status: statusMap[action] }).eq("id", sessionId);
