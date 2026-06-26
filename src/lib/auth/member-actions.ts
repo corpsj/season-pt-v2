@@ -1,7 +1,8 @@
 "use server";
 import { cookies } from "next/headers";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
-import { verifyPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
+import { getMemberContext } from "./context";
 import { MEMBER_COOKIE, signSession } from "./session";
 
 type Result = { ok: boolean; error?: string };
@@ -66,4 +67,20 @@ export async function memberLogin(phone: string, password: string): Promise<Resu
 export async function memberLogout(): Promise<void> {
   const c = await cookies();
   c.delete(MEMBER_COOKIE);
+}
+
+/** 회원 비밀번호 변경. 현재 비밀번호 확인 후 교체(생년월일 고정 문제 해소). */
+export async function changeMemberPassword(current: string, next: string): Promise<Result> {
+  const me = await getMemberContext();
+  if (!me) return { ok: false, error: "로그인이 필요해요" };
+  const np = next.trim();
+  if (np.length < 4) return { ok: false, error: "비밀번호는 4자 이상으로 설정해주세요" };
+  const admin = createSupabaseAdmin();
+  const { data: m } = await admin.from("members").select("password_hash").eq("id", me.memberId).maybeSingle();
+  if (!m || !verifyPassword(current.trim(), m.password_hash)) {
+    return { ok: false, error: "현재 비밀번호가 일치하지 않아요" };
+  }
+  const { error } = await admin.from("members").update({ password_hash: hashPassword(np) }).eq("id", me.memberId);
+  if (error) return { ok: false, error: "변경에 실패했어요" };
+  return { ok: true };
 }

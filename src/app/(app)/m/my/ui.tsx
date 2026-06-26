@@ -1,4 +1,5 @@
 "use client";
+import { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,10 +8,12 @@ import { TabBar } from "@/components/shell/TabBar";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { Field, TextInput } from "@/components/ui/Field";
+import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { memberTabs } from "@/components/trainer/tabs";
-import { memberLogout } from "@/lib/auth/member-actions";
+import { memberLogout, changeMemberPassword } from "@/lib/auth/member-actions";
 import { cn } from "@/lib/cn";
 import type { MemberMyView } from "@/lib/types";
 
@@ -18,11 +21,27 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
   const router = useRouter();
   const toast = useToast();
   const m = view.membership;
+  const [pwOpen, setPwOpen] = useState(false);
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [pending, startTransition] = useTransition();
 
   async function onLogout() {
     await memberLogout();
     router.push("/");
     router.refresh();
+  }
+
+  function savePassword() {
+    startTransition(async () => {
+      const r = await changeMemberPassword(cur, next);
+      if (r.ok) {
+        setPwOpen(false);
+        setCur("");
+        setNext("");
+        toast("비밀번호를 변경했어요");
+      } else toast(r.error ?? "변경에 실패했어요");
+    });
   }
 
   return (
@@ -174,7 +193,8 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         {/* menu · 고객지원 */}
         <Kicker className="mx-1 mb-[9px]">고객지원</Kicker>
         <Card className="mb-4 shrink-0 overflow-hidden">
-          <MenuRow icon="document-text" label="이용약관·정책" onClick={() => toast("이용약관은 준비 중이에요")} first />
+          <MenuRow icon="lock" label="비밀번호 변경" onClick={() => setPwOpen(true)} first />
+          <MenuRow icon="document-text" label="이용약관·정책" onClick={() => toast("이용약관은 준비 중이에요")} />
           <MenuRow icon="login" label="로그아웃" onClick={onLogout} />
         </Card>
 
@@ -190,6 +210,37 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
           <div className="mt-2 text-[11px] font-medium text-chevron">앱 버전 2.4.1</div>
         </div>
       </Body>
+
+      {pwOpen && (
+        <div
+          onClick={() => setPwOpen(false)}
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(38,35,30,0.42)] sm:items-center"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+          >
+            <div className="mb-1 text-[16px] font-bold text-ink">비밀번호 변경</div>
+            <p className="mb-3.5 text-[12.5px] text-muted">처음 비밀번호는 생년월일 6자리예요.</p>
+            <div className="flex flex-col gap-3">
+              <Field icon="lock" label="현재 비밀번호">
+                <TextInput type="password" value={cur} onChange={(e) => setCur(e.target.value)} placeholder="현재 비밀번호" />
+              </Field>
+              <Field icon="lock" label="새 비밀번호">
+                <TextInput type="password" value={next} onChange={(e) => setNext(e.target.value)} placeholder="4자 이상" />
+              </Field>
+            </div>
+            <div className="mt-4 flex gap-2.5">
+              <OutlineButton onClick={() => setPwOpen(false)} className="flex-1">
+                취소
+              </OutlineButton>
+              <PrimaryButton onClick={savePassword} disabled={pending} className="flex-1">
+                변경
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
 
       <TabBar tabs={memberTabs({ chatUnread })} liveChat />
     </div>

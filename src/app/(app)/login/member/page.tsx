@@ -75,12 +75,9 @@ export default function MemberLoginPage() {
         <PrimaryButton onClick={submit} disabled={pending}>
           로그인
         </PrimaryButton>
-        <button
-          type="button"
-          className="tappable mx-auto text-[13px] font-medium text-sage-deep"
-        >
-          비밀번호 변경하기
-        </button>
+        <p className="mx-auto text-[12.5px] font-medium text-muted2">
+          비밀번호는 로그인 후 마이페이지에서 변경할 수 있어요.
+        </p>
       </Footer>
     </div>
   );
