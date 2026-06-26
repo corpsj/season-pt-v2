@@ -5,7 +5,6 @@ import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
-import { RadioOption } from "@/components/ui/RadioOption";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
@@ -15,27 +14,43 @@ import { sendMemberRequest } from "@/lib/data/groups/member-actions";
 
 type Mode = "change" | "cancel";
 
-export function MemberRequestClient({
-  view,
-  slotIsoById,
-}: {
-  view: MemberRequestView;
-  slotIsoById: Record<string, string>;
-}) {
+/** datetime-local 값("YYYY-MM-DDTHH:mm")을 KST 벽시계로 해석 → 실제 UTC ISO. (디바이스 tz 무관) */
+function kstLocalToISO(v: string): string {
+  const [date, time] = v.split("T");
+  const [Y, M, D] = date.split("-").map(Number);
+  const [H, Min] = (time ?? "0:0").split(":").map(Number);
+  return new Date(Date.UTC(Y, M - 1, D, H - 9, Min || 0)).toISOString();
+}
+
+/** 현재 KST를 datetime-local min 값으로(과거 선택 방지). */
+function kstNowLocal(): string {
+  return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 16);
+}
+
+export function MemberRequestClient({ view }: { view: MemberRequestView }) {
   const router = useRouter();
   const toast = useToast();
   const [mode, setMode] = useState<Mode>("change");
-  const [selected, setSelected] = useState(view.slots[0]?.id ?? "");
+  const [desired, setDesired] = useState("");
   const [pending, setPending] = useState(false);
 
   async function submit() {
     if (pending) return;
+    if (mode === "change" && !desired) {
+      toast("원하는 시간을 선택해주세요");
+      return;
+    }
     setPending(true);
-    const proposedSlots =
-      mode === "change" && slotIsoById[selected] ? [slotIsoById[selected]] : undefined;
+    const proposedSlots = mode === "change" ? [kstLocalToISO(desired)] : undefined;
     const res = await sendMemberRequest({ sessionId: view.sessionId, type: mode, proposedSlots });
-    toast(res.ok ? "요청을 보냈어요" : res.error ?? "요청을 보내지 못했어요");
+    if (!res.ok) {
+      toast(res.error ?? "요청을 보내지 못했어요");
+      setPending(false);
+      return;
+    }
+    toast("요청을 보냈어요");
     router.push("/m");
+    router.refresh();
   }
 
   return (
@@ -74,23 +89,27 @@ export function MemberRequestClient({
             <div className="mb-2.5">
               <Kicker>원하는 시간</Kicker>
             </div>
-            <div className="mb-5 flex flex-col gap-2.5">
-              {view.slots.map((s) => (
-                <RadioOption key={s.id} selected={selected === s.id} onClick={() => setSelected(s.id)}>
-                  <span className="text-[14px] font-bold text-ink">{s.label}</span>
-                </RadioOption>
-              ))}
-            </div>
+            <Card className="mb-5 px-[15px] py-[14px]">
+              <input
+                type="datetime-local"
+                value={desired}
+                min={kstNowLocal()}
+                onChange={(e) => setDesired(e.target.value)}
+                className="w-full bg-transparent text-[15px] font-medium text-ink outline-none"
+              />
+            </Card>
           </>
         ) : null}
 
-        <Banner tone="neutral">수업 24시간 전까지는 무료로 변경·취소할 수 있어요.</Banner>
+        <Banner tone="neutral">
+          {mode === "change" ? "원하는 날짜·시간을 직접 선택해 선생님께 제안해요." : "선생님이 확인 후 처리해요."} 취소 차감은 스튜디오 정책을 따라요.
+        </Banner>
         <div className="h-3.5" />
       </Body>
 
       <Footer>
-        <PrimaryButton icon="send" onClick={submit}>
-          변경 요청 보내기
+        <PrimaryButton icon="send" onClick={submit} disabled={pending}>
+          {mode === "change" ? "변경 요청 보내기" : "취소 요청 보내기"}
         </PrimaryButton>
       </Footer>
     </div>
