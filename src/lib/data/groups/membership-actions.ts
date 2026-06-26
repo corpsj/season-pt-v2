@@ -30,7 +30,8 @@ export async function extendMembership(membershipId: string): Promise<Result> {
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   if ((ms.remaining_sessions ?? 0) <= 0) return { ok: false, error: "잔여 회차가 없어 연장할 수 없어요" };
   const { data: prod } = await sb.from("membership_products").select("duration_days").eq("id", ms.product_id).maybeSingle();
-  const days = prod?.duration_days ?? 30;
+  if (!prod) return { ok: false, error: "상품 정보를 찾을 수 없어요" };
+  const days = prod.duration_days;
   const today = todayISO();
   const base = String(ms.end_date) > today ? String(ms.end_date) : today; // 만료됐으면 오늘부터
   await sb.from("memberships").update({ end_date: addDays(base, days), status: "active" }).eq("id", membershipId);
