@@ -572,14 +572,30 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   // active membership
   const { data: msRows } = await sb
     .from("memberships")
-    .select("product, total_sessions, remaining_sessions, start_date, end_date, status")
+    .select("id, product, total_sessions, remaining_sessions, start_date, end_date, status")
     .eq("member_id", id)
     .eq("status", "active")
     .order("end_date", { ascending: false })
     .limit(1);
   const ms = (msRows ?? [])[0] as
-    | { product: string; total_sessions: number; remaining_sessions: number; start_date: string; end_date: string }
+    | { id: string; product: string; total_sessions: number; remaining_sessions: number; start_date: string; end_date: string }
     | undefined;
+
+  // membership events — most recent 5 for the active membership
+  let events: { type: string; note: string | null; createdAt: string }[] = [];
+  if (ms) {
+    const { data: evRows } = await sb
+      .from("membership_events")
+      .select("type, note, created_at")
+      .eq("membership_id", ms.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+    events = ((evRows ?? []) as { type: string; note: string | null; created_at: string }[]).map((e) => ({
+      type: e.type,
+      note: e.note,
+      createdAt: kstDateISO(e.created_at),
+    }));
+  }
 
   const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, [id]);
   const sm = meta.get(id);
@@ -625,6 +641,8 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     body,
     schedule: sm ? scheduleLabel(sm.weekdays, sm.hour) : "정기 일정 미설정",
     injury: m.injury_note ?? undefined,
+    activeMembershipId: ms?.id ?? null,
+    events,
   };
 }
 

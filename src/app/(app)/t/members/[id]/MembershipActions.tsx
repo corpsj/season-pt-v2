@@ -1,0 +1,95 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { OutlineButton, PrimaryButton } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/components/ui/Toast";
+import {
+  extendMembership,
+  previewRefund,
+  refundMembership,
+  transferMembership,
+} from "@/lib/data/groups/membership-actions";
+
+export function MembershipActions({
+  membershipId,
+  canExtend,
+}: {
+  membershipId: string;
+  canExtend: boolean;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundDesc, setRefundDesc] = useState("");
+
+  async function onExtend() {
+    if (busy) return;
+    setBusy(true);
+    const r = await extendMembership(membershipId);
+    setBusy(false);
+    toast(r.ok ? "유효기간을 연장했어요" : (r.error ?? "연장 실패"));
+    if (r.ok) router.refresh();
+  }
+
+  async function openRefund() {
+    const p = await previewRefund(membershipId);
+    if (!p.ok) {
+      toast(p.error ?? "환불 정보를 불러오지 못했어요");
+      return;
+    }
+    // ponytail: cast — ok:true branch not a proper discriminant in inferred union
+    const pp = p as { ok: true; refund: number; used: number; deduction: number; penalty: number };
+    setRefundDesc(
+      `환불 ${pp.refund.toLocaleString()}원 (사용 ${pp.used}회 정상가 차감 ${pp.deduction.toLocaleString()} · 위약금 ${pp.penalty.toLocaleString()})`,
+    );
+    setRefundOpen(true);
+  }
+
+  async function doRefund() {
+    setRefundOpen(false);
+    setBusy(true);
+    const r = await refundMembership({ membershipId, method: "account" });
+    setBusy(false);
+    toast(r.ok ? `환불 처리했어요 (${r.refund!.toLocaleString()}원)` : (r.error ?? "환불 실패"));
+    if (r.ok) router.refresh();
+  }
+
+  async function onTransfer() {
+    // ponytail: prompt, 회원 선택 시트는 필요 시
+    const toMemberId = prompt("양도받을 기존 회원 ID")?.trim();
+    if (!toMemberId) return;
+    setBusy(true);
+    const r = await transferMembership({ membershipId, toMemberId });
+    setBusy(false);
+    toast(r.ok ? "양도했어요" : (r.error ?? "양도 실패"));
+    if (r.ok) router.push("/t/members");
+  }
+
+  return (
+    <>
+      <div className="flex gap-2.5">
+        {canExtend && (
+          <OutlineButton icon="clock" onClick={onExtend} disabled={busy}>
+            연장
+          </OutlineButton>
+        )}
+        <OutlineButton icon="arrow-right" onClick={onTransfer} disabled={busy}>
+          양도
+        </OutlineButton>
+        <PrimaryButton icon="coins" onClick={openRefund} disabled={busy}>
+          환불
+        </PrimaryButton>
+      </div>
+      <ConfirmDialog
+        open={refundOpen}
+        title="환불을 진행할까요?"
+        description={refundDesc}
+        confirmLabel="환불"
+        onConfirm={doRefund}
+        onCancel={() => setRefundOpen(false)}
+      />
+    </>
+  );
+}

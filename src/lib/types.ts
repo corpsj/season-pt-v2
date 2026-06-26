@@ -218,6 +218,8 @@ export interface MemberDetailView {
   body: BodyComposition;
   schedule: string;
   injury?: string;
+  activeMembershipId: string | null;
+  events: { type: string; note: string | null; createdAt: string }[];
 }
 
 export interface PerfBar {

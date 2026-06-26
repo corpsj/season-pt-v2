@@ -10,6 +10,9 @@ import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref } from "@/lib/data/groups/trainer-home";
 import { MessageMemberButton } from "./MessageMemberButton";
+import { MembershipActions } from "./MembershipActions";
+
+const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급" };
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -66,6 +69,21 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           </div>
         </Card>
 
+        {/* membership events history */}
+        {m.events.length > 0 && (
+          <Card className="mb-3.5 divide-y divide-ink/[0.06] px-4 py-1">
+            {m.events.map((ev, i) => (
+              <div key={i} className="flex items-center justify-between py-2.5">
+                <span className="text-[13px] font-semibold text-ink">
+                  {EV_LABEL[ev.type] ?? ev.type}
+                  {ev.note ? <span className="ml-1.5 font-normal text-muted">{ev.note}</span> : null}
+                </span>
+                <span className="text-[12px] text-muted">{ev.createdAt.replace(/-/g, ".")}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+
         {/* body composition */}
         <Card className="mb-3.5 flex px-[15px] py-3.5">
           <Stat value={m.body.weight} label="체중 (kg)" className="flex-1" />
@@ -103,6 +121,9 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <PrimaryButton icon="refresh" href="/t/retention">
             재등록 안내
           </PrimaryButton>
+          {m.activeMembershipId && (
+            <MembershipActions membershipId={m.activeMembershipId} canExtend={m.remaining > 0} />
+          )}
         </div>
       </Footer>
     </div>
