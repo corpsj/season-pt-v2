@@ -8,6 +8,7 @@ import { getStudioOps } from "@/lib/data/groups/owner-ops";
 import { getRetention } from "@/lib/data/groups/perf-retention";
 import { getChatUnread } from "@/lib/data/groups/trainer-home";
 import { getStudioToday, getTrainerPerf } from "@/lib/data/groups/console";
+import { runStudioMaintenance } from "@/lib/data/groups/maintenance";
 import type { SessionStatus } from "@/lib/types";
 
 const EXP_DAYS = 14;
@@ -51,6 +52,7 @@ function Kpi({
 }
 
 export default async function ConsoleDashboard() {
+  await runStudioMaintenance(); // best-effort: expire past memberships + materialize upcoming sessions
   const [ops, retention, today, perf, chatUnread] = await Promise.all([
     getStudioOps(),
     getRetention(),

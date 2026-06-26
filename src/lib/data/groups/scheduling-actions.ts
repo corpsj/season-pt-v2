@@ -48,12 +48,16 @@ export async function confirmAttendance(
     cancel: "cancelled",
   };
 
-  const { data: session } = await sb
+  // Atomic claim: flip status only if still scheduled, so re-entry / double-tap / retry
+  // can't deduct the same session twice (no DB transaction available in this stack).
+  const { data: claimed } = await sb
     .from("sessions")
-    .select("scheduled_at")
+    .update({ status: statusMap[action] })
     .eq("id", sessionId)
-    .maybeSingle();
-  const scheduledAt = session?.scheduled_at ?? new Date().toISOString();
+    .eq("status", "scheduled")
+    .select("scheduled_at");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리된 수업이에요." };
+  const scheduledAt = claimed[0].scheduled_at ?? new Date().toISOString();
 
   const settings = await getStudioSettings();
   const deducted = shouldDeduct(action, scheduledAt, settings);
@@ -78,8 +82,6 @@ export async function confirmAttendance(
     });
     if (deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after).catch(() => {}); // ponytail: notify is best-effort, attendance must not fail
   }
-
-  await sb.from("sessions").update({ status: statusMap[action] }).eq("id", sessionId);
 
   revalidatePath("/t");
   return { ok: true };
@@ -145,12 +147,16 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
-  const { data: req } = await sb
+  // Atomic claim: accept only if still pending, so re-accepting a resolved request
+  // can't move/cancel the session (and re-deduct) a second time.
+  const { data: claimedReq } = await sb
     .from("schedule_change_requests")
-    .select("id, session_id, type, proposed_slots")
+    .update({ status: "accepted", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
-    .maybeSingle();
-  if (!req) return { ok: false, error: "요청을 찾을 수 없어요." };
+    .eq("status", "pending")
+    .select("id, session_id, type, proposed_slots");
+  if (!claimedReq || claimedReq.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
+  const req = claimedReq[0];
 
   if (req.type === "change") {
     const slots = (req.proposed_slots as string[] | null) ?? [];
@@ -193,11 +199,6 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
     }
   }
 
-  await sb
-    .from("schedule_change_requests")
-    .update({ status: "accepted", resolved_at: new Date().toISOString() })
-    .eq("id", requestId);
-
   revalidatePath("/t");
   revalidatePath("/t/inbox");
   revalidatePath("/confirm");
@@ -209,10 +210,13 @@ export async function rejectRequest(requestId: string): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
-  await sb
+  const { data: rejected } = await sb
     .from("schedule_change_requests")
     .update({ status: "rejected", resolved_at: new Date().toISOString() })
-    .eq("id", requestId);
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
+  if (!rejected || rejected.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
 
   revalidatePath("/t/inbox");
   return { ok: true };

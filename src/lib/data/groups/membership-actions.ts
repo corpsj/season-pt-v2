@@ -59,10 +59,17 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   // ponytail: cast after guard — tsc can't narrow inferred union without explicit discriminant
   const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty } = pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number };
   if (preStatus === "refunded") return { ok: false, error: "이미 환불된 회원권이에요" };
+  // Atomic claim: flip to refunded only if not already. The DB enforces a single transition,
+  // so a double-click / concurrent refund can't insert two negative-payment rows (double payout).
+  const { data: claimed } = await sb.from("memberships")
+    .update({ status: "refunded", remaining_sessions: 0 })
+    .eq("id", input.membershipId)
+    .neq("status", "refunded")
+    .select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 환불된 회원권이에요" };
   if (preRefund > 0) {
     await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
   }
-  await sb.from("memberships").update({ status: "refunded", remaining_sessions: 0 }).eq("id", input.membershipId);
   await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "refund", amount: -preRefund, note: `환불 ${preRefund.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})`, created_by: t.id });
   revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
   return { ok: true, refund: preRefund };
