@@ -4,7 +4,7 @@ import { Body } from "@/components/shell/Body";
 import { TabBar } from "@/components/shell/TabBar";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
-import { getStudioOps } from "@/lib/data/groups/owner-ops";
+import { getStudioOps, getOutstanding } from "@/lib/data/groups/owner-ops";
 import { sb } from "@/lib/data/db";
 import { requireOwnerPage } from "@/lib/auth/guard";
 
@@ -69,9 +69,10 @@ export default async function TrainerOpsPage() {
   const isOwner = true;
   // getStudioOps re-reads the (cached) trainer context internally; overlap it with the
   // unread-count query instead of stacking them.
-  const [ops, chatUnread] = await Promise.all([
+  const [ops, chatUnread, outstanding] = await Promise.all([
     getStudioOps(),
     chatUnreadFor(t.id),
+    getOutstanding(),
   ]);
 
   const todoCount =
@@ -161,6 +162,33 @@ export default async function TrainerOpsPage() {
             </span>
             <div className="text-[13.5px] font-medium text-muted">오늘은 처리할 일이 없어요</div>
           </div>
+        )}
+
+        {/* 받을 돈 (미수금) — 결제액 < 정가인 활성 회원권. 각 행은 결제 화면으로 연결. */}
+        {outstanding.total > 0 && (
+          <>
+            <div className="mb-2 mt-6 flex items-baseline justify-between px-0.5">
+              <span className="text-[12px] font-semibold text-muted">받을 돈 (미수금) · {outstanding.count}명</span>
+              <span className="text-[13px] font-bold text-terracotta">{won(outstanding.total)}</span>
+            </div>
+            {outstanding.items.slice(0, 6).map((o) => (
+              <Link
+                key={o.memberId}
+                href={`/t/payment?member=${o.memberId}`}
+                className="tappable mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[13px]"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13.5px] font-semibold text-ink">{o.name}</div>
+                  <div className="mt-0.5 text-[12px] text-muted2">{o.product}</div>
+                </div>
+                <span className="text-[14px] font-bold text-terracotta">{won(o.outstanding)}</span>
+                <Icon name="chevron-right" size={15} className="flex-none text-chevron" />
+              </Link>
+            ))}
+            {outstanding.count > 6 && (
+              <div className="mb-1 px-1 text-[12px] text-muted2">외 {outstanding.count - 6}명</div>
+            )}
+          </>
         )}
 
         {/* 빠른 작업 */}

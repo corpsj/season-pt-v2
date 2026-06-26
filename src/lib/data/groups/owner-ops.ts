@@ -691,3 +691,39 @@ export async function getMembershipBalance(membershipId: string) {
   const price = (ms?.price as number | null) ?? null;
   return { price, paid: amounts.filter((a) => a > 0).reduce((s, a) => s + a, 0), outstanding: outstanding(price, amounts), paidInFull: paidInFull(price, amounts) };
 }
+
+export interface OutstandingView {
+  total: number;
+  count: number;
+  items: { memberId: string; name: string; product: string; outstanding: number }[];
+}
+
+/** 미수금(받을 돈) 집계: active 회원권 중 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나). */
+export async function getOutstanding(): Promise<OutstandingView> {
+  const { data: msRows } = await sb
+    .from("memberships")
+    .select("id, member_id, product, price, members(name)")
+    .eq("status", "active");
+  const ms = (msRows ?? []) as unknown as { id: string; member_id: string; product: string; price: number | null; members: { name: string } | null }[];
+  if (!ms.length) return { total: 0, count: 0, items: [] };
+
+  const { data: payRows } = await sb.from("payments").select("membership_id, amount").in("membership_id", ms.map((m) => m.id));
+  const paidByMs = new Map<string, number[]>();
+  for (const p of (payRows ?? []) as { membership_id: string; amount: number | null }[]) {
+    const arr = paidByMs.get(p.membership_id) ?? [];
+    if (p.amount != null) arr.push(p.amount);
+    paidByMs.set(p.membership_id, arr);
+  }
+
+  const items = ms
+    .map((m) => ({
+      memberId: m.member_id,
+      name: m.members?.name ?? "",
+      product: `${m.product}회권`,
+      outstanding: outstanding(m.price, paidByMs.get(m.id) ?? []),
+    }))
+    .filter((x) => x.outstanding > 0)
+    .sort((a, b) => b.outstanding - a.outstanding);
+
+  return { total: items.reduce((s, x) => s + x.outstanding, 0), count: items.length, items };
+}
