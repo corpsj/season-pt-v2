@@ -10,7 +10,7 @@ import { requireOwnerPage } from "@/lib/auth/guard";
 
 /** ₩ with thousands separators. */
 function won(n: number): string {
-  return "₩" + n.toLocaleString("ko-KR");
+  return "₩" + Math.round(n).toLocaleString("ko-KR");
 }
 
 /** Unread chat count for this trainer (for the tab badge). */

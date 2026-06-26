@@ -23,13 +23,21 @@ export function CalendarGrid({
   return (
     <Card className="px-[13px] py-[15px]">
       <div className="mb-[11px] flex items-center justify-between px-1">
-        <button type="button" aria-label="이전 달" onClick={onPrev} className="tappable text-chevron">
-          <Icon name="chevron-left" size={18} />
-        </button>
+        {onPrev ? (
+          <button type="button" aria-label="이전 달" onClick={onPrev} className="tappable text-chevron">
+            <Icon name="chevron-left" size={18} />
+          </button>
+        ) : (
+          <span className="w-[18px]" aria-hidden />
+        )}
         <span className="text-[15px] font-bold text-ink">{monthLabel}</span>
-        <button type="button" aria-label="다음 달" onClick={onNext} className="tappable text-sage-deep">
-          <Icon name="chevron-right" size={18} />
-        </button>
+        {onNext ? (
+          <button type="button" aria-label="다음 달" onClick={onNext} className="tappable text-sage-deep">
+            <Icon name="chevron-right" size={18} />
+          </button>
+        ) : (
+          <span className="w-[18px]" aria-hidden />
+        )}
       </div>
       <div className="mb-[3px] grid grid-cols-7">
         {WD.map((d, i) => (

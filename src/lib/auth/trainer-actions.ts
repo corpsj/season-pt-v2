@@ -183,6 +183,12 @@ export async function deleteInstructor(id: string): Promise<Result> {
   if ((count ?? 0) > 0)
     return { ok: false, error: "담당 회원이 있어 삭제할 수 없어요. 먼저 비활성화하거나 회원을 재배정하세요." };
 
+  // 과거 수업/일정이 있으면 hard-delete가 sessions·schedules를 cascade로 지운다(출석·매출귀속 기록 소실).
+  // 이력 보존을 위해 삭제 대신 비활성화를 쓰게 한다(E4로 비활성 강사는 접근 차단됨).
+  const { count: sessCount } = await admin.from("sessions").select("id", { count: "exact", head: true }).eq("trainer_id", id);
+  if ((sessCount ?? 0) > 0)
+    return { ok: false, error: "과거 수업 기록이 있어 삭제할 수 없어요. 대신 비활성화를 사용하세요(기록 보존)." };
+
   // null out non-cascading references so the row delete isn't blocked
   await admin.from("payments").update({ recorded_by: null }).eq("recorded_by", id);
   await admin.from("attendance_ledger").update({ created_by: null }).eq("created_by", id);
