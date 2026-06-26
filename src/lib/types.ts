@@ -376,18 +376,28 @@ export interface MemberCalendarView {
   name: string;
   remaining: number;
   dDay: number;
+  hasMembership: boolean; // false → 회원권 없음(배지 숨김)
+  expired: boolean; // 만료일 지남 → 배지에 "만료"
   hasTrainerReq: boolean;
   monthLabel: string;
   calDays: CalendarDay[];
   selDateLabel: string;
   scheduleLegend: string;
-  dayClass?: { sessionId: string; time: string; trainerName: string };
+  dayClass?: MemberDayClass;
+}
+/** A class shown under the selected calendar day. `isPast` hides the 변경 affordance. */
+export interface MemberDayClass {
+  sessionId: string;
+  time: string;
+  trainerName: string;
+  isPast: boolean;
 }
 export interface MemberReceiveView {
   trainerName: string;
   ago: string;
   before: string;
   reason?: string;
+  sessionId: string; // the session this request targets ("다른 시간 제안" deep-links to it)
   slots: { id: string; label: string }[];
 }
 export interface MemberRequestView {
@@ -395,7 +405,6 @@ export interface MemberRequestView {
   dateBox: { weekday: string; day: number };
   time: string;
   trainerName: string;
-  slots: { id: string; label: string }[];
 }
 
 /* --------------------------- member · my page --------------------------- */
@@ -431,8 +440,9 @@ export interface MemberPaymentItem {
   productLabel: string; // "1:1 PT 20회권"
   dateLabel: string; // "04.02 · 카드 결제"
   amount: number | null;
-  statusLabel: string; // "결제완료" | "사용완료"
+  statusLabel: string; // "결제완료" | "사용완료" | "환불됨" | "일시정지" | "환불"
   done: boolean; // true → 진행/완료 강조(sage), false → 종료(muted)
+  refund: boolean; // amount<0 환불 행 → 부호/톤 별도 처리
 }
 export interface MemberPaymentYear {
   year: string;
@@ -465,6 +475,7 @@ export interface MemberNotifItem {
   title: string;
   sub: string;
   on: boolean;
+  ready: boolean; // false → 아직 미연동(토글 대신 "준비 중" 표시)
 }
 export interface MemberNotifGroup {
   title: string;
@@ -472,6 +483,19 @@ export interface MemberNotifGroup {
 }
 export interface MemberNotifView {
   groups: MemberNotifGroup[];
+}
+
+/* --------------------------- member · 운동 기록 --------------------------- */
+/** One workout session the trainer logged for this member (read-only). */
+export interface MemberWorkoutRecord {
+  id: string;
+  dateLabel: string; // "6월 24일 화"
+  timeLabel: string; // "오후 9:00"
+  exercises: { name: string; kg: number; sets: number }[];
+  comment?: string;
+}
+export interface MemberWorkoutView {
+  records: MemberWorkoutRecord[];
 }
 
 /* --------------------------- membership issue --------------------------- */

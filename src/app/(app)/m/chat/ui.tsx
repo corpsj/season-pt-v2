@@ -12,6 +12,18 @@ import { mergeMessages, latestCursor, TEMP_PREFIX } from "@/lib/chat/merge";
 import { usePolling } from "@/lib/hooks/usePolling";
 import type { ChatMessageView } from "@/lib/types";
 
+/** KST calendar day (YYYY-MM-DD) for a message; optimistic (no ts) folds into today. */
+function kstDayKey(iso: string | undefined, todayKey: string): string {
+  if (!iso) return todayKey;
+  return new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
+}
+function dayChipLabel(key: string, todayKey: string, yesterdayKey: string): string {
+  if (key === todayKey) return "오늘";
+  if (key === yesterdayKey) return "어제";
+  const [, mo, d] = key.split("-");
+  return `${Number(mo)}월 ${Number(d)}일`;
+}
+
 export function MemberChatClient({
   trainerName,
   initial,
@@ -100,13 +112,27 @@ export function MemberChatClient({
       </div>
 
       <Body className="gap-2.5 py-3">
-        {/* date chip */}
-        <div className="mb-1 flex justify-center">
-          <span className="rounded-full bg-chip-soft px-2.5 py-1 text-[11px] font-medium text-muted">오늘</span>
-        </div>
-        {messages.map((m) => (
-          <ChatBubble key={m.id} mine={m.mine} sender={m.sender} text={m.text} time={m.time} />
-        ))}
+        {(() => {
+          const todayKey = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+          const yesterdayKey = new Date(Date.now() - 86400000 + 9 * 3600000).toISOString().slice(0, 10);
+          let prevKey = "";
+          const rows: React.ReactNode[] = [];
+          for (const m of messages) {
+            const key = kstDayKey(m.createdAt, todayKey);
+            if (key !== prevKey) {
+              prevKey = key;
+              rows.push(
+                <div key={`day-${key}`} className="mb-1 flex justify-center">
+                  <span className="rounded-full bg-chip-soft px-2.5 py-1 text-[11px] font-medium text-muted">
+                    {dayChipLabel(key, todayKey, yesterdayKey)}
+                  </span>
+                </div>
+              );
+            }
+            rows.push(<ChatBubble key={m.id} mine={m.mine} sender={m.sender} text={m.text} time={m.time} />);
+          }
+          return rows;
+        })()}
         <div ref={bottomRef} />
       </Body>
 

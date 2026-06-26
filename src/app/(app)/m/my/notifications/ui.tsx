@@ -45,13 +45,19 @@ export function MemberNotifClient({ view }: { view: MemberNotifView }) {
               {g.items.map((it, i) => (
                 <div
                   key={it.key}
-                  className={cn("flex items-center gap-3 p-4", i > 0 && "border-t border-ink/[0.06]")}
+                  className={cn("flex items-center gap-3 p-4", i > 0 && "border-t border-ink/[0.06]", !it.ready && "opacity-60")}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-[14.5px] font-semibold text-ink">{it.title}</div>
                     <div className="mt-[3px] text-[12px] font-medium text-muted">{it.sub}</div>
                   </div>
-                  <Switch on={it.on} onChange={(next) => toggle(it.key, next)} label={it.title} />
+                  {it.ready ? (
+                    <Switch on={it.on} onChange={(next) => toggle(it.key, next)} label={it.title} />
+                  ) : (
+                    <span className="flex-none rounded-md bg-chip-soft px-2 py-[5px] text-[11px] font-semibold text-placeholder">
+                      준비 중
+                    </span>
+                  )}
                 </div>
               ))}
             </Card>
@@ -59,7 +65,7 @@ export function MemberNotifClient({ view }: { view: MemberNotifView }) {
         ))}
 
         <Banner tone="neutral" className="mb-6">
-          현재 잔여·만료 임박 알림이 제공되며, 나머지 항목은 순차 적용돼요. 설정은 저장됩니다.
+          회원권 알림(만료·잔여)은 켜고 끌 수 있어요. ‘준비 중’ 항목은 순차적으로 제공될 예정이에요.
         </Banner>
       </Body>
     </div>

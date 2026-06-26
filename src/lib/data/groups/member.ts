@@ -16,6 +16,7 @@ import type {
   CalendarDay,
   ChatMessageView,
   MemberCalendarView,
+  MemberDayClass,
   MemberMyView,
   MemberNotice,
   MemberNoticesView,
@@ -25,6 +26,8 @@ import type {
   MemberPaymentYear,
   MemberReceiveView,
   MemberRequestView,
+  MemberWorkoutRecord,
+  MemberWorkoutView,
 } from "@/lib/types";
 
 /* ------------------------------- helpers ------------------------------- */
@@ -151,6 +154,7 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
 
   const remaining = membership?.remaining_sessions ?? 0;
   const dDay = membership ? dayDiff(today, membership.end_date) : 0;
+  const nowIso = new Date().toISOString(); // real instant — for past-session check
 
   // Pending trainer change request on any of this member's sessions.
   let hasTrainerReq = false;
@@ -169,6 +173,8 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     name: me.name,
     remaining,
     dDay,
+    hasMembership: !!membership,
+    expired: !!membership && dDay < 0,
     hasTrainerReq,
     monthLabel,
     calDays,
@@ -179,6 +185,7 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
           sessionId: sessionOnDay.id,
           time: clockLabel(sessionOnDay.scheduled_at),
           trainerName: tr?.display_name ?? "",
+          isPast: sessionOnDay.scheduled_at < nowIso,
         }
       : undefined,
   };
@@ -191,7 +198,7 @@ export type MemberCalendarDayMap = {
     string,
     {
       selDateLabel: string;
-      dayClass?: { sessionId: string; time: string; trainerName: string };
+      dayClass?: MemberDayClass;
     }
   >;
 };
@@ -223,6 +230,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
       return d >= monthStart && d < monthEndExcl && s.status !== "cancelled";
     });
 
+  const nowIso = new Date().toISOString();
   const byDay = new Map<string, { id: string; scheduled_at: string }>();
   for (const s of rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))) {
     const d = kstDateISO(s.scheduled_at);
@@ -237,7 +245,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     days[dISO] = {
       selDateLabel: `${month}월 ${n}일 ${weekdayKo(wd)}`,
       dayClass: sess
-        ? { sessionId: sess.id, time: clockLabel(sess.scheduled_at), trainerName }
+        ? { sessionId: sess.id, time: clockLabel(sess.scheduled_at), trainerName, isPast: sess.scheduled_at < nowIso }
         : undefined,
     };
   }
@@ -279,6 +287,7 @@ export async function getMemberReceive(): Promise<MemberReceiveView> {
     trainerName: "",
     ago: "",
     before: "",
+    sessionId: "",
     slots: [],
   };
   if (!sessionIds.length) return empty;
@@ -309,6 +318,7 @@ export async function getMemberReceive(): Promise<MemberReceiveView> {
     ago: agoLabel(req.created_at),
     before: req.original_at ? slotLabel(req.original_at) : "",
     reason: req.reason ?? undefined,
+    sessionId: req.session_id,
     slots,
   };
 }
@@ -348,81 +358,45 @@ export async function getMemberReceiveMeta(): Promise<MemberReceiveMeta> {
 }
 
 /* ----------------------------- request (/m/request) ----------------------------- */
-export async function getMemberRequest(): Promise<MemberRequestView> {
+/**
+ * The session a change/cancel request will target. When `sessionId` is given (deep-link
+ * from a tapped calendar day or a trainer request), use that exact session if it's the
+ * member's own, still scheduled, and in the future — otherwise fall back to the nearest
+ * upcoming session. Past/foreign ids silently fall back (safe).
+ */
+export async function getMemberRequest(sessionId?: string): Promise<MemberRequestView> {
   const me = await requireMember();
   const nowIso = new Date().toISOString(); // 실제 현재 UTC instant (scheduled_at도 UTC) — KST 보정 금지
 
-  // Member's next upcoming scheduled session.
   const { data: sm } = await sb
     .from("session_members")
     .select("session_id, sessions(id, scheduled_at, status, trainer_id)")
     .eq("member_id", me.memberId);
-  const upcoming = (sm ?? [])
+  const candidates = (sm ?? [])
     .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string; trainer_id: string } }).sessions)
     .filter((s): s is { id: string; scheduled_at: string; status: string; trainer_id: string } => !!s)
     .filter((s) => s.status === "scheduled" && s.scheduled_at >= nowIso)
-    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0];
+    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+  // Prefer the explicitly requested session; else the nearest upcoming.
+  const target = (sessionId && candidates.find((s) => s.id === sessionId)) || candidates[0];
 
   const tr = await primaryTrainer(me.memberId);
   const trainerName = tr?.display_name ?? "";
 
-  if (!upcoming) {
-    return {
-      sessionId: "",
-      dateBox: { weekday: "", day: 0 },
-      time: "",
-      trainerName,
-      slots: [],
-    };
+  if (!target) {
+    return { sessionId: "", dateBox: { weekday: "", day: 0 }, time: "", trainerName };
   }
 
-  const dISO = kstDateISO(upcoming.scheduled_at);
+  const dISO = kstDateISO(target.scheduled_at);
   const day = Number(dISO.slice(8, 10));
-  const weekday = weekdayKo(kstWeekday(upcoming.scheduled_at));
-
-  // Proposed alternatives: same hour, next two of the same weekday window (next 2 days +1/+2 wk style mirrors mock).
-  const base = new Date(upcoming.scheduled_at);
-  const proposals: { id: string; label: string }[] = [];
-  for (let i = 0; i < 2; i++) {
-    const next = new Date(base.getTime() + (i === 0 ? 1 : 3) * 86400000);
-    proposals.push({ id: i === 0 ? "a" : "b", label: slotLabel(next.toISOString()) });
-  }
+  const weekday = weekdayKo(kstWeekday(target.scheduled_at));
 
   return {
-    sessionId: upcoming.id,
+    sessionId: target.id,
     dateBox: { weekday, day },
-    time: clockLabel(upcoming.scheduled_at),
+    time: clockLabel(target.scheduled_at),
     trainerName,
-    slots: proposals,
   };
-}
-
-/** Action metadata for the request screen (per-option proposed slot ISO). */
-export type MemberRequestMeta = { slotIsoById: Record<string, string> };
-
-export async function getMemberRequestMeta(): Promise<MemberRequestMeta> {
-  const req = await getMemberRequest();
-  if (!req.sessionId || !req.slots.length) return { slotIsoById: {} };
-
-  // Recompute the same proposal ISO strings as getMemberRequest (deterministic).
-  const me = await requireMember();
-  const nowIso = new Date().toISOString(); // 실제 현재 UTC instant (scheduled_at도 UTC) — KST 보정 금지
-  const { data: sm } = await sb
-    .from("session_members")
-    .select("session_id, sessions(id, scheduled_at, status)")
-    .eq("member_id", me.memberId);
-  const upcoming = (sm ?? [])
-    .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string } }).sessions)
-    .filter((s): s is { id: string; scheduled_at: string; status: string } => !!s)
-    .filter((s) => s.status === "scheduled" && s.scheduled_at >= nowIso)
-    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0];
-  if (!upcoming) return { slotIsoById: {} };
-
-  const base = new Date(upcoming.scheduled_at);
-  const slotIsoById: Record<string, string> = {};
-  slotIsoById["a"] = new Date(base.getTime() + 1 * 86400000).toISOString();
-  slotIsoById["b"] = new Date(base.getTime() + 3 * 86400000).toISOString();
-  return { slotIsoById };
 }
 
 /* ----------------------------- chat (/m/chat) ----------------------------- */
@@ -621,36 +595,41 @@ export async function getMemberChatUnread(): Promise<number> {
    ============================================================ */
 
 export const NOTICE_READ_COOKIE = "spt_notice_reads";
-export const NOTIF_COOKIE = "spt_notif";
 
-/** Notification toggles, grouped — with sensible defaults. */
-const NOTIF_GROUPS: { title: string; items: { key: string; title: string; sub: string; def: boolean }[] }[] = [
-  {
-    title: "수업 알림",
-    items: [
-      { key: "class_status", title: "예약 확정·취소", sub: "예약 상태가 바뀌면 알려드려요", def: true },
-      { key: "class_reminder", title: "수업 1시간 전 리마인더", sub: "놓치지 않도록 미리 알림", def: true },
-      { key: "attend_deduct", title: "출석·차감 알림", sub: "수업 후 잔여 횟수를 확인", def: false },
-    ],
-  },
+/**
+ * Notification toggles, grouped. `ready` marks whether a generator actually delivers it —
+ * only 만료/잔여 are wired (notifications.ts). Unready items render as "준비 중" (no live toggle),
+ * so the screen never pretends to control something it can't.
+ */
+const NOTIF_GROUPS: { title: string; items: { key: string; title: string; sub: string; def: boolean; ready: boolean }[] }[] = [
   {
     title: "회원권",
     items: [
-      { key: "expiry_soon", title: "만료 임박 안내", sub: "유효기간 D-7부터 안내", def: true },
-      { key: "low_sessions", title: "잔여 횟수 소진 임박", sub: "3회 이하로 남으면 알림", def: true },
+      { key: "expiry_soon", title: "만료 임박 안내", sub: "유효기간 D-7부터 안내", def: true, ready: true },
+      { key: "low_sessions", title: "잔여 횟수 소진 임박", sub: "3회 이하로 남으면 알림", def: true, ready: true },
+    ],
+  },
+  {
+    title: "수업 알림",
+    items: [
+      { key: "class_status", title: "예약 확정·취소", sub: "예약 상태가 바뀌면 알려드려요", def: true, ready: false },
+      { key: "class_reminder", title: "수업 1시간 전 리마인더", sub: "놓치지 않도록 미리 알림", def: true, ready: false },
+      { key: "attend_deduct", title: "출석·차감 알림", sub: "수업 후 잔여 횟수를 확인", def: false, ready: false },
     ],
   },
   {
     title: "마케팅",
     items: [
-      { key: "events", title: "이벤트·혜택 소식", sub: "할인·프로모션 안내", def: false },
-      { key: "night_push", title: "야간 푸시 (21–8시)", sub: "늦은 시간 알림 받기", def: false },
+      { key: "events", title: "이벤트·혜택 소식", sub: "할인·프로모션 안내", def: false, ready: false },
+      { key: "night_push", title: "야간 푸시 (21–8시)", sub: "늦은 시간 알림 받기", def: false, ready: false },
     ],
   },
 ];
 
 /** Valid notification keys (for action-side validation). */
 export const NOTIF_KEYS = NOTIF_GROUPS.flatMap((g) => g.items.map((i) => i.key));
+/** Keys whose toggle is actually honored by a generator. */
+export const NOTIF_READY_KEYS = NOTIF_GROUPS.flatMap((g) => g.items.filter((i) => i.ready).map((i) => i.key));
 
 async function readNoticeReadIds(): Promise<string[]> {
   const c = await cookies();
@@ -674,16 +653,11 @@ function unreadNoticeCount(noticeIds: string[], readIds: string[]): number {
   return noticeIds.filter((id) => !readIds.includes(id)).length;
 }
 
-async function readNotifOverrides(): Promise<Record<string, boolean>> {
-  const c = await cookies();
-  const raw = c.get(NOTIF_COOKIE)?.value;
-  if (!raw) return {};
-  try {
-    const o: unknown = JSON.parse(raw);
-    return o && typeof o === "object" && !Array.isArray(o) ? (o as Record<string, boolean>) : {};
-  } catch {
-    return {};
-  }
+/** Per-member notification prefs (DB-backed, so the background scan can honor them). */
+export async function readMemberNotifPrefs(memberId: string): Promise<Record<string, boolean>> {
+  const { data } = await sb.from("members").select("notif_prefs").eq("id", memberId).maybeSingle();
+  const p = data?.notif_prefs as unknown;
+  return p && typeof p === "object" && !Array.isArray(p) ? (p as Record<string, boolean>) : {};
 }
 
 /** Number of sessions this member actually attended (누적 출석). Count-only (no row transfer). */
@@ -816,21 +790,33 @@ export async function getMemberPayments(): Promise<MemberPaymentsView> {
     .order("paid_at", { ascending: false });
   const payments = pays ?? [];
 
+  // Status label by membership state (positive rows) — refund rows (amount<0) are tagged separately.
+  const MEMBERSHIP_PAYMENT_STATUS: Record<string, string> = {
+    active: "결제완료",
+    refunded: "환불됨",
+    paused: "일시정지",
+    expired: "사용완료",
+    used: "사용완료",
+  };
+
   let totalAmount = 0;
   const items: (MemberPaymentItem & { paidAt: string })[] = payments.map((p) => {
     const m = byId.get(p.membership_id);
     const total = m?.total_sessions ?? 0;
-    const done = (m?.status ?? "active") === "active";
     const mm = String(p.paid_at).slice(5, 7);
     const dd = String(p.paid_at).slice(8, 10);
     if (typeof p.amount === "number") totalAmount += p.amount;
+    const isRefund = typeof p.amount === "number" && p.amount < 0;
+    const status = m?.status ?? "active";
+    const done = !isRefund && status === "active";
     return {
       id: p.id,
       productLabel: `1:1 PT ${total}회권`,
-      dateLabel: `${mm}.${dd} · ${PAYMENT_METHOD_LABEL[p.method] ?? "결제"}`,
+      dateLabel: `${mm}.${dd} · ${isRefund ? "환불" : PAYMENT_METHOD_LABEL[p.method] ?? "결제"}`,
       amount: p.amount ?? null,
-      statusLabel: done ? "결제완료" : "사용완료",
+      statusLabel: isRefund ? "환불" : MEMBERSHIP_PAYMENT_STATUS[status] ?? "사용완료",
       done,
+      refund: isRefund,
       paidAt: String(p.paid_at),
     };
   });
@@ -845,11 +831,50 @@ export async function getMemberPayments(): Promise<MemberPaymentsView> {
     void paidAt;
     yearMap.get(y)!.push(pub);
   }
+  // 건수는 "결제 건"만(환불행 제외) — 헤더/연도 카운트 일관.
   const years: MemberPaymentYear[] = [...yearMap.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([year, list]) => ({ year, count: list.length, items: list }));
+    .map(([year, list]) => ({ year, count: list.filter((it) => !it.refund).length, items: list }));
+  const totalCount = items.filter((it) => !it.refund).length;
 
-  return { totalAmount, totalCount: payments.length, years };
+  return { totalAmount, totalCount, years };
+}
+
+/* ----------------------------- 운동 기록 (/m/my/records) ----------------------------- */
+/** Workout records the trainer logged for this member (read-only, newest first). */
+export async function getMemberWorkoutRecords(): Promise<MemberWorkoutView> {
+  const me = await requireMember();
+  const { data } = await sb
+    .from("workout_records")
+    .select("id, exercises, comment, created_at, sessions(scheduled_at)")
+    .eq("member_id", me.memberId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const records: MemberWorkoutRecord[] = (data ?? []).map((r) => {
+    const row = r as unknown as {
+      id: string;
+      exercises: unknown;
+      comment: string | null;
+      created_at: string;
+      sessions?: { scheduled_at: string } | null;
+    };
+    const when = row.sessions?.scheduled_at ?? row.created_at;
+    const dISO = kstDateISO(when);
+    const dateLabel = `${Number(dISO.slice(5, 7))}월 ${Number(dISO.slice(8, 10))}일 ${weekdayKo(kstWeekday(when))}`;
+    const exercises = (Array.isArray(row.exercises) ? row.exercises : [])
+      .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
+      .filter((e) => typeof e?.name === "string")
+      .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+    return {
+      id: row.id,
+      dateLabel,
+      timeLabel: clockLabel(when),
+      exercises,
+      comment: row.comment ?? undefined,
+    };
+  });
+  return { records };
 }
 
 /* ----------------------------- A3 · 공지사항 ----------------------------- */
@@ -876,8 +901,8 @@ export async function getMemberNotices(): Promise<MemberNoticesView> {
 
 /* ----------------------------- A4 · 알림 설정 ----------------------------- */
 export async function getMemberNotifSettings(): Promise<MemberNotifView> {
-  await requireMember();
-  const overrides = await readNotifOverrides();
+  const me = await requireMember();
+  const overrides = await readMemberNotifPrefs(me.memberId);
   return {
     groups: NOTIF_GROUPS.map((g) => ({
       title: g.title,
@@ -885,6 +910,7 @@ export async function getMemberNotifSettings(): Promise<MemberNotifView> {
         key: it.key,
         title: it.title,
         sub: it.sub,
+        ready: it.ready,
         on: typeof overrides[it.key] === "boolean" ? overrides[it.key] : it.def,
       })),
     })),

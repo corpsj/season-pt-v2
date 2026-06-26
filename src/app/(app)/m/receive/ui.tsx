@@ -57,7 +57,7 @@ export function MemberReceiveClient({
 
         {/* trainer row */}
         <div className="mb-4 flex items-center gap-2.5">
-          <Avatar initial="계" tone="sage" size={36} />
+          <Avatar initial={view.trainerName.charAt(0) || "선"} tone="sage" size={36} />
           <span className="text-[14px] font-bold text-ink">{view.trainerName} 선생님</span>
           <span className="text-[12px] font-medium text-muted">{view.ago}</span>
         </div>
@@ -88,7 +88,7 @@ export function MemberReceiveClient({
       <Footer>
         <div className="flex flex-col gap-2.5">
           <PrimaryButton onClick={accept}>이 시간으로 변경</PrimaryButton>
-          <OutlineButton href="/m/request">다른 시간 제안</OutlineButton>
+          <OutlineButton href={view.sessionId ? `/m/request?s=${view.sessionId}` : "/m/request"}>다른 시간 제안</OutlineButton>
           <button
             type="button"
             onClick={reject}

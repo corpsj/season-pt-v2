@@ -39,9 +39,11 @@ export function MemberCalendarClient({
             <div className="text-[13px] font-medium text-muted">내 일정</div>
             <div className="whitespace-nowrap text-[21px] font-bold text-ink">{view.name} 님</div>
           </div>
-          <Badge variant="remaining" icon="ticket-fill">
-            잔여 {view.remaining} · D-{view.dDay}
-          </Badge>
+          {view.hasMembership ? (
+            <Badge variant="remaining" icon="ticket-fill">
+              잔여 {view.remaining} · {view.expired ? "만료" : `D-${view.dDay}`}
+            </Badge>
+          ) : null}
         </div>
 
         {/* trainer change-request banner */}
@@ -81,13 +83,19 @@ export function MemberCalendarClient({
               <div className="text-[13.5px] font-bold text-ink">1:1 PT · {dayClass.time}</div>
               <div className="mt-0.5 text-[12px] font-medium text-muted">{dayClass.trainerName}</div>
             </div>
-            <Link
-              href="/m/request"
-              className="tappable flex flex-none items-center gap-1 rounded-[9px] bg-sage-banner2 px-[11px] py-[7px] text-[11.5px] font-bold text-sage-deep"
-            >
-              <Icon name="clock" size={13} />
-              변경
-            </Link>
+            {dayClass.isPast ? (
+              <span className="flex-none rounded-[9px] bg-chip-soft px-[11px] py-[7px] text-[11.5px] font-bold text-placeholder">
+                지난 수업
+              </span>
+            ) : (
+              <Link
+                href={`/m/request?s=${dayClass.sessionId}`}
+                className="tappable flex flex-none items-center gap-1 rounded-[9px] bg-sage-banner2 px-[11px] py-[7px] text-[11.5px] font-bold text-sage-deep"
+              >
+                <Icon name="clock" size={13} />
+                변경
+              </Link>
+            )}
           </Card>
         ) : (
           <EmptyState icon="calendar" title="이 날은 수업이 없어요" />

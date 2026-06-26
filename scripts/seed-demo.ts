@@ -15,7 +15,9 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 if (!url || !serviceKey) throw new Error("missing supabase env");
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-const TODAY = "2026-06-24"; // KST anchor (currentDate)
+// KST anchor = the real day the seed runs, so the demo always stays fresh relative to "now"
+// (no stale "upcoming" sessions/requests in the past). Dynamic by design.
+const TODAY = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 const DAY = 86400000;
 const addDays = (iso: string, n: number) =>
   new Date(new Date(iso + "T00:00:00Z").getTime() + n * DAY).toISOString().slice(0, 10);
@@ -297,9 +299,10 @@ async function main() {
         .select("id").single();
       await db.from("schedule_members").insert(memberIds.map((mid) => ({ schedule_id: sched!.id, member_id: mid })));
 
-      // generate sessions from sessionsSince..2026-06-30 on matching weekday
+      // generate sessions from sessionsSince..(TODAY+21d) on matching weekday — keeps a
+      // ~3주 future window relative to whenever the seed runs (no stale calendars).
       let cur = m.sessionsSince;
-      const end = "2026-06-30";
+      const end = addDays(TODAY, 21);
       while (cur <= end) {
         const [y, mo, d] = cur.split("-").map(Number);
         if (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() === s.weekday) {
@@ -397,7 +400,44 @@ async function main() {
     });
     reqCount++;
   }
+  // ── trainer → member change request (회원 receive 화면 데모: 윤채원) ──
+  {
+    const up = memberUpcoming["chaewon"];
+    if (up) {
+      await db.from("schedule_change_requests").insert({
+        session_id: up.id, requester_type: "trainer", requester_id: T.owner,
+        type: "change", status: "pending",
+        reason: "센터 정기 점검 일정과 겹쳐서, 이번 수업 시간 조정 부탁드려요.",
+        original_at: up.iso,
+        // 미래 슬롯만(과거 제안 방지)
+        proposed_slots: [at(addDays(TODAY, 1), 11), at(addDays(TODAY, 3), 18), at(addDays(TODAY, 4), 19)],
+      });
+      console.log("trainer→member request: 1 (chaewon)");
+    }
+  }
+
   console.log(`chats: 3 threads, change requests: ${reqCount}`);
+
+  // ── notices (대표 게시 공지, 회원 앱 노출) ─────────────────────────
+  await db.from("notices").delete().eq("created_by", T.owner); // idempotent
+  await db.from("notices").insert([
+    { tag: "중요", tone: "important", title: "7월 14일(월) 정기 휴무 안내", body: "시설 정기 점검으로 7월 14일은 휴무예요. 해당일 수업은 선생님이 미리 조정해 드려요.", created_by: T.owner, created_at: at("2026-06-25", 10) },
+    { tag: "시설", tone: "facility", title: "샤워실 리모델링 완료", body: "샤워실 공사가 마무리되어 정상 이용 가능합니다. 그동안 이용에 불편을 드려 죄송했어요.", created_by: T.owner, created_at: at("2026-06-20", 14) },
+    { tag: "운영", tone: "ops", title: "여름 재등록 이벤트", body: "7월 한 달간 재등록하시면 2회를 추가로 적립해 드려요. 자세한 내용은 담당 선생님에게 문의해 주세요.", created_by: T.owner, created_at: at("2026-06-18", 11) },
+  ]);
+  console.log("notices: 3");
+
+  // ── extra historical workout records for the demo member (richer 운동 기록) ──
+  // session_id null → getter falls back to created_at for the date label.
+  await db.from("workout_records").insert([
+    { session_id: null, member_id: idByKey.chaewon, created_by: T.owner, created_at: at(addDays(TODAY, -7), 21),
+      exercises: [{ name: "스쿼트", kg: 45, sets: 5 }, { name: "레그컬", kg: 30, sets: 4 }, { name: "플랭크", kg: 0, sets: 3 }],
+      comment: "하체 위주 세션. 무릎 정렬 좋아졌어요." },
+    { session_id: null, member_id: idByKey.chaewon, created_by: T.owner, created_at: at(addDays(TODAY, -14), 21),
+      exercises: [{ name: "벤치프레스", kg: 25, sets: 4 }, { name: "숄더프레스", kg: 12, sets: 4 }],
+      comment: "상체 첫 세션. 가벼운 무게로 폼부터 잡았어요." },
+  ]);
+  console.log("workout_records: +2 historical (chaewon)");
 
   console.log("\n✅ demo seed complete");
 }

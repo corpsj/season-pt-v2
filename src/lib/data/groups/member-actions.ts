@@ -5,11 +5,11 @@ import { sb, getMemberContext } from "@/lib/data/db";
 import { notifyTrainersOfRequest } from "@/lib/data/groups/notifications";
 import {
   NOTICE_READ_COOKIE,
-  NOTIF_COOKIE,
-  NOTIF_KEYS,
+  NOTIF_READY_KEYS,
   clockLabel,
   loadNewMemberMessages,
   ensureMemberThread,
+  readMemberNotifPrefs,
 } from "./member";
 import { markNotificationRead } from "./notifications";
 import type { ChatMessageView } from "@/lib/types";
@@ -230,23 +230,15 @@ export async function markNotifRead(id: string): Promise<void> {
   revalidatePath("/m/my");
 }
 
-/** Toggle one notification setting (per device). */
+/** Toggle one notification setting (per member, DB-backed so the scan honors it). */
 export async function setMemberNotifSetting(key: string, on: boolean): Promise<Result> {
-  await requireMember();
-  if (!NOTIF_KEYS.includes(key)) return { ok: false, error: "알 수 없는 설정이에요" };
-  const c = await cookies();
-  let obj: Record<string, boolean> = {};
-  const raw = c.get(NOTIF_COOKIE)?.value;
-  if (raw) {
-    try {
-      const o: unknown = JSON.parse(raw);
-      if (o && typeof o === "object" && !Array.isArray(o)) obj = o as Record<string, boolean>;
-    } catch {
-      /* ignore malformed cookie */
-    }
-  }
-  obj[key] = on;
-  c.set(NOTIF_COOKIE, JSON.stringify(obj), COOKIE_OPTS);
+  const me = await requireMember();
+  // Only wired notifications are settable; "준비 중" items have no live toggle.
+  if (!NOTIF_READY_KEYS.includes(key)) return { ok: false, error: "아직 준비 중인 알림이에요" };
+  const prefs = await readMemberNotifPrefs(me.memberId);
+  prefs[key] = on;
+  const { error } = await sb.from("members").update({ notif_prefs: prefs }).eq("id", me.memberId);
+  if (error) return { ok: false, error: "설정을 저장하지 못했어요" };
   revalidatePath("/m/my/notifications");
   return { ok: true };
 }

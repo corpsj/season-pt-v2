@@ -65,21 +65,31 @@ export default async function MemberPaymentsPage() {
                       key={it.id}
                       className={cn("flex items-center gap-[13px] py-[15px]", i > 0 && "border-t border-ink/[0.06]")}
                     >
-                      <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[10px] bg-sage-banner2 text-sage-deep">
-                        <Icon name="ticket-fill" size={19} />
+                      <span
+                        className={cn(
+                          "flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[10px]",
+                          it.refund ? "bg-warm-banner text-terracotta" : "bg-sage-banner2 text-sage-deep"
+                        )}
+                      >
+                        <Icon name={it.refund ? "refresh" : "ticket-fill"} size={19} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="text-[14.5px] font-semibold text-ink">{it.productLabel}</div>
                         <div className="mt-[3px] text-[12px] font-medium text-muted">{it.dateLabel}</div>
                       </div>
                       <div className="text-right">
-                        <div className="whitespace-nowrap text-[14.5px] font-bold text-ink">
+                        <div
+                          className={cn(
+                            "whitespace-nowrap text-[14.5px] font-bold",
+                            it.refund ? "text-terracotta" : "text-ink"
+                          )}
+                        >
                           {it.amount != null ? `${won(it.amount)}원` : "—"}
                         </div>
                         <div
                           className={cn(
                             "mt-[3px] text-[11px] font-semibold",
-                            it.done ? "text-sage-deep" : "text-placeholder"
+                            it.refund ? "text-terracotta" : it.done ? "text-sage-deep" : "text-placeholder"
                           )}
                         >
                           {it.statusLabel}

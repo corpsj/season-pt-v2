@@ -17,6 +17,8 @@ import { memberLogout, changeMemberPassword } from "@/lib/auth/member-actions";
 import { cn } from "@/lib/cn";
 import type { MemberMyView } from "@/lib/types";
 
+const APP_VERSION = "1.0.0";
+
 export function MemberMyClient({ view, chatUnread, notifUnread }: { view: MemberMyView; chatUnread: number; notifUnread: number }) {
   const router = useRouter();
   const toast = useToast();
@@ -87,14 +89,6 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
                 <span className="text-[12px] font-bold tracking-[0.02em] text-surface">{view.statusLabel}</span>
               </div>
             </div>
-            <button
-              type="button"
-              aria-label="프로필 편집"
-              onClick={() => toast("프로필 편집은 준비 중이에요")}
-              className="tappable flex h-9 w-9 flex-none items-center justify-center rounded-[11px] bg-surface/[0.16] text-surface"
-            >
-              <Icon name="pencil" size={17} />
-            </button>
           </div>
 
           {/* stats */}
@@ -184,7 +178,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         <Kicker className="mx-1 mb-[9px]">내 활동</Kicker>
         <Card className="mb-[18px] shrink-0 overflow-hidden">
           <MenuRow icon="coins-fill" label="결제·구매 내역" href="/m/my/payments" first />
-          <MenuRow icon="document-text" label="운동 기록" onClick={() => toast("운동 기록은 준비 중이에요")} />
+          <MenuRow icon="document-text" label="운동 기록" href="/m/my/records" />
           <MenuRow icon="bell-fill" label="알림" href="/m/my/notifications/feed" badge={notifUnread} />
           <MenuRow icon="setting" label="알림 설정" href="/m/my/notifications" />
           <MenuRow icon="megaphone-fill" label="공지사항" href="/m/my/notices" badge={view.unreadNotices} />
@@ -194,7 +188,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         <Kicker className="mx-1 mb-[9px]">고객지원</Kicker>
         <Card className="mb-4 shrink-0 overflow-hidden">
           <MenuRow icon="lock" label="비밀번호 변경" onClick={() => setPwOpen(true)} first />
-          <MenuRow icon="document-text" label="이용약관·정책" onClick={() => toast("이용약관은 준비 중이에요")} />
+          <MenuRow icon="document-text" label="이용약관·정책" href="/m/my/policy" />
           <MenuRow icon="login" label="로그아웃" onClick={onLogout} />
         </Card>
 
@@ -207,7 +201,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
           >
             회원 탈퇴
           </button>
-          <div className="mt-2 text-[11px] font-medium text-chevron">앱 버전 2.4.1</div>
+          <div className="mt-2 text-[11px] font-medium text-chevron">앱 버전 {APP_VERSION}</div>
         </div>
       </Body>
 

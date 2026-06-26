@@ -16,6 +16,14 @@ async function hasUnread(membershipId: string, type: "low_sessions" | "expiring"
   return !!data;
 }
 
+/** 회원별 알림 토글(미설정이면 기본 on). 스튜디오 게이트는 호출부에서 이미 적용됨. */
+async function memberNotifEnabled(memberId: string, key: string): Promise<boolean> {
+  const { data } = await sb.from("members").select("notif_prefs").eq("id", memberId).maybeSingle();
+  const p = data?.notif_prefs as Record<string, boolean> | null;
+  const v = p?.[key];
+  return typeof v === "boolean" ? v : true;
+}
+
 /** 잔여 ≤3 알림(회원+담당 선생님). dedup: 같은 회원권 unread 있으면 skip. */
 export async function notifyLowSessions(membershipId: string, memberId: string, remaining: number): Promise<void> {
   if (!isLowSessions(remaining)) return;
@@ -23,10 +31,11 @@ export async function notifyLowSessions(membershipId: string, memberId: string, 
   if (await hasUnread(membershipId, "low_sessions")) return;
   const common = { type: "low_sessions", title: "잔여 수업 임박", body: `남은 수업이 ${remaining}회예요.`, membership_id: membershipId };
   const rows = [
-    { recipient_type: "member", recipient_id: memberId, ...common },
+    // 회원 본인 알림은 회원 설정을 따른다(트레이너 알림은 항상 발송).
+    ...((await memberNotifEnabled(memberId, "low_sessions")) ? [{ recipient_type: "member", recipient_id: memberId, ...common }] : []),
     ...(await trainersOf(memberId)).map((tid) => ({ recipient_type: "trainer", recipient_id: tid, ...common })),
   ];
-  await sb.from("notifications").insert(rows);
+  if (rows.length) await sb.from("notifications").insert(rows);
 }
 
 /** 만료 N일 이내 active 회원권 → expiring 알림. dedup 적용. */
@@ -40,9 +49,11 @@ export async function scanExpiringMemberships(): Promise<{ created: number }> {
     if (await hasUnread(m.id as string, "expiring")) continue;
     const common = { type: "expiring", title: "회원권 만료 임박", body: `만료 D-${dDay}예요.`, membership_id: m.id };
     const inserts = [
-      { recipient_type: "member", recipient_id: m.member_id, ...common },
+      // 회원 본인 알림은 회원 설정을 따른다(트레이너 알림은 항상 발송).
+      ...((await memberNotifEnabled(m.member_id as string, "expiry_soon")) ? [{ recipient_type: "member", recipient_id: m.member_id, ...common }] : []),
       ...(await trainersOf(m.member_id as string)).map((tid) => ({ recipient_type: "trainer", recipient_id: tid, ...common })),
     ];
+    if (inserts.length === 0) continue;
     await sb.from("notifications").insert(inserts);
     created += inserts.length;
   }

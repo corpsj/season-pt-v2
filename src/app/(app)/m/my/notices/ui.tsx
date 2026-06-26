@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
-import { useToast } from "@/components/ui/Toast";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { markNoticesRead } from "@/lib/data/groups/member-actions";
 import { cn } from "@/lib/cn";
 import type { MemberNoticesView, NoticeTone } from "@/lib/types";
@@ -16,7 +16,6 @@ const TONE_TAG: Record<NoticeTone, string> = {
 const READ_TAG = "text-muted bg-chip-soft";
 
 export function MemberNoticesClient({ view }: { view: MemberNoticesView }) {
-  const toast = useToast();
   // Snapshot on mount so the unread highlight persists for this visit even after
   // markNoticesRead() re-renders the route. Cleared on the next open.
   const [notices] = useState(view.notices);
@@ -35,6 +34,9 @@ export function MemberNoticesClient({ view }: { view: MemberNoticesView }) {
           <span className="whitespace-nowrap text-[19px] font-bold tracking-[-0.01em] text-ink">공지사항</span>
         </div>
 
+        {notices.length === 0 ? (
+          <EmptyState icon="megaphone-fill" title="아직 공지가 없어요" desc="새 공지가 올라오면 여기에 표시돼요." />
+        ) : (
         <Card className="shrink-0 overflow-hidden">
           {notices.map((n, i) => (
             <div
@@ -66,16 +68,7 @@ export function MemberNoticesClient({ view }: { view: MemberNoticesView }) {
             </div>
           ))}
         </Card>
-
-        <div className="py-[18px] text-center">
-          <button
-            type="button"
-            onClick={() => toast("지난 공지는 준비 중이에요")}
-            className="tappable text-[12.5px] font-semibold text-muted"
-          >
-            지난 공지 더보기
-          </button>
-        </div>
+        )}
       </Body>
     </div>
   );
