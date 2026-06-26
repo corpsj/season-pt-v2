@@ -58,8 +58,9 @@ export async function getNotifications(recipientType: "member" | "trainer", reci
   return (data ?? []).map((n) => ({ id: n.id as string, type: n.type as string, title: n.title as string, body: n.body as string | null, createdAt: n.created_at as string, status: n.status as string }));
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
-  await sb.from("notifications").update({ status: "read", read_at: new Date().toISOString() }).eq("id", id);
+export async function markNotificationRead(id: string, recipientType: "member" | "trainer", recipientId: string): Promise<void> {
+  await sb.from("notifications").update({ status: "read", read_at: new Date().toISOString() })
+    .eq("id", id).eq("recipient_type", recipientType).eq("recipient_id", recipientId);
 }
 
 export async function countUnread(recipientType: "member" | "trainer", recipientId: string): Promise<number> {

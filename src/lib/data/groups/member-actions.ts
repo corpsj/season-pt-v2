@@ -210,8 +210,8 @@ export async function markNoticesRead(): Promise<void> {
 
 /** Mark a single in-app notification as read (member only). */
 export async function markNotifRead(id: string): Promise<void> {
-  await requireMember();
-  await markNotificationRead(id);
+  const me = await requireMember();
+  await markNotificationRead(id, "member", me.memberId);
   revalidatePath("/m/my");
 }
 

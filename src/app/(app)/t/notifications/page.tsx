@@ -18,7 +18,7 @@ export default async function TrainerNotifsPage() {
   const items = await getNotifications("trainer", t.id);
   const unread = items.filter((n) => n.status === "unread");
   if (unread.length > 0) {
-    await Promise.all(unread.map((n) => markNotificationRead(n.id)));
+    await Promise.all(unread.map((n) => markNotificationRead(n.id, "trainer", t.id)));
   }
 
   return (
