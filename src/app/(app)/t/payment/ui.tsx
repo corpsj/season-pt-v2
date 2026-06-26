@@ -19,11 +19,31 @@ const todayStr = () => {
   return d.toISOString().slice(0, 10);
 };
 
+const METHOD_OPTS: { value: PaymentMethod; label: string }[] = [
+  { value: "cash", label: "현금" },
+  { value: "card", label: "카드" },
+  { value: "account", label: "계좌" },
+];
+
+function parseAmt(s: string) {
+  return Number(s.replace(/[^\d]/g, "")) || 0;
+}
+
 export function PaymentClient({ summary }: { summary: PaymentSummary }) {
   const router = useRouter();
   const toast = useToast();
-  const [method, setMethod] = useState<PaymentMethod>("card");
-  const [amount, setAmount] = useState(summary.amount != null ? String(summary.amount) : "");
+
+  // 초기 금액: 미수금 > 전체 금액 > 빈 값 순
+  const defaultAmt =
+    summary.outstanding != null
+      ? String(summary.outstanding)
+      : summary.amount != null
+        ? String(summary.amount)
+        : "";
+
+  const [lines, setLines] = useState<{ method: PaymentMethod; amount: string }[]>([
+    { method: "card", amount: defaultAmt },
+  ]);
   const [payDate, setPayDate] = useState(todayStr());
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -31,21 +51,31 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
   const memberName = summary.memberName || "—";
   const product = summary.productLabel || "—";
 
+  const totalEntered = lines.reduce((s, l) => s + parseAmt(l.amount), 0);
+  // 미수 = price − Σ기존결제 − Σ이번입력
+  const remaining =
+    summary.price != null
+      ? summary.price - (summary.paid ?? 0) - totalEntered
+      : null;
+
   async function onRecord() {
     if (pending) return;
     setPending(true);
-    const parsedAmount = amount ? Number(amount.replace(/[^\d]/g, "")) : undefined;
-    const res = await recordPayment({
-      memberId: summary.memberId ?? undefined,
-      membershipId: summary.membershipId ?? undefined,
-      method,
-      amount: parsedAmount,
-      paidAt: payDate || undefined,
-    });
-    if (!res.ok) {
-      setPending(false);
-      toast(res.error ?? "결제 기록에 실패했어요");
-      return;
+    for (const l of lines) {
+      const amt = parseAmt(l.amount);
+      if (amt <= 0) continue;
+      const r = await recordPayment({
+        memberId: summary.memberId ?? undefined,
+        membershipId: summary.membershipId ?? undefined,
+        method: l.method,
+        amount: amt,
+        paidAt: payDate || undefined,
+      });
+      if (!r.ok) {
+        toast(r.error ?? "결제 기록 실패");
+        setPending(false);
+        return;
+      }
     }
     toast("결제를 기록했어요");
     if (summary.memberId) {
@@ -56,9 +86,7 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
     router.refresh();
   }
 
-  const amountDisplay = amount
-    ? `₩${Number(amount.replace(/[^\d]/g, "") || 0).toLocaleString()}`
-    : "₩0";
+  const totalDisplay = `₩${totalEntered.toLocaleString()}`;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -74,40 +102,76 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
           <div className="text-[13px] font-medium text-muted">
             {memberName} · {product}
           </div>
-          <div className="serif mt-1.5 text-[34px] leading-none text-ink">{amountDisplay}</div>
+          <div className="serif mt-1.5 text-[34px] leading-none text-ink">{totalDisplay}</div>
+          {remaining != null && (
+            <div
+              className={`mt-2 text-[12.5px] font-semibold ${
+                remaining < 0 ? "text-terracotta" : "text-muted"
+              }`}
+            >
+              결제 후 미수금 ₩{Math.abs(remaining).toLocaleString()}
+              {remaining < 0 ? " (초과)" : ""}
+            </div>
+          )}
         </Card>
 
-        <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
-        <SegmentedToggle
-          className="mb-6"
-          options={[
-            { value: "cash", label: "현금" },
-            { value: "card", label: "카드" },
-            { value: "account", label: "계좌" },
-          ]}
-          value={method}
-          onChange={setMethod}
-        />
+        {/* 결제일 공통 */}
+        <Field icon="calendar" label="결제일" className="mb-5">
+          <TextInput
+            type="date"
+            value={payDate}
+            onChange={(e) => setPayDate(e.target.value)}
+          />
+        </Field>
 
-        <div className="mb-4 flex flex-col gap-3">
-          <Field icon="calendar" label="결제일">
-            <TextInput
-              type="date"
-              value={payDate}
-              onChange={(e) => setPayDate(e.target.value)}
-            />
-          </Field>
-          <Field icon="coins" label="금액">
-            <TextInput
-              inputMode="numeric"
-              placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </Field>
+        {/* 결제 줄별 */}
+        <div className="flex flex-col gap-3">
+          {lines.map((line, i) => (
+            <Card key={i} className="px-4 py-4">
+              {lines.length > 1 && (
+                <div className="mb-2 text-[12px] font-semibold text-muted5">
+                  {i + 1}번 결제
+                </div>
+              )}
+              <SegmentedToggle
+                className="mb-3"
+                options={METHOD_OPTS}
+                value={line.method}
+                onChange={(v) =>
+                  setLines((ls) =>
+                    ls.map((l, j) => (j === i ? { ...l, method: v } : l))
+                  )
+                }
+              />
+              <Field icon="coins" label="금액">
+                <TextInput
+                  inputMode="numeric"
+                  placeholder="0"
+                  value={line.amount}
+                  onChange={(e) =>
+                    setLines((ls) =>
+                      ls.map((l, j) =>
+                        j === i ? { ...l, amount: e.target.value } : l
+                      )
+                    )
+                  }
+                />
+              </Field>
+            </Card>
+          ))}
         </div>
 
-        <Banner tone="neutral">PG 연동 전이라 수기로 기록해요.</Banner>
+        <button
+          type="button"
+          className="mt-3 text-[13px] font-semibold text-sage"
+          onClick={() => setLines((ls) => [...ls, { method: "card", amount: "" }])}
+        >
+          + 결제 줄 추가
+        </button>
+
+        <div className="mt-5">
+          <Banner tone="neutral">PG 연동 전이라 수기로 기록해요.</Banner>
+        </div>
         <div className="h-3.5" />
       </Body>
 
@@ -118,9 +182,12 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
       <ConfirmDialog
         open={confirmOpen}
         title="결제를 기록할까요?"
-        description={`${memberName} · ${product} · ${amountDisplay}`}
+        description={`${memberName} · ${product} · ${totalDisplay}`}
         confirmLabel="기록"
-        onConfirm={() => { setConfirmOpen(false); onRecord(); }}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onRecord();
+        }}
         onCancel={() => setConfirmOpen(false)}
       />
     </div>

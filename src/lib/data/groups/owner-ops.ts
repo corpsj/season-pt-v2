@@ -37,6 +37,9 @@ export interface PaymentSummary {
   productLabel: string; // "20회권"
   amount: number | null;
   payDateLabel: string; // "06.22"
+  price: number | null;       // 회원권 정가 (null = 회원권 없음)
+  paid: number;               // 기존 누적 결제액
+  outstanding: number | null; // null = 회원권 없음, 0+ = 미수금
 }
 
 const TONE_FALLBACK: AvatarTone = "sage";
@@ -453,6 +456,9 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
       productLabel: "",
       amount: null,
       payDateLabel,
+      price: null,
+      paid: 0,
+      outstanding: null,
     };
   }
 
@@ -468,6 +474,17 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
       .maybeSingle(),
   ]);
 
+  // 미수금 계산: 기존 결제 내역 포함 (getMembershipBalance 재사용)
+  let price: number | null = ms?.price ?? null;
+  let paid = 0;
+  let outstanding: number | null = null;
+  if (ms?.id) {
+    const bal = await getMembershipBalance(ms.id);
+    price = bal.price;
+    paid = bal.paid;
+    outstanding = bal.outstanding;
+  }
+
   return {
     membershipId: ms?.id ?? null,
     memberId,
@@ -475,6 +492,9 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
     productLabel: ms?.product ? `${ms.product}회권` : "",
     amount: ms?.price ?? null,
     payDateLabel,
+    price,
+    paid,
+    outstanding,
   };
 }
 
