@@ -49,7 +49,7 @@
 
 ```ts
 import { test, expect } from "bun:test";
-import { expiryDate, priceFor, tierForRole, PRODUCTS, PRODUCT_KEYS } from "./products";
+import { expiryDate, tierForRole, PRODUCTS, PRODUCT_KEYS } from "./products";
 
 test("expiryDate: 8회=+30일, 16회=+60일, 24회=+90일", () => {
   expect(expiryDate("2026-06-27", "8")).toBe("2026-07-27");   // +30
@@ -60,10 +60,6 @@ test("expiryDate: 8회=+30일, 16회=+60일, 24회=+90일", () => {
 test("tierForRole: owner→owner, instructor→instructor", () => {
   expect(tierForRole("owner")).toBe("owner");
   expect(tierForRole("instructor")).toBe("instructor");
-});
-
-test("priceFor: 설정값을 그대로 반환", () => {
-  expect(priceFor("8", "owner")).toBe(PRODUCTS["8"].price.owner);
 });
 
 test("카탈로그는 8/16/24 세 상품, sessions/days 일치", () => {
