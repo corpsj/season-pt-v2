@@ -18,14 +18,18 @@ async function memberIdsForSession(sessionId: string): Promise<string[]> {
   return (data ?? []).map((r) => r.member_id as string);
 }
 
-/** Active membership row (latest by end_date) for a member. */
+/**
+ * 회원의 "현재 사용 중" 활성 회원권 = 만료가 가장 임박한 것(end_date asc).
+ * 표시(member.ts)·잔여(scheduling.ts)와 동일 기준이어야 차감 대상과 회원 화면이 일치한다.
+ * (먼저 만료될 회원권부터 소진 = 회차 미사용 만료 방지.)
+ */
 async function activeMembership(memberId: string) {
   const { data } = await sb
     .from("memberships")
     .select("id, remaining_sessions")
     .eq("member_id", memberId)
     .eq("status", "active")
-    .order("end_date", { ascending: false })
+    .order("end_date", { ascending: true })
     .limit(1)
     .maybeSingle();
   return data as { id: string; remaining_sessions: number } | null;
@@ -135,6 +139,45 @@ export async function sendPropose(
     reason: reason ?? null,
     original_at: session?.scheduled_at ?? null,
     proposed_slots: proposedSlots,
+  });
+
+  revalidatePath("/t");
+  revalidatePath("/t/inbox");
+  return { ok: true };
+}
+
+/** Trainer requests to cancel this session: insert a pending cancel request (회원 확인 대상). */
+export async function sendCancelRequest(sessionId: string, reason?: string): Promise<ActionResult> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "권한이 없어요." };
+
+  const { data: session } = await sb
+    .from("sessions")
+    .select("scheduled_at, status")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요." };
+
+  // 동일 세션에 대기 중인 요청이 있으면 중복 생성 방지
+  const { data: dup } = await sb
+    .from("schedule_change_requests")
+    .select("id")
+    .eq("session_id", sessionId)
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
+  if (dup) return { ok: false, error: "이미 대기 중인 요청이 있어요." };
+
+  await sb.from("schedule_change_requests").insert({
+    session_id: sessionId,
+    requester_type: "trainer",
+    requester_id: t.id,
+    type: "cancel",
+    status: "pending",
+    reason: reason ?? null,
+    original_at: session.scheduled_at,
+    proposed_slots: [],
   });
 
   revalidatePath("/t");

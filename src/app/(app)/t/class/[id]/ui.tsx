@@ -1,5 +1,7 @@
 "use client";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
@@ -10,6 +12,7 @@ import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { sendCancelRequest } from "@/lib/data/groups/scheduling-actions";
 import type { AvatarTone, TeamAvatar as TeamAvatarType } from "@/lib/types";
 
 type ClassDetailView = {
@@ -25,6 +28,27 @@ type ClassDetailView = {
 
 export default function ClassDetailClient({ id, view }: { id: string; view: ClassDetailView }) {
   const toast = useToast();
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+
+  function requestCancel() {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    startTransition(async () => {
+      const r = await sendCancelRequest(view.sessionId);
+      setConfirming(false);
+      if (r.ok) {
+        toast("취소 요청을 보냈어요");
+        router.push("/t/inbox");
+        router.refresh();
+      } else {
+        toast(r.error ?? "취소 요청에 실패했어요");
+      }
+    });
+  }
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -82,16 +106,19 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
 
           <button
             type="button"
-            onClick={() => toast("취소 요청을 보냈어요")}
-            className="tappable flex w-full items-center gap-3 px-4 py-[15px] text-left"
+            onClick={requestCancel}
+            disabled={pending}
+            className="tappable flex w-full items-center gap-3 px-4 py-[15px] text-left disabled:opacity-60"
           >
             <span className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full bg-warm-banner">
               <Icon name="close" size={18} className="text-terracotta" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-bold text-ink">수업 취소 요청</span>
+              <span className="block text-[14px] font-bold text-ink">
+                {confirming ? "한 번 더 눌러 취소 요청" : "수업 취소 요청"}
+              </span>
               <span className="mt-0.5 block text-[12px] text-muted">
-                이번 수업 취소를 요청해요
+                {confirming ? "회원에게 취소 요청이 전송돼요" : "이번 수업 취소를 요청해요"}
               </span>
             </span>
             <Icon name="chevron-right" size={16} className="text-chevron" />
@@ -99,7 +126,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
         </Card>
 
         <Banner tone="neutral" className="mt-3.5">
-          변경·취소 요청은 수업 24시간 전까지 보낼 수 있어요.
+          변경·취소 요청은 수업 시작 전에 미리 보내주세요. 취소 차감은 스튜디오 정책을 따라요.
         </Banner>
         <div className="h-3.5" />
       </Body>

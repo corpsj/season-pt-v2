@@ -9,6 +9,7 @@ import {
   dayDiff,
   nowKstParts,
 } from "@/lib/data/db";
+import { isExpiringWindow } from "@/lib/data/notify";
 import type {
   AvatarTone,
   BadgeView,
@@ -278,7 +279,7 @@ async function countExpiring(trainerId: string, today: string): Promise<number> 
     .eq("status", "active");
   const expiring = new Set<string>();
   for (const r of (data ?? []) as { member_id: string; end_date: string; status: string }[]) {
-    if (dayDiff(today, r.end_date) <= 14) expiring.add(r.member_id);
+    if (isExpiringWindow(dayDiff(today, r.end_date))) expiring.add(r.member_id);
   }
   return expiring.size;
 }
@@ -366,8 +367,8 @@ function scheduleLabel(weekdays: number[], hour: number): string {
   return `매주 ${days} ${period} ${h12}시`;
 }
 
-function badgeForMember(status: "active" | "rest" | "inactive", dDay: number | null): BadgeView {
-  if (dDay !== null && dDay <= 14) {
+function badgeForMember(dDay: number | null): BadgeView {
+  if (dDay !== null && isExpiringWindow(dDay)) {
     const variant: BadgeView["variant"] = dDay <= 5 ? "expiringNear" : "expiringSoon";
     return { text: `D-${dDay}`, variant };
   }
@@ -417,7 +418,7 @@ export async function getMembers(filter: MemberFilter = "all"): Promise<MembersV
   const enriched = memberRows.map((m) => {
     const ms = msByMember.get(m.id);
     const dDay = ms ? ms.dDay : null;
-    const isExpiring = dDay !== null && dDay <= 14;
+    const isExpiring = dDay !== null && isExpiringWindow(dDay);
     const sm = meta.get(m.id);
     const isTeam = sm?.type === "2on1";
     const remaining = ms?.remaining ?? 0;
@@ -436,7 +437,7 @@ export async function getMembers(filter: MemberFilter = "all"): Promise<MembersV
       isTeam,
       team: sm?.team,
       sub,
-      badge: badgeForMember(m.status, dDay),
+      badge: badgeForMember(dDay),
       _status: derivedStatus,
     };
   });
@@ -515,7 +516,7 @@ export async function getMembersAll(): Promise<{
   const items = memberRows.map((m) => {
     const ms = msByMember.get(m.id);
     const dDay = ms ? ms.dDay : null;
-    const isExpiring = dDay !== null && dDay <= 14;
+    const isExpiring = dDay !== null && isExpiringWindow(dDay);
     const sm = meta.get(m.id);
     const isTeam = sm?.type === "2on1";
     const remaining = ms?.remaining ?? 0;
@@ -533,7 +534,7 @@ export async function getMembersAll(): Promise<{
       isTeam,
       team: sm?.team,
       sub,
-      badge: badgeForMember(m.status, dDay),
+      badge: badgeForMember(dDay),
     };
   });
 
@@ -629,7 +630,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     team: sm?.team,
     initial: initialOf(m.name),
     avatarTone: asTone(m.avatar_tone),
-    badge: badgeForMember(m.status, ms ? dDay : null),
+    badge: badgeForMember(ms ? dDay : null),
     typeLabel,
     product: productLabel,
     remaining,

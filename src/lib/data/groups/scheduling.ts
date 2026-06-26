@@ -54,7 +54,7 @@ async function remainingFor(memberId: string): Promise<number> {
     .select("remaining_sessions")
     .eq("member_id", memberId)
     .eq("status", "active")
-    .order("end_date", { ascending: false })
+    .order("end_date", { ascending: true }) // 만료 임박 우선 — 차감/표시와 동일 기준
     .limit(1)
     .maybeSingle();
   return data?.remaining_sessions ?? 0;

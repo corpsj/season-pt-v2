@@ -67,14 +67,14 @@ export function clockLabel(iso: string): string {
   return `오후 ${h - 12}:${mm}`;
 }
 
-/** Member's active membership (most recent by start_date). */
+/** Member's active membership = 만료가 가장 임박한 것(end_date asc) — 차감 대상과 동일 기준. */
 async function activeMembership(memberId: string) {
   const { data } = await sb
     .from("memberships")
     .select("id, remaining_sessions, total_sessions, end_date, status")
     .eq("member_id", memberId)
     .eq("status", "active")
-    .order("start_date", { ascending: false })
+    .order("end_date", { ascending: true })
     .limit(1)
     .maybeSingle();
   return data;
