@@ -44,10 +44,10 @@ export async function previewRefund(membershipId: string) {
   const { t, err } = await requireOwner();
   if (!t) return { ok: false, error: err! };
   const { data: ms } = await sb.from("memberships")
-    .select("total_sessions, remaining_sessions, list_unit_price").eq("id", membershipId).maybeSingle();
+    .select("total_sessions, remaining_sessions, list_unit_price, status").eq("id", membershipId).maybeSingle();
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   const bal = await getMembershipBalance(membershipId);
-  return { ok: true, ...computeRefund({ paidSum: bal.paid, totalSessions: ms.total_sessions, remainingSessions: ms.remaining_sessions, listUnitPrice: (ms.list_unit_price as number | null) ?? 0 }) };
+  return { ok: true, status: ms.status, ...computeRefund({ paidSum: bal.paid, totalSessions: ms.total_sessions, remainingSessions: ms.remaining_sessions, listUnitPrice: (ms.list_unit_price as number | null) ?? 0 }) };
 }
 
 /** 환불: 음수 결제 행 + status refunded + remaining 0 + events. */
@@ -57,7 +57,8 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   const pre = await previewRefund(input.membershipId);
   if (!pre.ok) return { ok: false, error: pre.error };
   // ponytail: cast after guard — tsc can't narrow inferred union without explicit discriminant
-  const { refund: preRefund, used: preUsed, penalty: prePenalty } = pre as { ok: true; refund: number; used: number; deduction: number; penalty: number };
+  const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty } = pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number };
+  if (preStatus === "refunded") return { ok: false, error: "이미 환불된 회원권이에요" };
   if (preRefund > 0) {
     await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
   }
@@ -82,8 +83,9 @@ export async function transferMembership(input: { membershipId: string; toMember
     toId = m.id;
   }
   if (!toId) return { ok: false, error: "양도 대상을 선택해주세요" };
-  const { data: ms } = await sb.from("memberships").select("member_id").eq("id", input.membershipId).maybeSingle();
+  const { data: ms } = await sb.from("memberships").select("member_id, status").eq("id", input.membershipId).maybeSingle();
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
+  if ((ms as { member_id: string; status: string }).status === "refunded") return { ok: false, error: "환불된 회원권은 양도할 수 없어요" };
   await sb.from("memberships").update({ member_id: toId }).eq("id", input.membershipId);
   await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "transfer", note: `${ms.member_id} → ${toId}`, created_by: t.id });
   revalidatePath("/t"); revalidatePath("/t/members");

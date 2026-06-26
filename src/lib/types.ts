@@ -64,7 +64,7 @@ export interface Member {
 export interface Membership {
   id: string;
   memberId: string;
-  product: "10" | "20" | "30";
+  product: string;
   totalSessions: number;
   remainingSessions: number;
   startDate: string;
