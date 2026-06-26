@@ -206,6 +206,44 @@ export async function recordPayment(input: {
   return { ok: true };
 }
 
+/** 분할 결제 일괄 기록: 여러 라인을 한 번의 원자적 insert로. 라인별 부분 실패/재시도 이중기록 방지. */
+export async function recordPayments(input: {
+  memberId?: string;
+  membershipId?: string;
+  paidAt?: string;
+  lines: { method: PaymentMethod; amount: number }[];
+}): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  const lines = input.lines.filter((l) => l.amount > 0);
+  if (lines.length === 0) return { ok: false, error: "금액을 입력해주세요" };
+
+  let membershipId = input.membershipId;
+  if (!membershipId && input.memberId) {
+    const { data: ms } = await sb
+      .from("memberships")
+      .select("id")
+      .eq("member_id", input.memberId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    membershipId = ms?.id;
+  }
+  if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+
+  const paidAt = input.paidAt ?? todayISO();
+  // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록·재시도 이중기록 없음
+  const { error } = await sb.from("payments").insert(
+    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id })),
+  );
+  if (error) return { ok: false, error: "결제 기록에 실패했어요" };
+  revalidatePath("/t");
+  return { ok: true };
+}
+
 /** 매출 직접 추가(과거/기타 수입). membership_id 없는 payments 행. 대표 전용. */
 export async function addRevenue(input: {
   amount: number;

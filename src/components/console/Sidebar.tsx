@@ -85,7 +85,7 @@ export function Sidebar({
           <button
             type="button"
             aria-label="로그아웃"
-            onClick={() => trainerLogout().then(() => (window.location.href = "/login/trainer"))}
+            onClick={() => trainerLogout().then(() => (window.location.href = "/console"))}
             className="flex-none text-[#6F6655] transition-colors hover:text-[#AEA08D]"
           >
             <Icon name="login" size={17} />

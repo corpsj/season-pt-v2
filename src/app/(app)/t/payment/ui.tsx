@@ -10,7 +10,7 @@ import { Field, TextInput } from "@/components/ui/Field";
 import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
-import { recordPayment } from "@/lib/data/groups/owner-ops-actions";
+import { recordPayments } from "@/lib/data/groups/owner-ops-actions";
 import type { PaymentMethod } from "@/lib/types";
 import type { PaymentSummary } from "@/lib/data/groups/owner-ops";
 
@@ -63,21 +63,16 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
     const hasAny = lines.some((l) => parseAmt(l.amount) > 0);
     if (!hasAny) { toast("금액을 입력해 주세요"); return; }
     setPending(true);
-    for (const l of lines) {
-      const amt = parseAmt(l.amount);
-      if (amt <= 0) continue;
-      const r = await recordPayment({
-        memberId: summary.memberId ?? undefined,
-        membershipId: summary.membershipId ?? undefined,
-        method: l.method,
-        amount: amt,
-        paidAt: payDate || undefined,
-      });
-      if (!r.ok) {
-        toast(r.error ?? "결제 기록 실패");
-        setPending(false);
-        return;
-      }
+    const r = await recordPayments({
+      memberId: summary.memberId ?? undefined,
+      membershipId: summary.membershipId ?? undefined,
+      paidAt: payDate || undefined,
+      lines: lines.map((l) => ({ method: l.method, amount: parseAmt(l.amount) })),
+    });
+    if (!r.ok) {
+      toast(r.error ?? "결제 기록 실패");
+      setPending(false);
+      return;
     }
     toast("결제를 기록했어요");
     setPending(false);

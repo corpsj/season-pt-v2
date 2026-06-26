@@ -7,9 +7,6 @@ import { Icon, type IconName } from "@/components/ui/icon";
    can render them. Mirrors 대표 콘솔 (PC).dc.html.
    ============================================================ */
 
-export const CARD_SHADOW =
-  "0 1px 2px rgba(75,59,46,.04), 0 14px 30px -22px rgba(75,59,46,.3)";
-
 /** ₩ with thousands separators (ko-KR). */
 export function won(n: number): string {
   return "₩" + Math.round(n).toLocaleString("ko-KR");
@@ -33,8 +30,8 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-[18px] border border-[rgba(75,59,46,0.06)] bg-white ${className}`}
-      style={{ boxShadow: CARD_SHADOW, ...style }}
+      className={`rounded-[18px] border border-ink/[0.06] bg-white shadow-card ${className}`}
+      style={style}
     >
       {children}
     </div>
@@ -75,12 +72,14 @@ function Btn({ base, icon, children, href, onClick, type = "button", disabled, c
   );
 }
 
+// 모바일 버튼과 동일한 디자인 축: radius 15/13(--radius-btn/field), .tappable 모션, sage 포커스 링.
+const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage/40";
 const PBTN =
-  "inline-flex items-center justify-center gap-[7px] rounded-[12px] bg-sage px-4 py-[11px] text-[14px] font-semibold tracking-[-0.01em] text-white transition hover:brightness-[1.06] active:scale-[.98] disabled:opacity-50";
+  `inline-flex items-center justify-center gap-[7px] rounded-[15px] bg-sage px-4 py-[11px] text-[14px] font-semibold tracking-[-0.01em] text-white transition-[filter,transform] duration-[130ms] hover:brightness-[1.06] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
 const OBTN =
-  "inline-flex items-center justify-center gap-[6px] rounded-[12px] border-[1.4px] border-[rgba(107,120,94,0.4)] bg-white px-4 py-[11px] text-[13.5px] font-semibold text-[#5B6452] transition hover:bg-[#F4F0E8] active:scale-[.98] disabled:opacity-50";
+  `inline-flex items-center justify-center gap-[6px] rounded-[15px] border-[1.4px] border-sage-deep/40 bg-white px-4 py-[11px] text-[13.5px] font-semibold text-[#5B6452] transition-[background-color,transform] duration-[130ms] hover:bg-[#F4F0E8] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
 const GBTN =
-  "inline-flex items-center justify-center gap-[6px] rounded-[10px] border border-[rgba(75,59,46,0.12)] bg-white px-[13px] py-[8px] text-[13px] font-semibold text-[#766D60] transition hover:bg-[#F4F0E8] disabled:opacity-50";
+  `inline-flex items-center justify-center gap-[6px] rounded-[13px] border border-ink/[0.12] bg-white px-[13px] py-[8px] text-[13px] font-semibold text-[#766D60] transition-[background-color,transform] duration-[150ms] hover:bg-[#F4F0E8] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
 
 export function PBtn(p: BtnBase) {
   return <Btn base={PBTN} {...p} />;
