@@ -49,6 +49,18 @@ export async function scanExpiringMemberships(): Promise<{ created: number }> {
   return { created };
 }
 
+/** 회원이 일정 변경/취소를 요청하면 담당 선생님에게 알림(인박스 배지 외 피드 신호). best-effort. */
+export async function notifyTrainersOfRequest(memberId: string, kind: "change" | "cancel"): Promise<void> {
+  const trainers = await trainersOf(memberId);
+  if (trainers.length === 0) return;
+  const title = kind === "cancel" ? "수업 취소 요청" : "수업 변경 요청";
+  const rows = trainers.map((tid) => ({
+    recipient_type: "trainer", recipient_id: tid, type: "request",
+    title, body: "회원이 일정 조율을 요청했어요. 요청함에서 확인해주세요.", channel: "in_app", status: "unread",
+  }));
+  await sb.from("notifications").insert(rows);
+}
+
 export interface NotificationView { id: string; type: string; title: string; body: string | null; createdAt: string; status: string; }
 
 export async function getNotifications(recipientType: "member" | "trainer", recipientId: string): Promise<NotificationView[]> {

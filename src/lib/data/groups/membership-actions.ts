@@ -76,10 +76,18 @@ export async function refundMembership(input: { membershipId: string; method: Pa
 }
 
 /** 양도: 회원권 통째 이전(member_id 교체). 대상=기존 회원 또는 신규 즉시 등록(새 결제 없음). */
-export async function transferMembership(input: { membershipId: string; toMemberId?: string; newMember?: { name: string; phone: string; birth: string; gender: Gender } }): Promise<Result & { toMemberId?: string }> {
+export async function transferMembership(input: { membershipId: string; toMemberId?: string; toPhone?: string; newMember?: { name: string; phone: string; birth: string; gender: Gender } }): Promise<Result & { toMemberId?: string }> {
   const { t, err } = await requireOwner();
   if (!t) return { ok: false, error: err! };
   let toId = input.toMemberId;
+  // 휴대폰 번호로 기존 회원 조회(대표가 UUID를 알 수 없으므로 번호로 양도 대상 지정).
+  if (!toId && input.toPhone) {
+    const phone = input.toPhone.replace(/\D/g, "");
+    if (!phone) return { ok: false, error: "휴대폰 번호를 입력해주세요" };
+    const { data: m } = await sb.from("members").select("id").eq("phone", phone).maybeSingle();
+    if (!m) return { ok: false, error: "해당 번호의 회원을 찾을 수 없어요" };
+    toId = m.id as string;
+  }
   if (!toId && input.newMember) {
     const n = input.newMember;
     const phone = n.phone.replace(/\D/g, "");
@@ -93,6 +101,7 @@ export async function transferMembership(input: { membershipId: string; toMember
   const { data: ms } = await sb.from("memberships").select("member_id, status").eq("id", input.membershipId).maybeSingle();
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   if ((ms as { member_id: string; status: string }).status === "refunded") return { ok: false, error: "환불된 회원권은 양도할 수 없어요" };
+  if ((ms as { member_id: string }).member_id === toId) return { ok: false, error: "이미 이 회원의 회원권이에요" };
   await sb.from("memberships").update({ member_id: toId }).eq("id", input.membershipId);
   await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "transfer", note: `${ms.member_id} → ${toId}`, created_by: t.id });
   revalidatePath("/t"); revalidatePath("/t/members");

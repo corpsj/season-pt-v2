@@ -57,13 +57,13 @@ export function MembershipActions({
   }
 
   async function onTransfer() {
-    // ponytail: prompt, 회원 선택 시트는 필요 시
-    const toMemberId = prompt("양도받을 기존 회원 ID")?.trim();
-    if (!toMemberId) return;
+    // 대표는 회원 UUID를 모르므로 휴대폰 번호로 양도 대상을 지정(서버에서 조회). 잔여 회차만 이전(일정 별도).
+    const toPhone = prompt("양도받을 회원의 휴대폰 번호를 입력하세요 (잔여 회차만 이전됩니다)")?.trim();
+    if (!toPhone) return;
     setBusy(true);
-    const r = await transferMembership({ membershipId, toMemberId });
+    const r = await transferMembership({ membershipId, toPhone });
     setBusy(false);
-    toast(r.ok ? "양도했어요" : (r.error ?? "양도 실패"));
+    toast(r.ok ? "양도했어요 (잔여 회차 이전 완료)" : (r.error ?? "양도 실패"));
     if (r.ok) router.push("/t/members");
   }
 

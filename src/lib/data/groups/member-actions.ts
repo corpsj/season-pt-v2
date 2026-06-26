@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { sb, getMemberContext } from "@/lib/data/db";
+import { notifyTrainersOfRequest } from "@/lib/data/groups/notifications";
 import {
   NOTICE_READ_COOKIE,
   NOTICE_UNREAD_IDS,
@@ -111,6 +112,17 @@ export async function sendMemberRequest(input: {
     .maybeSingle();
   if (!sm) return { ok: false, error: "수업을 찾을 수 없어요" };
 
+  // 중복 방지: 같은 수업에 대기 중인 내 요청이 이미 있으면 막는다(인박스 중복 노출 방지).
+  const { data: dupReq } = await sb
+    .from("schedule_change_requests")
+    .select("id")
+    .eq("session_id", input.sessionId)
+    .eq("requester_id", me.memberId)
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
+  if (dupReq) return { ok: false, error: "이미 보낸 요청이 대기 중이에요." };
+
   const { data: session } = await sb
     .from("sessions")
     .select("scheduled_at")
@@ -127,6 +139,8 @@ export async function sendMemberRequest(input: {
     proposed_slots: input.type === "change" ? input.proposedSlots ?? [] : [],
   });
   if (error) return { ok: false, error: "요청을 보내지 못했어요" };
+
+  await notifyTrainersOfRequest(me.memberId, input.type).catch(() => {}); // best-effort 알림
 
   revalidatePath("/m");
   revalidatePath("/m/request");
