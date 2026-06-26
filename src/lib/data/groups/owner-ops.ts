@@ -11,6 +11,7 @@ import {
   weekBoundsKst,
   currentMonthLabel,
   kstWeekday,
+  kstDateISO,
 } from "@/lib/data/db";
 import type {
   AvatarTone,
@@ -697,6 +698,25 @@ export interface OutstandingView {
   total: number;
   count: number;
   items: { memberId: string; name: string; product: string; outstanding: number }[];
+}
+
+export interface OwnerNotice { id: string; tag: string; tone: string; title: string; body: string; dateLabel: string }
+
+/** 대표용 공지 목록(작성/삭제 화면). */
+export async function getStudioNotices(): Promise<OwnerNotice[]> {
+  const { data } = await sb
+    .from("notices")
+    .select("id, tag, tone, title, body, created_at")
+    .eq("active", true)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((n) => ({
+    id: n.id as string,
+    tag: n.tag as string,
+    tone: n.tone as string,
+    title: n.title as string,
+    body: (n.body as string | null) ?? "",
+    dateLabel: kstDateISO(n.created_at as string).slice(5).replace("-", "."),
+  }));
 }
 
 /** 미수금(받을 돈) 집계: active 회원권 중 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나). */

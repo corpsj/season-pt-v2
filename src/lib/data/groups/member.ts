@@ -619,45 +619,6 @@ export async function getMemberChatUnread(): Promise<number> {
 export const NOTICE_READ_COOKIE = "spt_notice_reads";
 export const NOTIF_COOKIE = "spt_notif";
 
-/** Curated facility notices (newest first). */
-const NOTICES: Omit<MemberNotice, "unread">[] = [
-  {
-    id: "n-summer-closure",
-    tag: "중요",
-    tone: "important",
-    dateLabel: "08.10",
-    title: "여름 휴관 안내 (8/15~8/16)",
-    body: "광복절 연휴 기간 전관 휴무입니다. 예약은 8/17부터 가능해요.",
-  },
-  {
-    id: "n-new-reformer",
-    tag: "시설",
-    tone: "facility",
-    dateLabel: "06.18",
-    title: "신규 필라테스 기구 입고 안내",
-    body: "리포머 2대가 추가 입고되어 예약 슬롯이 늘었어요.",
-  },
-  {
-    id: "n-june-schedule",
-    tag: "운영",
-    tone: "ops",
-    dateLabel: "06.01",
-    title: "6월 수업 일정 변경 안내",
-    body: "현충일(6/6) 휴무로 일부 수업이 조정됩니다.",
-  },
-  {
-    id: "n-parking",
-    tag: "운영",
-    tone: "ops",
-    dateLabel: "05.20",
-    title: "주차장 이용 안내",
-    body: "건물 지하 2~3층, 2시간 무료 주차 가능합니다.",
-  },
-];
-
-/** Notices that start unread (until the member opens 공지사항). */
-export const NOTICE_UNREAD_IDS = ["n-summer-closure", "n-new-reformer"] as const;
-
 /** Notification toggles, grouped — with sensible defaults. */
 const NOTIF_GROUPS: { title: string; items: { key: string; title: string; sub: string; def: boolean }[] }[] = [
   {
@@ -699,8 +660,14 @@ async function readNoticeReadIds(): Promise<string[]> {
   }
 }
 
-function unreadNoticeCount(readIds: string[]): number {
-  return NOTICE_UNREAD_IDS.filter((id) => !readIds.includes(id)).length;
+/** 활성 공지 id 목록(최신순). 회원 읽음 배지/목록의 DB 소스. */
+async function activeNoticeIds(): Promise<string[]> {
+  const { data } = await sb.from("notices").select("id").eq("active", true);
+  return (data ?? []).map((n) => n.id as string);
+}
+
+function unreadNoticeCount(noticeIds: string[], readIds: string[]): number {
+  return noticeIds.filter((id) => !readIds.includes(id)).length;
 }
 
 async function readNotifOverrides(): Promise<Record<string, boolean>> {
@@ -770,13 +737,14 @@ export async function getMemberMyPage(): Promise<MemberMyView> {
   const me = await requireMember();
   const today = todayISO();
 
-  const [mrow, membership, tr, attended, firstStart, readIds] = await Promise.all([
+  const [mrow, membership, tr, attended, firstStart, readIds, noticeIds] = await Promise.all([
     sb.from("members").select("name, status, avatar_tone").eq("id", me.memberId).maybeSingle(),
     activeMembership(me.memberId),
     primaryTrainer(me.memberId),
     attendedCount(me.memberId),
     earliestMembershipStart(me.memberId),
     readNoticeReadIds(),
+    activeNoticeIds(),
   ]);
 
   const name = mrow.data?.name ?? me.name;
@@ -808,11 +776,11 @@ export async function getMemberMyPage(): Promise<MemberMyView> {
     stats: [
       { value: String(attended), unit: "회", label: "누적 출석" },
       { value: join.value, unit: join.unit, label: "함께한 기간" },
-      { value: String(unreadNoticeCount(readIds)), unit: "건", label: "미열람 공지" },
+      { value: String(unreadNoticeCount(noticeIds, readIds)), unit: "건", label: "미열람 공지" },
     ],
     membership: membershipView,
     trainer: tr ? { name: tr.display_name, sub: "담당 선생님" } : null,
-    unreadNotices: unreadNoticeCount(readIds),
+    unreadNotices: unreadNoticeCount(noticeIds, readIds),
   };
 }
 
@@ -884,9 +852,20 @@ export async function getMemberPayments(): Promise<MemberPaymentsView> {
 export async function getMemberNotices(): Promise<MemberNoticesView> {
   await requireMember();
   const readIds = await readNoticeReadIds();
-  const notices: MemberNotice[] = NOTICES.map((n) => ({
-    ...n,
-    unread: (NOTICE_UNREAD_IDS as readonly string[]).includes(n.id) && !readIds.includes(n.id),
+  const { data } = await sb
+    .from("notices")
+    .select("id, tag, tone, title, body, created_at")
+    .eq("active", true)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const notices: MemberNotice[] = (data ?? []).map((n) => ({
+    id: n.id as string,
+    tag: n.tag as string,
+    tone: n.tone as MemberNotice["tone"],
+    dateLabel: kstDateISO(n.created_at as string).slice(5).replace("-", "."),
+    title: n.title as string,
+    body: (n.body as string | null) ?? "",
+    unread: !readIds.includes(n.id as string),
   }));
   return { notices, unread: notices.filter((n) => n.unread).length };
 }

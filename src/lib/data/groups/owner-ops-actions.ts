@@ -294,6 +294,39 @@ export async function addRevenue(input: {
   return { ok: true };
 }
 
+/* ----------------------- notices (공지) ----------------------- */
+
+const NOTICE_TAG: Record<"important" | "ops" | "facility", string> = { important: "중요", ops: "운영", facility: "시설" };
+
+/** 공지 작성(대표 전용). 회원 앱 공지사항에 노출. */
+export async function createNotice(input: { title: string; body?: string; category: "important" | "ops" | "facility" }): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  if (!input.title.trim()) return { ok: false, error: "제목을 입력해주세요" };
+  const { error } = await sb.from("notices").insert({
+    title: input.title.trim(),
+    body: input.body?.trim() || null,
+    tone: input.category,
+    tag: NOTICE_TAG[input.category],
+    created_by: t.id,
+  });
+  if (error) return { ok: false, error: "공지 작성에 실패했어요" };
+  revalidatePath("/t/settings/notices");
+  return { ok: true };
+}
+
+/** 공지 삭제(대표 전용). */
+export async function deleteNotice(id: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("notices").delete().eq("id", id);
+  if (error) return { ok: false, error: "삭제에 실패했어요" };
+  revalidatePath("/t/settings/notices");
+  return { ok: true };
+}
+
 /* ----------------------- product catalog actions ----------------------- */
 
 export async function createProduct(input: {

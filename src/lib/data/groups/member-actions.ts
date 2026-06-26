@@ -5,7 +5,6 @@ import { sb, getMemberContext } from "@/lib/data/db";
 import { notifyTrainersOfRequest } from "@/lib/data/groups/notifications";
 import {
   NOTICE_READ_COOKIE,
-  NOTICE_UNREAD_IDS,
   NOTIF_COOKIE,
   NOTIF_KEYS,
   clockLabel,
@@ -215,7 +214,9 @@ export async function markNoticesRead(): Promise<void> {
       /* ignore malformed cookie */
     }
   }
-  const merged = [...new Set([...ids, ...NOTICE_UNREAD_IDS])];
+  const { data: noticeRows } = await sb.from("notices").select("id").eq("active", true);
+  const activeIds = (noticeRows ?? []).map((n) => n.id as string);
+  const merged = [...new Set([...ids, ...activeIds])];
   c.set(NOTICE_READ_COOKIE, JSON.stringify(merged), COOKIE_OPTS);
   // Only refresh the My page (for the unread badge/stat). The notices screen
   // keeps its unread highlight for this visit; it clears on the next open.
