@@ -70,7 +70,7 @@ export interface Membership {
   startDate: string;
   endDate: string;
   price: number | null;
-  status: "active" | "expired";
+  status: "active" | "expired" | "refunded";
   guided: boolean;
 }
 
@@ -475,6 +475,7 @@ export type MembershipProduct = {
   name: string;
   sessions: number;
   price: number;
+  unitListPrice: number;
   durationDays: number;
   active: boolean;
   sortOrder: number;

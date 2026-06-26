@@ -22,16 +22,18 @@ type FormState = {
   name: string;
   sessions: string;
   price: string;
+  unitListPrice: string;
   durationDays: string;
 };
 
-const EMPTY_FORM: FormState = { name: "", sessions: "", price: "", durationDays: "90" };
+const EMPTY_FORM: FormState = { name: "", sessions: "", price: "", unitListPrice: "", durationDays: "90" };
 
 function productToForm(p: MembershipProduct): FormState {
   return {
     name: p.name,
     sessions: String(p.sessions),
     price: String(p.price),
+    unitListPrice: p.unitListPrice ? String(p.unitListPrice) : "",
     durationDays: String(p.durationDays),
   };
 }
@@ -62,6 +64,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     if (busy) return;
     const sessions = Number(form.sessions);
     const price = Number(form.price.replace(/[^\d]/g, ""));
+    const unitListPrice = Number(form.unitListPrice.replace(/[^\d]/g, "") || "0");
     const durationDays = Number(form.durationDays);
     if (!form.name.trim()) return toast("상품명을 입력해주세요");
     if (!sessions || sessions <= 0) return toast("회차를 입력해주세요");
@@ -69,7 +72,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요");
 
     setBusy(true);
-    const input = { name: form.name.trim(), sessions, price, durationDays };
+    const input = { name: form.name.trim(), sessions, price, unitListPrice, durationDays };
     const res =
       editId === "new"
         ? await createProduct(input)
@@ -116,6 +119,9 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
             </Field>
             <Field icon="coins" label="가격 (원)">
               <TextInput inputMode="numeric" placeholder="750000" value={form.price} onChange={f("price")} />
+            </Field>
+            <Field icon="coins" label="1회 정상가 (환불 기준, 원)">
+              <TextInput inputMode="numeric" placeholder="100000" value={form.unitListPrice} onChange={f("unitListPrice")} />
             </Field>
             <Field icon="calendar" label="유효기간 (일)">
               <TextInput inputMode="numeric" placeholder="90" value={form.durationDays} onChange={f("durationDays")} />

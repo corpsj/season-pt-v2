@@ -105,7 +105,7 @@ export async function issueMembership(
 
   const { data: prod } = await sb
     .from("membership_products")
-    .select("id, sessions, price, duration_days, name")
+    .select("id, sessions, price, unit_list_price, duration_days, name")
     .eq("id", productId)
     .maybeSingle();
   if (!prod) return { ok: false, error: "상품을 찾을 수 없어요" };
@@ -127,6 +127,7 @@ export async function issueMembership(
       start_date: start,
       end_date: end,
       price: prod.price,
+      list_unit_price: prod.unit_list_price ?? 0,
       status: "active",
       guided: false,
     })
@@ -220,6 +221,7 @@ export async function createProduct(input: {
   name: string;
   sessions: number;
   price: number;
+  unitListPrice: number;
   durationDays: number;
 }): Promise<Result> {
   const t = await getTrainerContext();
@@ -229,6 +231,7 @@ export async function createProduct(input: {
     name: input.name.trim(),
     sessions: input.sessions,
     price: input.price,
+    unit_list_price: input.unitListPrice,
     duration_days: input.durationDays,
   });
   if (error) return { ok: false, error: "상품 추가에 실패했어요" };
@@ -238,14 +241,14 @@ export async function createProduct(input: {
 
 export async function updateProduct(
   id: string,
-  input: { name: string; sessions: number; price: number; durationDays: number },
+  input: { name: string; sessions: number; price: number; unitListPrice: number; durationDays: number },
 ): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
   const { error } = await sb
     .from("membership_products")
-    .update({ name: input.name.trim(), sessions: input.sessions, price: input.price, duration_days: input.durationDays })
+    .update({ name: input.name.trim(), sessions: input.sessions, price: input.price, unit_list_price: input.unitListPrice, duration_days: input.durationDays })
     .eq("id", id);
   if (error) return { ok: false, error: "상품 수정에 실패했어요" };
   revalidatePath("/t/settings/products");

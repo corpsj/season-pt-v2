@@ -337,6 +337,7 @@ export function getMembershipProducts(): MembershipProduct[] {
     name: `1:1 PT ${p.label}`,
     sessions: Number(p.product),
     price: p.price,
+    unitListPrice: 0,
     durationDays: 90,
     active: true,
     sortOrder: i + 1,

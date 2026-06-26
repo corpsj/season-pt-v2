@@ -227,7 +227,7 @@ export async function getRevenue(): Promise<RevenueView> {
 export async function getMembershipProducts(): Promise<MembershipProduct[]> {
   const { data } = await sb
     .from("membership_products")
-    .select("id, name, sessions, price, duration_days, active, sort_order")
+    .select("id, name, sessions, price, unit_list_price, duration_days, active, sort_order")
     .eq("active", true)
     .order("sort_order", { ascending: true });
   return (data ?? []).map((r) => ({
@@ -235,6 +235,7 @@ export async function getMembershipProducts(): Promise<MembershipProduct[]> {
     name: r.name,
     sessions: r.sessions,
     price: r.price,
+    unitListPrice: r.unit_list_price ?? 0,
     durationDays: r.duration_days,
     active: r.active,
     sortOrder: r.sort_order,
@@ -245,13 +246,14 @@ export async function getMembershipProducts(): Promise<MembershipProduct[]> {
 export async function getAllProducts(): Promise<MembershipProduct[]> {
   const { data } = await sb
     .from("membership_products")
-    .select("id, name, sessions, price, duration_days, active, sort_order")
+    .select("id, name, sessions, price, unit_list_price, duration_days, active, sort_order")
     .order("sort_order", { ascending: true });
   return (data ?? []).map((r) => ({
     id: r.id,
     name: r.name,
     sessions: r.sessions,
     price: r.price,
+    unitListPrice: r.unit_list_price ?? 0,
     durationDays: r.duration_days,
     active: r.active,
     sortOrder: r.sort_order,
