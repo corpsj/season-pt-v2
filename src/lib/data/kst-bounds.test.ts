@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { monthBoundsFromKst, weekBoundsFromKst, monthLabelFromKst } from "./kst-bounds";
+import { monthBoundsFromKst, weekBoundsFromKst, monthLabelFromKst, kstSlotInstant } from "./kst-bounds";
 
 // KST 2026-06-23 (화요일) 12:00 — getUTC* 필드가 KST 벽시계로 읽히는 Date.
 const kst = new Date(Date.UTC(2026, 5, 23, 12, 0, 0));
@@ -18,4 +18,15 @@ test("monthBoundsFromKst → 2026년 6월 경계 (UTC)", () => {
 
 test("monthLabelFromKst → '2026년 6월'", () => {
   expect(monthLabelFromKst(kst)).toBe("2026년 6월");
+});
+
+// 세션 생성기: 반복 스케줄의 KST 시:분이 실제 UTC instant로 정확히 변환되는지(회차/매출 직결).
+test("kstSlotInstant: 2026-07-01(수) 21:30 KST → UTC 12:30", () => {
+  const day = new Date(Date.UTC(2026, 6, 1)); // KST 달력일
+  expect(kstSlotInstant(day, 21, 30).toISOString()).toBe("2026-07-01T12:30:00.000Z");
+});
+
+test("kstSlotInstant: 07:00 KST는 UTC 전날 22:00이지만 KST 날짜는 유지", () => {
+  const day = new Date(Date.UTC(2026, 6, 1));
+  expect(kstSlotInstant(day, 7, 0).toISOString()).toBe("2026-06-30T22:00:00.000Z");
 });

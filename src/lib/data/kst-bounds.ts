@@ -25,3 +25,8 @@ export function weekBoundsFromKst(kstNow: Date): { startISO: string; endISO: str
 export function monthLabelFromKst(kstNow: Date): string {
   return `${kstNow.getUTCFullYear()}년 ${kstNow.getUTCMonth() + 1}월`;
 }
+
+/** KST 달력일(kstDay의 UTC 연/월/일)의 시:분 슬롯 → 실제 UTC instant. 반복 스케줄→세션 생성에 사용. */
+export function kstSlotInstant(kstDay: Date, hour: number, minute: number): Date {
+  return new Date(Date.UTC(kstDay.getUTCFullYear(), kstDay.getUTCMonth(), kstDay.getUTCDate(), hour, minute) - KST_OFFSET_MS);
+}

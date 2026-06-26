@@ -1,5 +1,6 @@
 import "server-only";
 import { sb, todayISO } from "@/lib/data/db";
+import { kstSlotInstant } from "@/lib/data/kst-bounds";
 
 /**
  * Background lifecycle upkeep that has no other trigger in this stack (no cron/queue):
@@ -21,8 +22,6 @@ export async function flipExpiredMemberships(): Promise<{ flipped: number }> {
     .select("id");
   return { flipped: (data ?? []).length };
 }
-
-const KST_OFFSET_HOURS = 9;
 
 /** 반복 스케줄 → 향후 `weeks`주 구간의 구체 세션 materialize. (source_schedule_id, scheduled_at) 기준 dedup. */
 export async function generateUpcomingSessions(weeks = 4): Promise<{ created: number }> {
@@ -62,7 +61,7 @@ export async function generateUpcomingSessions(weeks = 4): Promise<{ created: nu
     const todays = byWeekday.get(wd);
     if (!todays) continue;
     for (const s of todays) {
-      const at = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), s.hour - KST_OFFSET_HOURS, s.minute, 0));
+      const at = kstSlotInstant(d, s.hour, s.minute);
       slots.push({ schedId: s.id, trainerId: s.trainerId, type: s.type, at, memberIds: s.memberIds });
     }
   }
