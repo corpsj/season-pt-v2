@@ -27,6 +27,7 @@ import type {
   TeamAvatar,
   TrainerRole,
 } from "@/lib/types";
+import { outstanding, paidInFull } from "@/lib/data/balance";
 import { getRetention } from "./perf-retention";
 
 export interface PaymentSummary {
@@ -649,4 +650,12 @@ export async function getStudioOps(): Promise<StudioOps> {
     pendingRequests,
     activeMembers,
   };
+}
+
+export async function getMembershipBalance(membershipId: string) {
+  const { data: ms } = await sb.from("memberships").select("price").eq("id", membershipId).maybeSingle();
+  const { data: pays } = await sb.from("payments").select("amount").eq("membership_id", membershipId);
+  const amounts = (pays ?? []).map((p) => (p.amount as number | null) ?? 0);
+  const price = (ms?.price as number | null) ?? null;
+  return { price, paid: amounts.filter((a) => a > 0).reduce((s, a) => s + a, 0), outstanding: outstanding(price, amounts), paidInFull: paidInFull(price, amounts) };
 }
