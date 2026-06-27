@@ -6,7 +6,7 @@ import { Banner } from "@/components/ui/Banner";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Stat } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
+import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
 import { MessageMemberButton } from "./MessageMemberButton";
@@ -91,17 +91,12 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
         )}
 
         {/* membership management */}
-        <Card className="mb-3.5 px-4 py-4">
-          <div className="mb-3 text-[12.5px] font-semibold text-muted5">회원권 관리</div>
-          <div className="flex flex-col gap-2.5">
-            <div className="flex gap-2.5">
-              <OutlineButton icon="ticket-fill" href={`/t/members/${id}/membership`}>
-                회원권 발급
-              </OutlineButton>
-              <OutlineButton icon="refresh" href="/t/retention">
-                재등록 안내
-              </OutlineButton>
-            </div>
+        <Card className="mb-3.5 px-4 py-[14px]">
+          <div className="mb-2.5 text-[12.5px] font-semibold text-muted5">회원권 관리</div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniButton icon="ticket-fill" href={`/t/members/${id}/membership`}>
+              발급
+            </MiniButton>
             {m.activeMembershipId && (
               <MembershipActions
                 membershipId={m.activeMembershipId}
@@ -109,6 +104,9 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
                 paused={m.membershipPaused}
               />
             )}
+            <MiniButton icon="refresh" href="/t/retention">
+              재등록
+            </MiniButton>
           </div>
         </Card>
 

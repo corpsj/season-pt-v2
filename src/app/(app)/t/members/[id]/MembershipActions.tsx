@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { OutlineButton, PrimaryButton } from "@/components/ui/Button";
+import { MiniButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import {
@@ -92,28 +92,26 @@ export function MembershipActions({
   return (
     <>
       {paused ? (
-        <PrimaryButton icon="clock" onClick={onResume} disabled={busy} className="w-full">
-          정지 해제 (재개)
-        </PrimaryButton>
+        <MiniButton icon="play" onClick={onResume} disabled={busy}>
+          재개
+        </MiniButton>
       ) : (
-        <div className="flex flex-col gap-2.5">
-          <div className="flex gap-2.5">
-            {canExtend && (
-              <OutlineButton icon="clock" onClick={onExtend} disabled={busy}>
-                연장
-              </OutlineButton>
-            )}
-            <OutlineButton icon="arrow-right" onClick={onTransfer} disabled={busy}>
-              양도
-            </OutlineButton>
-            <PrimaryButton icon="coins" onClick={openRefund} disabled={busy}>
-              환불
-            </PrimaryButton>
-          </div>
-          <OutlineButton icon="clock" onClick={onPause} disabled={busy}>
-            일시정지 (부상·출장 등)
-          </OutlineButton>
-        </div>
+        <>
+          {canExtend && (
+            <MiniButton icon="clock" onClick={onExtend} disabled={busy}>
+              연장
+            </MiniButton>
+          )}
+          <MiniButton icon="arrow-right" onClick={onTransfer} disabled={busy}>
+            양도
+          </MiniButton>
+          <MiniButton icon="coins" onClick={openRefund} disabled={busy}>
+            환불
+          </MiniButton>
+          <MiniButton icon="pause" onClick={onPause} disabled={busy}>
+            정지
+          </MiniButton>
+        </>
       )}
       <ConfirmDialog
         open={refundOpen}
