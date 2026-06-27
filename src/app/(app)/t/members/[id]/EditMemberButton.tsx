@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { OutlineButton, PrimaryButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/icon";
 import { Field, TextInput } from "@/components/ui/Field";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { useToast } from "@/components/ui/Toast";
@@ -43,9 +44,14 @@ export function EditMemberButton({
 
   return (
     <>
-      <OutlineButton icon="pencil" onClick={() => setOpen(true)} className="flex-1">
-        정보 수정
-      </OutlineButton>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="회원 정보 수정"
+        className="tappable flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-sage-deep/40 text-sage-deep hover:bg-sage/[0.07]"
+      >
+        <Icon name="pencil" size={16} />
+      </button>
       {open && (
         <div
           onClick={() => setOpen(false)}

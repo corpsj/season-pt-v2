@@ -26,6 +26,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
         <div className="mb-5 flex items-center gap-3">
           <BackButton />
           <span className="text-[19px] font-bold text-ink">회원 상세</span>
+          {me.isOwner && (
+            <div className="ml-auto">
+              <EditMemberButton id={id} name={m.name} phone={m.phone} gender={m.gender} injury={m.injury} />
+            </div>
+          )}
         </div>
 
         {/* profile row */}
@@ -85,6 +90,28 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           </Card>
         )}
 
+        {/* membership management */}
+        <Card className="mb-3.5 px-4 py-4">
+          <div className="mb-3 text-[12.5px] font-semibold text-muted5">회원권 관리</div>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex gap-2.5">
+              <OutlineButton icon="ticket-fill" href={`/t/members/${id}/membership`}>
+                회원권 발급
+              </OutlineButton>
+              <OutlineButton icon="refresh" href="/t/retention">
+                재등록 안내
+              </OutlineButton>
+            </div>
+            {m.activeMembershipId && (
+              <MembershipActions
+                membershipId={m.activeMembershipId}
+                canExtend={!m.membershipPaused && m.remaining > 0}
+                paused={m.membershipPaused}
+              />
+            )}
+          </div>
+        </Card>
+
         {/* body composition */}
         <Card className="mb-3.5 flex px-[15px] py-3.5">
           <Stat value={m.body.weight} label="체중 (kg)" className="flex-1" />
@@ -109,31 +136,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
       </Body>
 
       <Footer>
-        <div className="flex flex-col gap-2.5">
+        <div className="flex gap-2.5">
           <MessageMemberButton memberId={id} />
-          <div className="flex gap-2.5">
-            <OutlineButton icon="pencil" href={recordHref}>
-              기록
-            </OutlineButton>
-            <OutlineButton icon="ticket-fill" href={`/t/members/${id}/membership`}>
-              회원권 발급
-            </OutlineButton>
-          </div>
-          {me.isOwner && (
-            <div className="flex">
-              <EditMemberButton id={id} name={m.name} phone={m.phone} gender={m.gender} injury={m.injury} />
-            </div>
-          )}
-          <PrimaryButton icon="refresh" href="/t/retention">
-            재등록 안내
+          <PrimaryButton icon="document-text" href={recordHref}>
+            기록
           </PrimaryButton>
-          {m.activeMembershipId && (
-            <MembershipActions
-              membershipId={m.activeMembershipId}
-              canExtend={!m.membershipPaused && m.remaining > 0}
-              paused={m.membershipPaused}
-            />
-          )}
         </div>
       </Footer>
     </div>
