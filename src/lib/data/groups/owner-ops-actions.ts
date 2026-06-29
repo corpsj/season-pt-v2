@@ -98,6 +98,26 @@ export async function createMember(input: {
   return { ok: true, memberId: member.id, warn };
 }
 
+/** CSV 일괄 회원 등록. 행마다 createMember를 재사용해 검증·삽입을 공유한다. 대표 전용. */
+export async function createMembersCsv(
+  rows: { name: string; phone: string; birth: string; gender: Gender }[],
+): Promise<Result & { created: number; failed: { name: string; phone: string; error: string }[] }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요", created: 0, failed: [] };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR, created: 0, failed: [] };
+  if (rows.length === 0) return { ok: false, error: "등록할 회원이 없어요", created: 0, failed: [] };
+
+  const failed: { name: string; phone: string; error: string }[] = [];
+  let created = 0;
+  for (const r of rows) {
+    // ponytail: 행마다 createMember가 트레이너 컨텍스트를 다시 조회한다. CSV 규모(수십~수백 행)엔 충분; 대량 임포트로 커지면 컨텍스트 1회 캐시 + 일괄 insert로 승급.
+    const res = await createMember({ name: r.name, phone: r.phone, birth: r.birth, gender: r.gender, slots: [] });
+    if (res.ok) created++;
+    else failed.push({ name: r.name, phone: r.phone, error: res.error ?? "등록 실패" });
+  }
+  return { ok: created > 0, created, failed };
+}
+
 /** 회원 정보 수정(이름·연락처·성별·부상메모). 대표 전용. 연락처는 정규화 후 중복 시 거부. */
 export async function updateMember(
   id: string,
