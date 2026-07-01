@@ -61,9 +61,16 @@ export async function confirmAttendance(
     .eq("id", sessionId)
     .eq("status", "scheduled");
   if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);
-  const { data: claimed } = await claimQ.select("scheduled_at");
+  const { data: claimed } = await claimQ.select("scheduled_at, trainer_id, type");
   if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리됐거나 담당 수업이 아니에요." };
   const scheduledAt = claimed[0].scheduled_at ?? new Date().toISOString();
+
+  // 정산용: 진행(출석) 확정 시점의 회당 단가를 세션에 스냅샷. 이후 강사 단가를 바꿔도 과거 정산은 불변.
+  if (action === "attend") {
+    const { data: tr } = await sb.from("trainers").select("rate_1on1, rate_2on1").eq("id", claimed[0].trainer_id).maybeSingle();
+    const rate = claimed[0].type === "2on1" ? (tr?.rate_2on1 ?? 0) : (tr?.rate_1on1 ?? 0);
+    await sb.from("sessions").update({ pay_rate: rate }).eq("id", sessionId);
+  }
 
   const settings = await getStudioSettings();
   const deducted = shouldDeduct(action, scheduledAt, settings);

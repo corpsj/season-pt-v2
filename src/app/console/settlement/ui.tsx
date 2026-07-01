@@ -47,7 +47,7 @@ export function SettlementClient({ settlement }: { settlement: Settlement }) {
       <div className="mt-4 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
         <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
         <span className="text-[12.5px] font-medium leading-relaxed text-[#766D60]">
-          정산은 해당 월에 <b className="font-semibold text-[#5B5345]">실제 진행(출석 확정)된 수업</b> 기준이에요. 2:1 팀 수업은 1회로 계산돼요. 단가를 바꾸면 즉시 반영돼요.
+          정산은 해당 월에 <b className="font-semibold text-[#5B5345]">실제 진행(출석 확정)된 수업</b> 기준이에요. 2:1 팀 수업은 1회로 계산돼요. 지급액은 <b className="font-semibold text-[#5B5345]">각 수업 진행 시점의 단가</b>로 계산되며, 단가를 바꿔도 지난 정산은 바뀌지 않아요(다음 진행분부터 적용).
         </span>
       </div>
     </>
@@ -90,6 +90,7 @@ function TrainerRow({ row }: { row: SettlementRow }) {
           <div className="flex items-center gap-1.5">
             <span className="text-[14px] font-semibold text-ink">{row.name}</span>
             {row.role === "owner" ? <span className="rounded-[6px] bg-[#F3EAD2] px-1.5 py-[2px] text-[10px] font-bold text-[#9A7B2E]">대표</span> : null}
+            {row.inactive ? <span className="rounded-[6px] bg-[#F0ECE4] px-1.5 py-[2px] text-[10px] font-bold text-[#9A917F]">비활성</span> : null}
           </div>
         </div>
       </div>
@@ -99,16 +100,22 @@ function TrainerRow({ row }: { row: SettlementRow }) {
       </div>
 
       <div className="flex w-[220px] items-center justify-center gap-1.5">
-        <RateInput value={r1} onChange={setR1} placeholder="1:1" />
-        <RateInput value={r2} onChange={setR2} placeholder="2:1" />
-        <button
-          onClick={save}
-          disabled={busy || !dirty}
-          className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-sage text-white transition disabled:opacity-30"
-          aria-label="단가 저장"
-        >
-          <Icon name="check-bold" size={14} />
-        </button>
+        {row.inactive ? (
+          <span className="text-[12px] font-medium text-[#B3AA9C]">단가 설정 불가</span>
+        ) : (
+          <>
+            <RateInput value={r1} onChange={setR1} placeholder="1:1" />
+            <RateInput value={r2} onChange={setR2} placeholder="2:1" />
+            <button
+              onClick={save}
+              disabled={busy || !dirty}
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-sage text-white transition disabled:opacity-30"
+              aria-label="단가 저장"
+            >
+              <Icon name="check-bold" size={14} />
+            </button>
+          </>
+        )}
       </div>
 
       <span className="w-[110px] text-right text-[15px] font-bold text-ink">{won(row.payout)}</span>
@@ -120,8 +127,9 @@ function RateInput({ value, onChange, placeholder }: { value: string; onChange: 
   return (
     <input
       inputMode="numeric"
+      maxLength={8}
       value={value}
-      onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ""))}
+      onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 8))}
       placeholder={placeholder}
       className="w-[78px] rounded-[9px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-2 py-[7px] text-center text-[13px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
     />
