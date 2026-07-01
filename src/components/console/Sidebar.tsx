@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { key: "trainers", label: "강사", href: "/console/trainers", icon: "persons", activeIcon: "persons-fill" },
   { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
   { key: "settlement", label: "강사 정산", href: "/console/settlement", icon: "tag", activeIcon: "tag-fill" },
+  { key: "finance", label: "손익", href: "/console/finance", icon: "chart", activeIcon: "chart" },
   { key: "settings", label: "설정", href: "/console/settings", icon: "setting", activeIcon: "setting" },
 ];
 
