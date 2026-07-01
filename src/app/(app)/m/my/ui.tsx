@@ -179,6 +179,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         <Card className="mb-[18px] shrink-0 overflow-hidden">
           <MenuRow icon="coins-fill" label="결제·구매 내역" href="/m/my/payments" first />
           <MenuRow icon="document-text" label="운동 기록" href="/m/my/records" />
+          <MenuRow icon="camera" label="체형 기록" href="/m/my/body" />
           <MenuRow icon="bell-fill" label="알림" href="/m/my/notifications/feed" badge={notifUnread} />
           <MenuRow icon="setting" label="알림 설정" href="/m/my/notifications" />
           <MenuRow icon="megaphone-fill" label="공지사항" href="/m/my/notices" badge={view.unreadNotices} />
