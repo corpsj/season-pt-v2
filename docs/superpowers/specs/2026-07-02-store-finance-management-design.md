@@ -76,8 +76,9 @@ create table if not exists expenses (
 alter table expenses enable row level security;
 
 -- 확정 상태 조회·월별 지출 조회용. (멱등은 인덱스가 아니라 §5 액션의 delete-then-insert로 보장)
-create index if not exists expenses_settle_idx on expenses (settle_month, source);
-create index if not exists expenses_spent_at_idx on expenses (spent_at);
+-- 인덱스명은 코드베이스 관례 `idx_<table>_<cols>` 접두(전량 13개 idx_ 접두, _idx 접미 0개).
+create index if not exists idx_expenses_settle on expenses (settle_month, source);
+create index if not exists idx_expenses_spent_at on expenses (spent_at);
 ```
 
 > **검토 반영:** 초안의 "부분 유니크 인덱스로 upsert 멱등"은 **오류**였다 — supabase-js/PostgREST는 `where source=...` 부분 인덱스를 `ON CONFLICT` 타깃으로 못 잡아 실패한다(코드베이스에 onConflict 선례 0건). 멱등은 §5 액션의 delete-then-insert로 옮긴다. 값 검증은 payments.method(enum) 관례에 맞춰 **DB CHECK**로 강제(앱 상수는 표시 라벨용).
@@ -112,7 +113,7 @@ create index if not exists expenses_spent_at_idx on expenses (spent_at);
 ### `src/lib/data/groups/finance-actions.ts` (`"use server"`, 대표 전용)
 모두 `getTrainerContext()` + `role==='owner'` 아니면 `OWNER_ONLY_ERROR`.
 - **`addExpense({ category, amount, spentAt?, note?, trainerId? })`**
-  `amount>0`·카테고리 검증. `spentAt` 미지정 시 **KST 오늘**(`kstDateISO(nowKstParts())`). `trainerId`는 `category==='labor'`일 때만 의미. `revalidatePath` → `/console/finance`, `/t/perf`.
+  `amount>0`·카테고리 검증. `spentAt` 미지정 시 **KST 오늘 = `todayISO()`** (db.ts의 `kstDateISO(new Date())`. ⚠️ `kstDateISO(nowKstParts())`는 +9h 이중 시프트 버그 — `nowKstParts()`가 이미 +9h). `trainerId`는 `category==='labor'`일 때만 저장(그 외 null). `revalidatePath` → `/console/finance`, `/t/perf`.
 - **`deleteExpense(id)`** — **`source='settlement'` 행은 거부**(정산 지급은 정산 페이지 확정/취소로만 관리 → 부분 삭제 desync 차단). `revalidatePath('/console/finance')`, `/t/perf`.
 - **`confirmSettlement(monthOffset=0)`** — 핵심 연결. **delete-then-insert로 멱등**:
   1. `off`·`monthKey` 파생(위 규약).
@@ -208,4 +209,65 @@ create index if not exists expenses_spent_at_idx on expenses (spent_at);
 | 6 | 대표 정산 인건비 계상 여부(사업 판단) | **제외**(net income excluding owner pay) — 사용자 확정 |
 | — | RLS 누락 / 값 무제약 / KST 오늘 / revalidate 누락 / 마이그 스크립트 중복 / 아이콘 | RLS on·CHECK 제약·`kstDateISO`·관련 경로 전부 revalidate·기존 스크립트 재사용·아이콘 1개 추가 |
 
-**남은 저위험 미결(계획/구현 재량):** 손익 히어로 세부 비주얼, 지출 구성 막대 스타일, 빈 상태 카피 문구 톤. 돈·상태 로직은 모두 확정.
+**남은 저위험 미결(계획/구현 재량):** 손익 히어로 세부 비주얼, 지출 구성 막대 스타일, 빈 상태 카피 문구 톤. 돈·상태 로직은 모두 확정. → **아래 §11에서 이 잔여까지 전부 확정.**
+
+---
+
+## 11. 부록 B — 무추측 구현 명세 (7슬라이스 코드 대조로 확정)
+2차 검토가 슬라이스별로 남은 결정을 **코드 근거로 전부 해소**. 아래는 구현자가 추측할 것이 없는 확정값. **검토가 추가로 잡은 버그: `kstDateISO(nowKstParts())`는 +9h 이중 시프트 → `todayISO()` 사용**(본문 §5 반영).
+
+### 11.1 마이그레이션 `0015_expenses.sql` (최종)
+- 상단 한국어 헤더 2줄(0013/0014식). `create table if not exists`(멱등). 컬럼 순서 = 본문 §4.
+- **인덱스명 교정:** `idx_expenses_settle (settle_month, source)`, `idx_expenses_spent_at (spent_at)` (관례 `idx_` 접두).
+- `alter table expenses enable row level security;` (직접 alter 1줄, 정책 없음=deny-by-default, 주석 `-- service-role만`. 0003/0006/0009 관례). `create extension` 재선언 금지(pgcrypto 0001에 영속).
+- FK: `trainer_id … on delete set null`(이력 보존), `recorded_by references trainers(id)`(절 없음=NO ACTION, payments.recorded_by 동일). CHECK 3개 인라인(category/amount>0/source). `spent_at`·`settle_month` DEFAULT 없음.
+
+### 11.2 `src/lib/data/finance-calc.ts` (신규 **순수** 모듈 — server-only 금지, DB 금지 → 테스트 대상)
+> ⚠️ `groups/finance.ts`는 `import "server-only"`라 `bun:test` 불가(kst-bounds.ts 선례처럼 순수 계산은 별도 파일). 게터/액션이 이 모듈을 import해 조합.
+- `export const CATEGORY_LABELS = { labor:'인건비', rent:'임대료', utility:'공과금', marketing:'마케팅', supply:'소모품·장비', etc:'기타' } as const;` + `export type ExpenseCategory = keyof typeof CATEGORY_LABELS;` + `export type ExpenseSource = 'manual'|'settlement'|'incentive';`
+- `summarizeFinance({ revenue, expenses:{category,amount}[], prevNet }) → { revenue, expenseTotal, netProfit, byCategory:{key,label,amount,pctOfRevenue:number|null}[], netDeltaPct:number|null }`. `expenseTotal=Σamount`, `netProfit=revenue−expenseTotal`(음수 허용), `pctOfRevenue = revenue>0 ? round(amount/revenue*100) : null`, `netDeltaPct = prevNet>0 ? round((netProfit−prevNet)/prevNet*100) : null`. byCategory는 `CATEGORY_ORDER`(labor→etc 고정순) 순회, `amount>0`만.
+- `settlementLaborRows(rows: SettlementRow[], { monthKey, spentAt, recordedBy }) → insertRow[]`. `rows.filter(r=>r.payout>0 && r.role!=='owner')` → `{category:'labor', source:'settlement', trainer_id:r.trainerId, settle_month:monthKey, amount:r.payout, spent_at:spentAt, note:`${monthKey} 정산`, recorded_by:recordedBy}`.
+
+### 11.3 `src/lib/data/groups/finance.ts` (게터)
+- `import "server-only"; import { sb, nowKstParts } from "@/lib/data/db"; import { monthLabelFromKst } from "@/lib/data/kst-bounds";` + finance-calc import. 스튜디오 전체, 내부 가드 없음(페이지 게이팅 의존).
+- 타입 export: `ExpenseItem { id; category; categoryLabel; amount; date:'YYYY-MM-DD'; dateLabel:'MM.DD'; note:string|null; source; trainerName?:string }`, `ExpensesView { monthOffset; monthLabel; items[]; byCategory:{key,label,amount}[]; total }`, `FinanceSummary { monthOffset; monthLabel; revenue; expenseTotal; netProfit; byCategory:{key,label,amount,pctOfRevenue:number|null}[]; netPrev; netDeltaPct:number|null }`.
+- **월 파생/필터:** getSettlement L25 규약 그대로. 경계는 **문자열** `firstThis`/`firstNext`(`>=`/`<`), 타임스탬프 경계 금지. slice 아님.
+- `getExpenses`: `.select("…, trainers(display_name)")` 임베드(getOutstanding 선례), `.order(spent_at desc).order(created_at desc)`. `trainerName = row.trainers?.display_name ?? undefined`. `categoryLabel`은 게터가 `CATEGORY_LABELS`로 계산.
+- `getFinanceSummary`: 4쿼리(payThis/payPrev/expThis/expPrev) `Promise.all`, `sum=(rows)=>Σ(amount??0)` (getStudioOps sumAmount 선례), 계산은 `summarizeFinance` 위임. `monthLabelFromKst(target)`.
+
+### 11.4 `src/lib/data/groups/finance-actions.ts` (`"use server"`, Result=`{ok,error?}`)
+- `CATEGORIES` const로 category 검증. 검증 순서 = addRevenue(로그인→owner→금액→분류). 에러 카피: `"금액을 입력해주세요"`/`"분류를 선택해주세요"`/`"지출 추가에 실패했어요"`.
+- `addExpense`: `spent_at: input.spentAt || todayISO()`, `amount:Math.round`, `trainer_id: category==='labor' ? (trainerId??null) : null`, `source:'manual'`, `recorded_by:t.id`.
+- `deleteExpense(id)`: **source 사전조회 → `settlement`면 거부** `"정산 지급 항목은 정산 화면에서 취소해주세요"`, 아니면 `.delete().eq("id",id)`.
+- `monthKeys(off)` 헬퍼: `monthKey=Date.UTC(y, m-off, 1).slice(0,7)`, `lastDay=Date.UTC(y, m+1-off, 0).slice(0,10)` (순수 UTC-midnight, tz 무오염).
+- `confirmSettlement(off=0)`: `getSettlement(off)` → **`delete().eq(source,settlement).eq(settle_month,monthKey)` 먼저** → `settlementLaborRows(...)` insert(rows>0일 때만). revalidate `/console/settlement`·`/console/finance`·`/t/perf`. `// ponytail: delete→insert 비원자적(2요청), 실패 시 미확정 롤백 → 재클릭 자기치유.`
+- `unconfirmSettlement(off=0)`: 그 달 정산행 `delete` + 동일 revalidate. 카피 `"확정 취소에 실패했어요"`.
+
+### 11.5 `settlement.ts` — `getSettlement`에 `confirmed`
+- Settlement 타입에 `confirmed:boolean`. `target`(L27) 직후 `monthKey='YYYY-MM'` 파생(confirmSettlement와 동일). 비오너 조기반환에 `confirmed:false`. 오너 Promise.all에 3번째 쿼리 `sb.from("expenses").select("id").eq("source","settlement").eq("settle_month",monthKey).limit(1)` → `confirmed:(settleRows?.length??0)>0`. **page.tsx 무수정**(객체 통째 전달).
+
+### 11.6 `console/settlement/ui.tsx` — 토글 + 모달
+- L13 구조분해에 `confirmed` 추가. 월-nav 행: 합계 pill을 `<div className="ml-auto flex items-center gap-3">`로 감싸고 오른쪽에 신규 `ConfirmControl`.
+- `ConfirmControl`(ui.tsx 내부 client): `confirmed=false`→`지급 확정` 버튼(`total<=0`이면 disabled), `confirmed=true`→`지급 완료` 배지(#5B6452/#EDF4E3)+`확정 취소` 고스트. 확인은 **`ConsoleModal`**(신규 컴포넌트 금지). 
+- 모달 카피: confirm 본문 "이 달 정산을 지급 확정할까요? **인건비 지출**로 반영돼요." / unconfirm 본문 "이 달 정산 확정을 취소할까요? 반영된 **인건비 지출**이 삭제돼요."(액션버튼 terracotta). `run(kind)`=busy/toast/`router.refresh()` (trainers 삭제 패턴). import `confirmSettlement/unconfirmSettlement`.
+- 하단 info 박스(L50) 끝에 1문장 추가: "**지급 확정**하면 이 달 인건비가 **손익** 화면에 지출로 반영돼요."
+
+### 11.7 `console/finance/` — `page.tsx`(서버) + `ui.tsx`(client `ExpenseLedger`)
+- page.tsx: `searchParams {m?}` → `off=Math.max(0,Number(sp.m)||0)`, `Promise.all([getFinanceSummary(off), getExpenses(off), getStaff()])`. `requireOwnerPage` 호출 안 함(revenue 선례, 레이아웃 게이팅). `staffPicks = staff.filter(s=>s.role!=='invited').map(s=>({id,name}))`.
+- Topbar `title="손익" sub={`${monthLabel} · 손익 요약`}`. 월-nav = settlement `NavArrow` 마크업 복제(로컬 non-export라 import 불가), 링크 `/console/finance?m=`.
+- **히어로**(전폭, revenue 박스 차용): bg `netProfit>=0 ? #768C6A : #C67352`, 순이익 `serif text-[38px]`(Money+won, 음수 부호 자동), delta 배지는 `netDeltaPct!=null`일 때만, 보조숫자 매출/지출.
+- **지출 구성**: 카테고리별 개별 가로바(revenue 결제수단 단일 stacked 아님). `CAT_COLOR={labor:#768c6a,rent:#b89a5e,utility:#6e8aa0,marketing:#c67352,supply:#8fa187,etc:#a89a80}`. `amount>0`만, amount desc. **경고 pill**: `rent&&pct>20 || labor&&pct>60`이면 terracotta pill+%텍스트 terracotta(문구 "권장 초과"). % Money 미적용.
+- **지출 장부**(client): 컬럼 날짜/분류·메모/강사/금액. `source==='settlement'`행 → "정산 지급" 배지 + **삭제버튼 숨김**. 빈 목록 "이번 달 지출이 없어요".
+- **지출 추가 모달**: `ConsoleModal`(실존 `components/console/ui.tsx`). native `<select>`(6 CATS)+금액+`<input type=date>`(기본=KST 오늘)+메모, `category==='labor'`일 때만 강사 `<select>`(staffPicks, "선택 안 함"=기본). 성공 toast "지출을 추가했어요". 삭제 모달 카피 "이 지출 기록을 삭제할까요? 되돌릴 수 없어요.". Money=금액에만.
+
+### 11.8 모바일 `t/perf/page.tsx` — 순이익 스트립
+- header `</div>` 다음, 2×2 grid **위**에 전폭 인라인 카드(Metric 컴포넌트 미사용 — 값 색 커스텀 불가). Promise.all에 `getFinanceSummary(0)` 4번째로 추가(import 1줄). `won()` 로컬 재사용, Money 미적용.
+- `netProfit<0` → `bg-warm-banner`+값 `text-terracotta`, else `bg-sage-banner`+`text-ink`. 라벨 "이번 달 순이익", 보조 "매출 {won} · 지출 {won}", delta 배지는 `netDeltaPct!=null`일 때.
+
+### 11.9 테스트 + 배선
+- **테스트** `src/lib/data/finance-calc.test.ts`(`bun test`): `summarizeFinance` netProfit=매출−지출, byCategory 합=expenseTotal, prevNet<=0→null·prevNet>0→값; `settlementLaborRows` owner·payout0 제외(length·trainer_id·note 검증). 순수 모듈이라 DB 불필요. (DB 거동=통합/수동 영역.)
+- **Sidebar** NAV: settlement 다음 `{ key:"finance", label:"손익", href:"/console/finance", icon:"chart", activeIcon:"chart" }`(fill 변형 없어 동일 지정 — settings 선례).
+- **아이콘** "chart": `icon-data.ts`는 AUTO-GENERATED → 직접 편집 금지. `docs/design-handoff/pt-icons.js`에 filled 막대 3개 글리프 추가 후 `bun run scripts/gen-icons.ts`. (정식 글리프 원하면 상위 DS에서 교체, 배선 불변.)
+
+### 11.10 잔여 = 순수 미관(동작 무관, 구현 중 교체 가능)
+1. 경고 pill 문구 "권장 초과" 톤(예 "임대료 과다"). 2. `CAT_COLOR` 6색(revenue 팔레트 유추). 3. "chart" 아이콘 최종 아트. 4. `total<=0`(대표만/무진행) 달 확정 버튼 disabled 방침(반영됨). — **셋 다 로직·상태·돈에 영향 0.**
