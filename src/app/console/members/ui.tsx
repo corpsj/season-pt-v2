@@ -293,13 +293,17 @@ export function MembersClient({
                   <MicroLabel className="mb-2.5">사진 · 인바디</MicroLabel>
                   <div className="mb-[18px] grid grid-cols-4 gap-2">
                     {files.map((f) =>
-                      f.url && f.kind === "photo" ? (
-                        <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-[12px] bg-[#F1EDE6]">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={f.url} alt={f.takenAt} className="h-full w-full object-cover" />
-                        </a>
+                      f.kind === "photo" ? (
+                        f.url ? (
+                          <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-[12px] bg-[#F1EDE6]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={f.url} alt={f.takenAt} className="h-full w-full object-cover" />
+                          </a>
+                        ) : (
+                          <div key={f.id} className="aspect-square rounded-[12px] bg-[#F1EDE6]" />
+                        )
                       ) : (
-                        <a key={f.id} href={f.url ?? "#"} target="_blank" rel="noreferrer" className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[12px] bg-[#FBF7F1] text-center">
+                        <a key={f.id} href={f.url ?? undefined} target="_blank" rel="noreferrer" className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[12px] bg-[#FBF7F1] text-center">
                           <Icon name="document-text" size={18} className="text-sage-deep" />
                           <span className="text-[10px] font-semibold text-[#766D60]">인바디</span>
                         </a>

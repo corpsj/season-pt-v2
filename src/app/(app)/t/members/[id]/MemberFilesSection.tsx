@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { downscaleImage } from "@/lib/media/downscale";
+import { validateUpload } from "@/lib/media/upload-guard";
 import { uploadMemberFile, deleteMemberFile } from "@/lib/data/groups/member-files-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 
@@ -33,6 +34,10 @@ export function MemberFilesSection({
     const file = e.target.files?.[0];
     e.target.value = ""; // 같은 파일 재선택 허용
     if (!file || busy) return;
+    if (kind === "inbody") {
+      const v = validateUpload("inbody", file.type, file.size);
+      if (!v.ok) return toast(v.error);
+    }
     setBusy(true);
     try {
       const blob = kind === "photo" ? await downscaleImage(file) : file;
@@ -46,6 +51,8 @@ export function MemberFilesSection({
         toast(kind === "photo" ? "사진을 저장했어요" : "인바디를 저장했어요");
         refresh(() => router.refresh());
       }
+    } catch {
+      toast("업로드에 실패했어요");
     } finally {
       setBusy(false);
     }
