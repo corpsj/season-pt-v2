@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
-import type { CarrySlot, Gender } from "@/lib/import/carryover-parse";
+import { parseEndDate, type CarrySlot, type Gender } from "@/lib/import/carryover-parse";
 
 type Result = { ok: boolean; error?: string };
 
@@ -69,7 +69,22 @@ export async function carryoverMembers(
       failed.push({ name, error: `잔여횟수는 0~${prod.sessions} 범위여야 해요` });
       continue;
     }
-    const trainerId = (r.trainerName && trainerByName.get(r.trainerName.trim())) || t.id;
+    // 만료일 서버 재검증(존재하지 않는 날짜 등) — 회원 생성 前에 걸러 고아 방지.
+    const endDate = parseEndDate(r.endDate);
+    if (!endDate) {
+      failed.push({ name, error: "만료일이 올바르지 않아요" });
+      continue;
+    }
+    // 담당강사: 이름을 줬는데 매칭 안 되면 조용히 대표 배정하지 않고 거부(오배정 방지).
+    let trainerId = t.id;
+    if (r.trainerName) {
+      const found = trainerByName.get(r.trainerName.trim());
+      if (!found) {
+        failed.push({ name, error: `강사 '${r.trainerName}' 미매칭 — 이름을 확인하세요` });
+        continue;
+      }
+      trainerId = found;
+    }
 
     // 1) 회원
     const { data: member, error: memErr } = await sb
@@ -89,7 +104,7 @@ export async function carryoverMembers(
     for (const s of r.slots) {
       const { data: sched } = await sb
         .from("schedules")
-        .insert({ trainer_id: trainerId, type: "1on1", weekday: s.weekday, hour: s.hour, active: true })
+        .insert({ trainer_id: trainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
         .select("id")
         .single();
       if (sched) await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: member.id });
@@ -103,7 +118,7 @@ export async function carryoverMembers(
       total_sessions: prod.sessions,
       remaining_sessions: r.remaining,
       start_date: start,
-      end_date: r.endDate,
+      end_date: endDate,
       price: null,
       list_unit_price: prod.unit_list_price,
       status: "active",

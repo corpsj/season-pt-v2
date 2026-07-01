@@ -2,7 +2,7 @@
 // 열 순서: 이름, 연락처, 생년월일, 성별, 상품명, 잔여횟수, 만료일, 정기일정, [담당강사]
 // 예) 김서연,010-1234-5678,920101,여,1:1 PT 20회권,7,2026-08-31,월 19:00 / 수 19:00,박지훈
 
-export type CarrySlot = { weekday: number; hour: number };
+export type CarrySlot = { weekday: number; hour: number; minute: number };
 export type Gender = "male" | "female";
 
 export type CarryRow = {
@@ -21,16 +21,17 @@ export type CarryRow = {
 
 const WEEKDAY: Record<string, number> = { 일: 0, 월: 1, 화: 2, 수: 3, 목: 4, 금: 5, 토: 6 };
 
-/** "월 19:00 / 수 20" → [{weekday:1,hour:19},{weekday:3,hour:20}] (시 단위, 분 무시). */
+/** "월 19:00 / 수 20:30" → [{weekday:1,hour:19,minute:0},{weekday:3,hour:20,minute:30}]. 분은 0/30만(스케줄 제약). */
 export function parseSlots(raw: string): CarrySlot[] {
   const out: CarrySlot[] = [];
   for (const piece of raw.split(/[,/·]/).map((s) => s.trim()).filter(Boolean)) {
     const wd = piece.match(/[일월화수목금토]/);
-    const hr = piece.match(/(\d{1,2})/);
-    if (!wd || !hr) continue;
-    const hour = Number(hr[1]);
+    const hm = piece.match(/(\d{1,2})(?::(\d{2}))?/);
+    if (!wd || !hm) continue;
+    const hour = Number(hm[1]);
     if (hour < 0 || hour > 23) continue;
-    out.push({ weekday: WEEKDAY[wd[0]], hour });
+    const minute = Number(hm[2] ?? 0) >= 30 ? 30 : 0;
+    out.push({ weekday: WEEKDAY[wd[0]], hour, minute });
   }
   return out;
 }
@@ -51,6 +52,9 @@ export function parseEndDate(raw: string): string | null {
   const mm = Number(m);
   const dd = Number(day);
   if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+  // 라운드트립 검증: 2/30, 4/31, 평년 2/29 등 존재하지 않는 날짜 거부.
+  const dt = new Date(Number(y), mm - 1, dd);
+  if (dt.getFullYear() !== Number(y) || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
   return `${y}-${m}-${day}`;
 }
 
@@ -58,14 +62,17 @@ export function parseEndDate(raw: string): string | null {
 export function parseCarryoverCsv(text: string): CarryRow[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
-  const body = /이름|name|상품|잔여/i.test(lines[0]) ? lines.slice(1) : lines;
+  // 헤더 판정은 첫 '칸'만 검사(상품명 등 데이터가 '상품'을 포함해도 데이터 행을 삼키지 않게).
+  const firstCell = lines[0].split(",")[0]?.trim() ?? "";
+  const body = /이름|name/i.test(firstCell) ? lines.slice(1) : lines;
 
   return body.map((line) => {
     const [name = "", phone = "", birth = "", genderRaw = "", productName = "", remainingRaw = "", endRaw = "", slotsRaw = "", trainerRaw = ""] =
       line.split(",").map((c) => c.trim());
 
     const gender: Gender = /남|^m/i.test(genderRaw) ? "male" : "female";
-    const remaining = Number(remainingRaw.replace(/[^\d]/g, ""));
+    const remainingDigits = remainingRaw.replace(/[^\d]/g, "");
+    const remaining = Number(remainingDigits);
     const endDate = parseEndDate(endRaw);
     const slots = parseSlots(slotsRaw);
     const trainerName = trainerRaw || null;
@@ -75,7 +82,7 @@ export function parseCarryoverCsv(text: string): CarryRow[] {
     else if (phone.replace(/\D/g, "").length < 9) reason = "연락처 오류";
     else if (birth.replace(/\D/g, "").length !== 6) reason = "생년월일 6자리 아님";
     else if (!productName) reason = "상품명 없음";
-    else if (!remainingRaw || !Number.isFinite(remaining) || remaining < 0) reason = "잔여횟수 오류";
+    else if (!remainingDigits) reason = "잔여횟수 오류";
     else if (!endDate) reason = "만료일 오류";
 
     return { name, phone, birth, gender, productName, remaining, endDate: endDate ?? "", slots, trainerName, valid: !reason, reason };

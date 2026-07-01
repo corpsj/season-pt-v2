@@ -538,7 +538,7 @@ export function MembersClient({
                         {r.valid ? (
                           <>
                             <span className="flex-1 truncate text-[12px] font-medium text-[#9A917F]">{r.productName} · 잔여 {r.remaining}</span>
-                            <span className="text-[11.5px] font-medium text-[#9A8772]">~{r.endDate.slice(2).replace(/-/g, ".")} · {r.slots.map((s) => WD_LABEL[s.weekday] + s.hour).join(" ") || "일정없음"}</span>
+                            <span className="text-[11.5px] font-medium text-[#9A8772]">~{r.endDate.slice(2).replace(/-/g, ".")} · {r.slots.map((s) => `${WD_LABEL[s.weekday]}${s.hour}${s.minute ? ":30" : ""}`).join(" ") || "일정없음"}</span>
                           </>
                         ) : (
                           <span className="flex-1 truncate text-[11.5px] font-medium text-[#9A8772]">{r.reason}</span>
