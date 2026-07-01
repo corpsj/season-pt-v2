@@ -5,6 +5,7 @@ import { TabBar } from "@/components/shell/TabBar";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { trainerTabs } from "@/components/trainer/tabs";
 import { getStudioOps, getOutstanding } from "@/lib/data/groups/owner-ops";
+import { getFinanceSummary } from "@/lib/data/groups/finance";
 import { sb } from "@/lib/data/db";
 import { requireOwnerPage } from "@/lib/auth/guard";
 
@@ -69,10 +70,11 @@ export default async function TrainerOpsPage() {
   const isOwner = true;
   // getStudioOps re-reads the (cached) trainer context internally; overlap it with the
   // unread-count query instead of stacking them.
-  const [ops, chatUnread, outstanding] = await Promise.all([
+  const [ops, chatUnread, outstanding, finance] = await Promise.all([
     getStudioOps(),
     chatUnreadFor(t.id),
     getOutstanding(),
+    getFinanceSummary(0),
   ]);
 
   const todoCount =
@@ -100,6 +102,20 @@ export default async function TrainerOpsPage() {
           >
             <Icon name="setting" size={20} />
           </Link>
+        </div>
+
+        {/* 이번 달 순이익 — 전폭 강조 스트립. 음수면 terracotta */}
+        <div className={`mb-2.5 rounded-[16px] border p-4 ${finance.netProfit < 0 ? "border-terracotta/20 bg-warm-banner" : "border-ink/[0.07] bg-sage-banner"}`}>
+          <div className="flex items-baseline justify-between">
+            <span className="text-[12px] font-medium text-muted">이번 달 순이익</span>
+            {finance.netDeltaPct != null ? (
+              <span className={`text-[11.5px] font-semibold ${finance.netDeltaPct < 0 ? "text-terracotta" : "text-muted2"}`}>
+                전월 대비 {finance.netDeltaPct >= 0 ? "+" : ""}{finance.netDeltaPct}%
+              </span>
+            ) : null}
+          </div>
+          <div className={`serif mt-1.5 text-[26px] font-bold leading-none ${finance.netProfit < 0 ? "text-terracotta" : "text-ink"}`}>{won(finance.netProfit)}</div>
+          <div className="mt-2 text-[11.5px] font-medium text-muted2">매출 {won(finance.revenue)} · 지출 {won(finance.expenseTotal)}</div>
         </div>
 
         {/* 운영 지표 (표시 전용) — 매출 / 활성 / 신규 / 만료 임박 */}
