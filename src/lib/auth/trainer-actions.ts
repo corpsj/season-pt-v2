@@ -193,6 +193,7 @@ export async function deleteInstructor(id: string): Promise<Result> {
   await admin.from("payments").update({ recorded_by: null }).eq("recorded_by", id);
   await admin.from("attendance_ledger").update({ created_by: null }).eq("created_by", id);
   await admin.from("workout_records").update({ created_by: null }).eq("created_by", id);
+  await admin.from("expenses").update({ recorded_by: null }).eq("recorded_by", id);
 
   // delete the auth user → cascades the trainers row (auth_user_id ON DELETE CASCADE)
   if (target.auth_user_id) await admin.auth.admin.deleteUser(target.auth_user_id);
