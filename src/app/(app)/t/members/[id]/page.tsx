@@ -9,6 +9,8 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
+import { getMemberFiles } from "@/lib/data/groups/member-files";
+import { MemberFilesSection } from "./MemberFilesSection";
 import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
 import { EditMemberButton } from "./EditMemberButton";
@@ -17,7 +19,13 @@ const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", t
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me] = await Promise.all([getMemberDetail(id), getMemberRecordHref(id), getMe()]);
+  const [m, recordHref, me, photos, inbodies] = await Promise.all([
+    getMemberDetail(id),
+    getMemberRecordHref(id),
+    getMe(),
+    getMemberFiles(id, "photo"),
+    getMemberFiles(id, "inbody"),
+  ]);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -118,6 +126,9 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <div className="h-7 w-px self-center bg-ink/[0.08]" />
           <Stat value={m.body.bodyFat} label="체지방 (%)" className="flex-1" />
         </Card>
+
+        <MemberFilesSection kind="photo" memberId={id} initial={photos} />
+        <MemberFilesSection kind="inbody" memberId={id} initial={inbodies} />
 
         {/* regular schedule */}
         <Card className="mb-3.5 flex items-center gap-2.5 px-4 py-3.5">
