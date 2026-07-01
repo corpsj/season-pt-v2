@@ -10,7 +10,11 @@ import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember, createMembersCsv } from "@/lib/data/groups/owner-ops-actions";
+import { carryoverMembers } from "@/lib/data/groups/carryover-actions";
+import { parseCarryoverCsv, type CarryRow } from "@/lib/import/carryover-parse";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
+
+const WD_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 
 type Status = "active" | "expiring" | "rest" | "inactive";
 const FILTERS: { key: "all" | "expiring" | "active" | "rest"; label: string }[] = [
@@ -47,10 +51,12 @@ export function MembersClient({
   const [detail, setDetail] = useState(initialDetail);
   const [files, setFiles] = useState<MemberFileView[]>([]);
   const [, startLoad] = useTransition();
-  const [modal, setModal] = useState<null | "add" | "csv" | "issue" | "extend" | "refund">(null);
+  const [modal, setModal] = useState<null | "add" | "csv" | "carry" | "issue" | "extend" | "refund">(null);
   const [busy, setBusy] = useState(false);
   const [csvRows, setCsvRows] = useState<CsvRow[] | null>(null);
   const [csvResult, setCsvResult] = useState<{ created: number; failed: { name: string; phone: string; error: string }[] } | null>(null);
+  const [carryRows, setCarryRows] = useState<CarryRow[] | null>(null);
+  const [carryResult, setCarryResult] = useState<{ created: number; failed: { name: string; error: string }[] } | null>(null);
 
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod });
   const [issueProduct, setIssueProduct] = useState("");
@@ -165,6 +171,29 @@ export function MembersClient({
     router.refresh();
   }
 
+  function openCarry() {
+    setCarryRows(null);
+    setCarryResult(null);
+    setModal("carry");
+  }
+  async function onCarryFile(file: File) {
+    setCarryResult(null);
+    setCarryRows(parseCarryoverCsv(await file.text()));
+  }
+  async function doCarry() {
+    if (busy || !carryRows) return;
+    const valid = carryRows.filter((r) => r.valid);
+    if (valid.length === 0) return toast("이관할 유효한 회원이 없어요");
+    setBusy(true);
+    const r = await carryoverMembers(
+      valid.map((v) => ({ name: v.name, phone: v.phone, birth: v.birth, gender: v.gender, productName: v.productName, remaining: v.remaining, endDate: v.endDate, slots: v.slots, trainerName: v.trainerName })),
+    );
+    setBusy(false);
+    if (!r.ok && r.error) return toast(r.error);
+    setCarryResult({ created: r.created, failed: r.failed });
+    router.refresh();
+  }
+
   const d = detail;
 
   return (
@@ -186,7 +215,8 @@ export function MembersClient({
             );
           })}
         </div>
-        <OBtn icon="document-text" className="ml-auto" onClick={openCsv}>CSV 일괄 등록</OBtn>
+        <OBtn icon="refresh" className="ml-auto" onClick={openCarry}>기존 회원권 이관</OBtn>
+        <OBtn icon="document-text" onClick={openCsv}>CSV 일괄 등록</OBtn>
         <PBtn icon="person-plus" onClick={() => setModal("add")}>회원 등록</PBtn>
       </div>
 
@@ -441,6 +471,88 @@ export function MembersClient({
         </ConsoleModal>
       ) : null}
 
+      {modal === "carry" ? (
+        <ConsoleModal
+          title="기존 회원권 이관"
+          width={520}
+          onClose={() => setModal(null)}
+          footer={
+            carryResult ? (
+              <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>완료</PBtn>
+            ) : (
+              <>
+                <OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn>
+                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !carryRows?.some((r) => r.valid)} onClick={doCarry}>
+                  {carryRows ? `${carryRows.filter((r) => r.valid).length}명 이관` : "이관"}
+                </PBtn>
+              </>
+            )
+          }
+        >
+          {carryResult ? (
+            <div>
+              <div className="mb-4 rounded-[14px] bg-[#EDF4E3] px-[18px] py-4 text-center">
+                <div className="text-[13px] font-medium text-[#5B6452]">이관 완료</div>
+                <div className="mt-0.5 text-[26px] font-bold text-sage-deep">{carryResult.created}명</div>
+              </div>
+              {carryResult.failed.length > 0 ? (
+                <>
+                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">실패 {carryResult.failed.length}건</div>
+                  <div className="flex flex-col gap-1.5">
+                    {carryResult.failed.map((fr, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-[11px] bg-[#FBF3E9] px-3.5 py-2.5">
+                        <Icon name="triangle-exclamation" size={15} className="flex-none text-terracotta" />
+                        <span className="flex-1 truncate text-[12.5px] font-semibold text-[#5B5345]">{fr.name}</span>
+                        <span className="text-[11.5px] font-medium text-[#9A8772]">{fr.error}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : (
+            <div>
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-[14px] border-[1.4px] border-dashed border-[rgba(75,59,46,0.22)] bg-[#FBF9F5] px-5 py-7 text-center transition hover:bg-[#F4F0E8]">
+                <Icon name="refresh" size={24} className="text-[#A89F92]" />
+                <span className="text-[13.5px] font-semibold text-[#766D60]">이관 CSV 파일 선택</span>
+                <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onCarryFile(f); }} />
+              </label>
+              <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
+                <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
+                <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
+                  열: <b className="font-semibold text-[#5B5345]">이름, 연락처, 생년월일, 성별, 상품명, 잔여횟수, 만료일, 정기일정, 담당강사</b>. 상품명은 <b className="font-semibold text-[#5B5345]">미리 등록한 회원권 상품</b>과 정확히 같아야 해요(설정에서 먼저 등록). 결제는 기록되지 않아 매출에 잡히지 않아요.{" "}
+                  <button onClick={downloadCarryTemplate} className="font-semibold text-sage-deep underline underline-offset-2">양식 내려받기</button>
+                </span>
+              </div>
+              {carryRows ? (
+                <div className="mt-4">
+                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">
+                    총 {carryRows.length}명 · <span className="text-sage-deep">유효 {carryRows.filter((r) => r.valid).length}명</span>
+                    {carryRows.some((r) => !r.valid) ? <span className="text-terracotta"> · 오류 {carryRows.filter((r) => !r.valid).length}명</span> : null}
+                  </div>
+                  <div className="flex max-h-[240px] flex-col gap-1.5 overflow-y-auto">
+                    {carryRows.map((r, i) => (
+                      <div key={i} className={`flex items-center gap-2 rounded-[11px] px-3.5 py-2.5 ${r.valid ? "bg-[#FBF7F1]" : "bg-[#FBF3E9]"}`}>
+                        <Icon name={r.valid ? "circle-check" : "triangle-exclamation"} size={15} className={`flex-none ${r.valid ? "text-sage-deep" : "text-terracotta"}`} />
+                        <span className="w-[64px] flex-none truncate text-[12.5px] font-semibold text-[#5B5345]">{r.name || "—"}</span>
+                        {r.valid ? (
+                          <>
+                            <span className="flex-1 truncate text-[12px] font-medium text-[#9A917F]">{r.productName} · 잔여 {r.remaining}</span>
+                            <span className="text-[11.5px] font-medium text-[#9A8772]">~{r.endDate.slice(2).replace(/-/g, ".")} · {r.slots.map((s) => WD_LABEL[s.weekday] + s.hour).join(" ") || "일정없음"}</span>
+                          </>
+                        ) : (
+                          <span className="flex-1 truncate text-[11.5px] font-medium text-[#9A8772]">{r.reason}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </ConsoleModal>
+      ) : null}
+
       {modal === "issue" && d ? (
         <ConsoleModal
           title="회원권 발급"
@@ -515,6 +627,19 @@ function downloadCsvTemplate() {
   const a = document.createElement("a");
   a.href = url;
   a.download = "회원등록_양식.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadCarryTemplate() {
+  const csv =
+    "이름,연락처,생년월일,성별,상품명,잔여횟수,만료일,정기일정,담당강사\n" +
+    "김서연,010-1234-5678,920101,여,1:1 PT 20회권,7,2026-08-31,월 19:00 / 수 19:00,박지훈\n" +
+    "박민수,010-2222-3333,880303,남,1:1 PT 10회권,3,2026-07-15,화 07:00,\n";
+  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "회원권이관_양식.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
