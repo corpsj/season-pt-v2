@@ -54,10 +54,13 @@ export function MemberFilesSection({
   async function onDelete(id: string) {
     if (busy) return;
     setBusy(true);
-    const r = await deleteMemberFile(id);
-    setBusy(false);
-    if (!r.ok) toast(r.error ?? "삭제에 실패했어요");
-    else refresh(() => router.refresh());
+    try {
+      const r = await deleteMemberFile(id);
+      if (!r.ok) toast(r.error ?? "삭제에 실패했어요");
+      else refresh(() => router.refresh());
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -96,7 +99,8 @@ export function MemberFilesSection({
               ) : null}
               <button
                 onClick={() => onDelete(f.id)}
-                className="absolute right-1 top-1 rounded-full bg-ink/60 p-1 text-surface"
+                disabled={busy}
+                className="absolute right-1 top-1 rounded-full bg-ink/60 p-1 text-surface disabled:opacity-50"
                 aria-label="삭제"
               >
                 <Icon name="close" size={12} />
@@ -109,10 +113,10 @@ export function MemberFilesSection({
           {initial.map((f) => (
             <div key={f.id} className="flex items-center gap-2 py-2.5">
               <Icon name="document-text" size={16} className="flex-none text-sage" />
-              <a href={f.url ?? "#"} target="_blank" rel="noreferrer" className="flex-1 truncate text-[13px] font-semibold text-ink">
+              <a href={f.url ?? undefined} target="_blank" rel="noreferrer" className="flex-1 truncate text-[13px] font-semibold text-ink">
                 인바디 · {f.takenAt.replace(/-/g, ".")}
               </a>
-              <button onClick={() => onDelete(f.id)} className="flex-none text-muted" aria-label="삭제">
+              <button onClick={() => onDelete(f.id)} disabled={busy} className="flex-none text-muted disabled:opacity-50" aria-label="삭제">
                 <Icon name="close" size={15} />
               </button>
             </div>
