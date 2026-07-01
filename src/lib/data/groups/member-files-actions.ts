@@ -68,8 +68,9 @@ export async function deleteMemberFile(fileId: string): Promise<Result> {
   if (!row) return { ok: false, error: "파일을 찾을 수 없어요" };
   if (!(await trainerCanAccess(row.member_id as string))) return { ok: false, error: "권한이 없어요" };
 
-  await sb.storage.from(FILES_BUCKET).remove([row.storage_path as string]);
-  await sb.from("member_files").delete().eq("id", fileId);
+  const { error: storErr } = await sb.storage.from(FILES_BUCKET).remove([row.storage_path as string]);
+  const { error: delErr } = await sb.from("member_files").delete().eq("id", fileId);
+  if (storErr || delErr) return { ok: false, error: "삭제에 실패했어요" };
 
   revalidatePath(`/t/members/${row.member_id as string}`);
   revalidatePath("/m/my/body");
