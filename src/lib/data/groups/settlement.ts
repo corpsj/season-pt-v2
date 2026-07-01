@@ -18,6 +18,7 @@ export type Settlement = {
   monthLabel: string;
   rows: SettlementRow[];
   total: number;
+  confirmed: boolean;
 };
 
 /** 지정 월(현재-offset)의 강사별 회당 정산. attended 세션을 유형별로 세어 단가와 곱한다. 대표 전용. */
@@ -28,13 +29,15 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const monthLabel = monthLabelFromKst(target);
 
   const t = await getTrainerContext();
-  if (!t || t.role !== "owner") return { monthOffset: off, monthLabel, rows: [], total: 0 };
+  if (!t || t.role !== "owner") return { monthOffset: off, monthLabel, rows: [], total: 0, confirmed: false };
 
   const { startISO, endISO } = monthBoundsFromKst(target);
+  const monthKey = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}`;
 
-  const [{ data: trainers }, { data: sessions }] = await Promise.all([
+  const [{ data: trainers }, { data: sessions }, { data: settleRows }] = await Promise.all([
     sb.from("trainers").select("id, display_name, role, status, rate_1on1, rate_2on1").order("role", { ascending: false }),
     sb.from("sessions").select("trainer_id, type, pay_rate").eq("status", "attended").gte("scheduled_at", startISO).lt("scheduled_at", endISO),
+    sb.from("expenses").select("id").eq("source", "settlement").eq("settle_month", monthKey).limit(1),
   ]);
 
   const meta = new Map((trainers ?? []).map((tr) => [tr.id as string, tr]));
@@ -76,5 +79,5 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
     .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : b.payout - a.payout));
 
   const total = rows.reduce((s, r) => s + r.payout, 0);
-  return { monthOffset: off, monthLabel, rows, total };
+  return { monthOffset: off, monthLabel, rows, total, confirmed: (settleRows?.length ?? 0) > 0 };
 }
