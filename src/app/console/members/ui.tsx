@@ -6,6 +6,8 @@ import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, DPill, ConsoleModal, MicroLabel, won, pill } from "@/components/console/ui";
 import { loadMemberDetail, consoleIssueMembership } from "@/lib/data/groups/console-actions";
+import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
+import type { MemberFileView } from "@/lib/data/groups/member-files";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember, createMembersCsv } from "@/lib/data/groups/owner-ops-actions";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
@@ -43,6 +45,7 @@ export function MembersClient({
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [selectedId, setSelectedId] = useState(initialId);
   const [detail, setDetail] = useState(initialDetail);
+  const [files, setFiles] = useState<MemberFileView[]>([]);
   const [, startLoad] = useTransition();
   const [modal, setModal] = useState<null | "add" | "csv" | "issue" | "extend" | "refund">(null);
   const [busy, setBusy] = useState(false);
@@ -62,7 +65,12 @@ export function MembersClient({
 
   function select(id: string) {
     setSelectedId(id);
-    startLoad(async () => setDetail(await loadMemberDetail(id)));
+    setFiles([]);
+    startLoad(async () => {
+      const [d, fs] = await Promise.all([loadMemberDetail(id), listMemberFiles(id)]);
+      setDetail(d);
+      setFiles(fs);
+    });
   }
   async function reload() {
     if (selectedId) setDetail(await loadMemberDetail(selectedId));
@@ -278,6 +286,27 @@ export function MembersClient({
                   <Icon name="triangle-exclamation" size={16} className="mt-px flex-none text-terracotta" />
                   <span className="text-[12.5px] font-medium leading-relaxed text-[#9A8772]">{d.injury}</span>
                 </div>
+              ) : null}
+
+              {files.length > 0 ? (
+                <>
+                  <MicroLabel className="mb-2.5">사진 · 인바디</MicroLabel>
+                  <div className="mb-[18px] grid grid-cols-4 gap-2">
+                    {files.map((f) =>
+                      f.url && f.kind === "photo" ? (
+                        <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-[12px] bg-[#F1EDE6]">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={f.url} alt={f.takenAt} className="h-full w-full object-cover" />
+                        </a>
+                      ) : (
+                        <a key={f.id} href={f.url ?? "#"} target="_blank" rel="noreferrer" className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[12px] bg-[#FBF7F1] text-center">
+                          <Icon name="document-text" size={18} className="text-sage-deep" />
+                          <span className="text-[10px] font-semibold text-[#766D60]">인바디</span>
+                        </a>
+                      ),
+                    )}
+                  </div>
+                </>
               ) : null}
 
               {/* membership history */}
