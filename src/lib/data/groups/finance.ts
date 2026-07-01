@@ -57,7 +57,8 @@ export async function getExpenses(monthOffset = 0): Promise<ExpensesView> {
 
   const { data } = await sb
     .from("expenses")
-    .select("id, category, amount, spent_at, note, source, trainer_id, trainers(display_name)")
+    // expenses는 trainers를 참조하는 FK가 2개(trainer_id·recorded_by) → 임베드 명시 안 하면 PGRST201(모호) 에러로 data=null.
+    .select("id, category, amount, spent_at, note, source, trainer_id, trainers!expenses_trainer_id_fkey(display_name)")
     .gte("spent_at", firstThis)
     .lt("spent_at", firstNext)
     .order("spent_at", { ascending: false })
