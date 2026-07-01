@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     // main cause of the ~760ms tab-switch delay. Tabs are dynamic (auth/cookies), so
     // `dynamic` governs them; `static` covers prefetch={true} routes (5min).
     staleTimes: { dynamic: 60, static: 300 },
+    // 인바디 PDF 업로드(최대 10MB)를 서버 액션으로 받기 위해 상향. 기본값(1MB)은 부족.
+    serverActions: { bodySizeLimit: "10mb" },
   },
 };
 
