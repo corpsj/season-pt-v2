@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { key: "messages", label: "메시지", href: "/console/messages", icon: "message", activeIcon: "message-fill", badgeKey: "messages" },
   { key: "trainers", label: "강사", href: "/console/trainers", icon: "persons", activeIcon: "persons-fill" },
   { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
+  { key: "settlement", label: "강사 정산", href: "/console/settlement", icon: "tag", activeIcon: "tag-fill" },
   { key: "settings", label: "설정", href: "/console/settings", icon: "setting", activeIcon: "setting" },
 ];
 
