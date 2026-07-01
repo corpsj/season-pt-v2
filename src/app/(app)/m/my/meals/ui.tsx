@@ -1,0 +1,205 @@
+"use client";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Body } from "@/components/shell/Body";
+import { BackButton } from "@/components/shell/BackButton";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Icon } from "@/components/ui/icon";
+import { useToast } from "@/components/ui/Toast";
+import { downscaleImage } from "@/lib/media/downscale";
+import { logMeal, deleteMeal } from "@/lib/data/groups/meals-actions";
+import type { MealLog } from "@/lib/data/groups/meals";
+
+const TYPES = ["아침", "점심", "저녁", "간식"] as const;
+
+const kst = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", ...opts });
+const dayKey = (iso: string) => kst(iso, { year: "numeric", month: "2-digit", day: "2-digit" });
+const timeLabel = (iso: string) => kst(iso, { hour: "2-digit", minute: "2-digit", hour12: false });
+function dayLabel(iso: string): string {
+  const today = dayKey(new Date().toISOString());
+  const y = new Date(Date.now() - 86400000).toISOString();
+  if (dayKey(iso) === today) return "오늘";
+  if (dayKey(iso) === dayKey(y)) return "어제";
+  return kst(iso, { month: "long", day: "numeric", weekday: "short" });
+}
+
+export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
+  const router = useRouter();
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [, refresh] = useTransition();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [mealType, setMealType] = useState<string>("");
+  const [memo, setMemo] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  function pickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setPhoto(f);
+    setPreview(URL.createObjectURL(f));
+  }
+  function reset() {
+    setOpen(false);
+    setMealType("");
+    setMemo("");
+    setPhoto(null);
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(null);
+  }
+  async function submit() {
+    if (busy) return;
+    if (!photo && !memo.trim()) return toast("사진이나 메모를 입력해주세요");
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      if (mealType) fd.set("mealType", mealType);
+      if (memo.trim()) fd.set("memo", memo.trim());
+      if (photo) fd.set("photo", await downscaleImage(photo), "meal.jpg");
+      const r = await logMeal(fd);
+      if (!r.ok) return toast(r.error ?? "기록에 실패했어요");
+      toast("식단을 기록했어요");
+      reset();
+      refresh(() => router.refresh());
+    } catch {
+      toast("기록에 실패했어요");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(id: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await deleteMeal(id);
+      if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+      refresh(() => router.refresh());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // group by day
+  const groups: { label: string; items: MealLog[] }[] = [];
+  for (const m of initial) {
+    const label = dayLabel(m.eatenAt);
+    const g = groups.find((x) => x.label === label);
+    if (g) g.items.push(m);
+    else groups.push({ label, items: [m] });
+  }
+
+  return (
+    <div className="scr flex min-h-0 flex-1 flex-col">
+      <Body>
+        <div className="mb-[18px] flex items-center gap-3 px-0.5">
+          <BackButton fallback="/m/my" />
+          <span className="whitespace-nowrap text-[19px] font-bold tracking-[-0.01em] text-ink">식단 관리</span>
+          {!open ? (
+            <button
+              onClick={() => setOpen(true)}
+              className="ml-auto inline-flex items-center gap-1 rounded-[12px] bg-sage px-3 py-2 text-[13px] font-semibold text-surface active:scale-[.97]"
+            >
+              <Icon name="plus-bold" size={14} />기록
+            </button>
+          ) : null}
+        </div>
+
+        {open ? (
+          <Card className="mb-4 p-[18px]">
+            <div className="mb-3 flex gap-1.5">
+              {TYPES.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setMealType(mealType === t ? "" : t)}
+                  className={`flex-1 rounded-[11px] py-2 text-[13px] font-semibold transition ${mealType === t ? "bg-sage text-surface" : "bg-[#F4F0E8] text-muted"}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {preview ? (
+              <div className="relative mb-3 overflow-hidden rounded-[14px]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="미리보기" className="max-h-[220px] w-full object-cover" />
+                <button
+                  onClick={() => { if (preview) URL.revokeObjectURL(preview); setPreview(null); setPhoto(null); }}
+                  className="absolute right-2 top-2 rounded-full bg-ink/60 p-1.5 text-surface"
+                  aria-label="사진 제거"
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-[14px] border-[1.4px] border-dashed border-ink/20 bg-[#FBF9F5] py-5 text-[13.5px] font-semibold text-muted active:scale-[.99]"
+              >
+                <Icon name="camera" size={18} />사진 추가
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickPhoto} />
+
+            <textarea
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="무엇을 드셨나요? (예: 닭가슴살 샐러드, 고구마)"
+              rows={2}
+              className="mb-3 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+            />
+
+            <div className="flex gap-2">
+              <button onClick={reset} disabled={busy} className="flex-1 rounded-[13px] border border-ink/[0.12] bg-white py-3 text-[14px] font-semibold text-muted disabled:opacity-50">취소</button>
+              <button onClick={submit} disabled={busy} className="flex-[1.6] rounded-[13px] bg-sage py-3 text-[14px] font-semibold text-surface disabled:opacity-50">{busy ? "기록 중…" : "기록하기"}</button>
+            </div>
+          </Card>
+        ) : null}
+
+        {initial.length === 0 && !open ? (
+          <EmptyState icon="fire" title="아직 식단 기록이 없어요" desc="먹은 음식을 사진·메모로 남기면 선생님이 피드백을 드려요." />
+        ) : (
+          groups.map((g) => (
+            <div key={g.label} className="mb-4">
+              <div className="mb-2 px-1 text-[12.5px] font-semibold text-muted5">{g.label}</div>
+              <div className="flex flex-col gap-2.5">
+                {g.items.map((m) => (
+                  <Card key={m.id} className="overflow-hidden">
+                    {m.photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.photoUrl} alt="식단" className="max-h-[240px] w-full object-cover" />
+                    ) : null}
+                    <div className="p-[15px]">
+                      <div className="mb-1 flex items-center gap-2">
+                        {m.mealType ? <span className="rounded-md bg-[#EDF4E3] px-2 py-0.5 text-[11.5px] font-bold text-sage-deep">{m.mealType}</span> : null}
+                        <span className="text-[12px] font-medium text-muted">{timeLabel(m.eatenAt)}</span>
+                        <button onClick={() => remove(m.id)} disabled={busy} className="ml-auto text-[#C2BAAD] disabled:opacity-50" aria-label="삭제">
+                          <Icon name="close" size={16} />
+                        </button>
+                      </div>
+                      {m.memo ? <div className="text-[14px] leading-relaxed text-ink">{m.memo}</div> : null}
+                      {m.feedback ? (
+                        <div className="mt-3 flex items-start gap-2 rounded-[12px] bg-[#EDF4E3] px-3.5 py-3">
+                          <Icon name="message-fill" size={15} className="mt-0.5 flex-none text-sage-deep" />
+                          <div>
+                            <div className="mb-0.5 text-[11.5px] font-bold text-sage-deep">선생님 피드백</div>
+                            <div className="text-[13px] leading-relaxed text-[#4F5A45]">{m.feedback}</div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+        <div className="h-2" />
+      </Body>
+    </div>
+  );
+}

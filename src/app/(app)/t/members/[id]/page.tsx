@@ -10,7 +10,9 @@ import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
+import { getMemberMeals } from "@/lib/data/groups/meals";
 import { MemberFilesSection } from "./MemberFilesSection";
+import { MemberMealsSection } from "./MemberMealsSection";
 import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
 import { EditMemberButton } from "./EditMemberButton";
@@ -19,12 +21,13 @@ const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", t
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me, photos, inbodies] = await Promise.all([
+  const [m, recordHref, me, photos, inbodies, meals] = await Promise.all([
     getMemberDetail(id),
     getMemberRecordHref(id),
     getMe(),
     getMemberFiles(id, "photo"),
     getMemberFiles(id, "inbody"),
+    getMemberMeals(id),
   ]);
 
   return (
@@ -129,6 +132,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
 
         <MemberFilesSection kind="photo" memberId={id} initial={photos} />
         <MemberFilesSection kind="inbody" memberId={id} initial={inbodies} />
+        <MemberMealsSection initial={meals} />
 
         {/* regular schedule */}
         <Card className="mb-3.5 flex items-center gap-2.5 px-4 py-3.5">
