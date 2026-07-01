@@ -75,7 +75,8 @@ export async function confirmSettlement(monthOffset = 0): Promise<Result> {
   const s = await getSettlement(monthOffset);
 
   // 멱등: 그 달 정산 인건비 행 전량 삭제 후 재삽입. // ponytail: delete→insert 비원자적(2요청), 실패 시 미확정 롤백 → 재클릭 자기치유.
-  await sb.from("expenses").delete().eq("source", "settlement").eq("settle_month", monthKey);
+  const { error: delErr } = await sb.from("expenses").delete().eq("source", "settlement").eq("settle_month", monthKey);
+  if (delErr) return { ok: false, error: "정산 확정에 실패했어요" };
 
   const rows = settlementLaborRows(s.rows, { monthKey, spentAt: lastDay, recordedBy: t.id });
   if (rows.length > 0) {
