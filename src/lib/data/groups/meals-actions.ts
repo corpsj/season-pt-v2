@@ -3,13 +3,18 @@ import { revalidatePath } from "next/cache";
 import { sb, getMemberContext } from "@/lib/data/db";
 import { validateUpload } from "@/lib/media/upload-guard";
 import { FILES_BUCKET, trainerCanAccess } from "./member-files";
-import { getMyMeals, type MealsPage } from "./meals";
+import { getMyMeals, getMemberMeals, type MealsPage } from "./meals";
 
 type Result = { ok: boolean; error?: string };
 
 /** 회원 본인 식단 더보기(무한스크롤 아님, 버튼 클릭 페이지네이션) — getMyMeals와 동일 권한. */
 export async function loadMoreMeals(offset: number): Promise<MealsPage> {
   return getMyMeals(offset);
+}
+
+/** 대표 콘솔(클라이언트)에서 회원 선택 시 식단 조회 — getMemberMeals가 권한 검증. */
+export async function listMemberMeals(memberId: string): Promise<MealsPage> {
+  return getMemberMeals(memberId);
 }
 
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
