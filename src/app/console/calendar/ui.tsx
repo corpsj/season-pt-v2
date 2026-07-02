@@ -3,10 +3,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
-import { Card, OBtn, GBtn, ConsoleModal, pill } from "@/components/console/ui";
-import { confirmAttendance, revertAttendance } from "@/lib/data/groups/scheduling-actions";
-import { loadSessionSignature } from "@/lib/data/groups/console-actions";
+import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
+import { confirmAttendance, revertAttendance, sendPropose } from "@/lib/data/groups/scheduling-actions";
+import { loadSessionSignature, loadProposeSlots } from "@/lib/data/groups/console-actions";
 import type { StudioCalendarMonth, StudioClass } from "@/lib/data/groups/console";
+
+type ProposeView = NonNullable<Awaited<ReturnType<typeof loadProposeSlots>>>;
 
 const WD = ["월", "화", "수", "목", "금", "토", "일"];
 
@@ -33,10 +35,65 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [sig, setSig] = useState<{ member: string; url: string } | null>(null);
 
+  // 일정 조율 요청 모달 상태 — 캘린더 날짜 모달에서 예정 수업을 클릭하면 열린다.
+  const [prop, setProp] = useState<{ c: StudioClass; view: ProposeView } | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [reason, setReason] = useState<string | null>(null);
+  const [reasonText, setReasonText] = useState("");
+  const [customDate, setCustomDate] = useState("");
+  const [customTime, setCustomTime] = useState("");
+  const [sending, setSending] = useState(false);
+
   async function openSignature(c: StudioClass) {
     const url = await loadSessionSignature(c.sessionId);
     if (!url) return toast("서명을 불러오지 못했어요");
     setSig({ member: c.member, url });
+  }
+
+  async function openPropose(c: StudioClass) {
+    setBusy(c.sessionId);
+    const view = await loadProposeSlots(c.sessionId);
+    setBusy(null);
+    if (!view) return toast("조율 정보를 불러오지 못했어요");
+    setPicked(new Set());
+    setReason(null);
+    setReasonText("");
+    setCustomDate("");
+    setCustomTime("");
+    setProp({ c, view });
+  }
+
+  function toggleSlot(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 3) next.add(id);
+      return next;
+    });
+  }
+
+  const proposeCount = picked.size + (customDate && customTime ? 1 : 0);
+
+  async function submitPropose() {
+    if (!prop) return;
+    const customIso =
+      customDate && customTime ? new Date(`${customDate}T${customTime}:00+09:00`).toISOString() : null;
+    if (customIso && customIso <= new Date().toISOString()) return toast("지난 시간은 제안할 수 없어요");
+    const slotsIso = [
+      ...prop.view.slots.filter((s) => picked.has(s.id)).map((s) => s.iso),
+      ...(customIso ? [customIso] : []),
+    ];
+    if (slotsIso.length === 0) return;
+    setSending(true);
+    const r = await sendPropose(
+      prop.c.sessionId,
+      slotsIso,
+      reason === "직접 입력" ? reasonText.trim() || undefined : reason ?? undefined,
+    );
+    setSending(false);
+    if (!r.ok) return toast(r.error ?? "요청 전송에 실패했어요");
+    toast("일정 조율 요청을 보냈어요");
+    setProp(null);
   }
 
   function go(off: number) {
@@ -152,15 +209,24 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
               {modalClasses.length > 0 ? (
                 modalClasses.map((c) => (
                   <div key={c.sessionId} className="flex items-center gap-3 border-b border-[rgba(75,59,46,0.05)] px-1.5 py-3 last:border-b-0">
-                    <div className="w-[58px] flex-none">
-                      <div className="text-[13.5px] font-bold text-ink">{c.start}</div>
-                      <div className="mt-px text-[10px] font-medium text-[#A89F92]">{c.end}</div>
-                    </div>
-                    <div className="h-[38px] w-[3px] flex-none rounded-[2px]" style={{ background: c.color }} />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13.5px] font-bold text-ink">{c.member}{c.isTeam ? " · 2:1" : ""}</div>
-                      <div className="text-[11px] font-medium text-[#9A917F]">{c.trainerName}</div>
-                    </div>
+                    {/* 예정 수업 클릭 → 일정 조율 요청 모달 */}
+                    <button
+                      type="button"
+                      disabled={c.status !== "scheduled" || busy === c.sessionId}
+                      title={c.status === "scheduled" ? "일정 조율 요청" : undefined}
+                      onClick={() => openPropose(c)}
+                      className="-m-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-[10px] p-1.5 text-left transition enabled:cursor-pointer enabled:hover:bg-[#F7F4ED]"
+                    >
+                      <div className="w-[58px] flex-none">
+                        <div className="text-[13.5px] font-bold text-ink">{c.start}</div>
+                        <div className="mt-px text-[10px] font-medium text-[#A89F92]">{c.end}</div>
+                      </div>
+                      <div className="h-[38px] w-[3px] flex-none rounded-[2px]" style={{ background: c.color }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13.5px] font-bold text-ink">{c.member}{c.isTeam ? " · 2:1" : ""}</div>
+                        <div className="text-[11px] font-medium text-[#9A917F]">{c.trainerName}</div>
+                      </div>
+                    </button>
                     {c.showAttend ? (
                       <div className="flex flex-none gap-1.5">
                         <OBtn className="!px-3 !py-[7px] text-[12.5px]" disabled={busy === c.sessionId} onClick={() => mark(c.sessionId, "attend")}>출석</OBtn>
@@ -201,6 +267,85 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* 일정 조율 요청 — 예정 수업 클릭 시. 모바일 propose와 동일 흐름(sendPropose)·회원이 받은 요청에서 응답 */}
+      {prop ? (
+        <ConsoleModal
+          title="일정 조율 요청"
+          onClose={() => setProp(null)}
+          footer={
+            <>
+              <GBtn className="flex-1" onClick={() => setProp(null)}>취소</GBtn>
+              <PBtn className="flex-[2]" disabled={proposeCount === 0 || sending} onClick={submitPropose}>
+                조율 요청 보내기 · {proposeCount}개 제안
+              </PBtn>
+            </>
+          }
+        >
+          <div className="mb-4 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.1)] bg-[#FAF8F4] px-3.5 py-3">
+            <span className="text-[13px] font-semibold text-[#8A8175] line-through">{prop.view.before}</span>
+            <span className="text-[13px] font-bold text-ink">{prop.view.memberName}</span>
+            <span className="ml-auto text-[11px] font-medium text-[#9A917F]">{prop.c.trainerName}</span>
+          </div>
+
+          <MicroLabel className="mb-2">새 시간 제안 · 최대 3개</MicroLabel>
+          <div className="flex flex-col gap-2">
+            {prop.view.slots.map((s) => {
+              const on = picked.has(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleSlot(s.id)}
+                  className={`w-full rounded-[11px] border px-3.5 py-2.5 text-left text-[13.5px] font-semibold transition ${on ? "border-sage bg-[#F3F7EC] text-ink" : "border-[rgba(75,59,46,0.12)] bg-white text-[#5B5345] hover:bg-[#F7F4ED]"}`}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+            <div className="flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5">
+              <input
+                type="date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                className="flex-1 bg-transparent text-[13.5px] font-semibold text-ink"
+              />
+              <input
+                type="time"
+                value={customTime}
+                onChange={(e) => setCustomTime(e.target.value)}
+                step={1800}
+                className="bg-transparent text-[13.5px] font-semibold text-ink"
+              />
+            </div>
+          </div>
+
+          <MicroLabel className="mb-2 mt-4">사유 (선택)</MicroLabel>
+          <div className="mb-4 flex flex-wrap gap-2">
+            {prop.view.reasons.map((r) => {
+              const on = reason === r;
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setReason((prev) => (prev === r ? null : r))}
+                  className={`rounded-[20px] border px-3 py-1.5 text-[12.5px] font-semibold transition ${on ? "border-sage bg-sage text-white" : "border-[rgba(75,59,46,0.12)] bg-white text-[#766D60] hover:bg-[#F7F4ED]"}`}
+                >
+                  {r}
+                </button>
+              );
+            })}
+          </div>
+          {reason === "직접 입력" ? (
+            <input
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
+              placeholder="사유를 입력해주세요"
+              className="mb-4 w-full rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5 text-[13px]"
+            />
+          ) : null}
+        </ConsoleModal>
       ) : null}
 
       {/* 수업 완료 회원 확인 서명 뷰어 */}
