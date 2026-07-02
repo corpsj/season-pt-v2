@@ -2,8 +2,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
-import { PBtn, OBtn, ConsoleModal } from "@/components/console/ui";
+import { PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { addInstructor, issueInstructorLogin, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword } from "@/lib/auth/trainer-actions";
+import { setTrainerRates } from "@/lib/data/groups/settlement-actions";
 
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
@@ -213,5 +214,62 @@ export function TrainerActions({
         </ConsoleModal>
       ) : null}
     </>
+  );
+}
+
+/** 강사 회당 단가(1:1 / 2:1) 편집 — 정산 지급액 계산 기준. 변경은 다음 진행분부터 적용(지난 정산 불변). */
+export function TrainerRates({ id, rate1on1, rate2on1 }: { id: string; rate1on1: number; rate2on1: number }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [r1, setR1] = useState(String(rate1on1 || ""));
+  const [r2, setR2] = useState(String(rate2on1 || ""));
+  const [busy, setBusy] = useState(false);
+  const dirty = Number(r1 || 0) !== rate1on1 || Number(r2 || 0) !== rate2on1;
+
+  async function save() {
+    if (busy || !dirty) return;
+    setBusy(true);
+    const res = await setTrainerRates(id, Number(r1 || 0), Number(r2 || 0));
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "단가 저장에 실패했어요");
+    toast("회당 단가를 저장했어요");
+    router.refresh();
+  }
+
+  return (
+    <div className="mt-[18px] rounded-[15px] border border-[rgba(75,59,46,0.08)] bg-[#FBF7F1] px-5 py-[18px]">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <div className="text-[13.5px] font-bold text-ink">회당 단가</div>
+          <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">정산 지급액 계산 기준 · 변경은 다음 진행분부터 적용</div>
+        </div>
+        <PBtn icon="check-bold" className="!px-4" disabled={busy || !dirty} onClick={save}>저장</PBtn>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        <RateField label="1:1 회당" value={r1} onChange={setR1} />
+        <RateField label="2:1 회당" value={r2} onChange={setR2} />
+      </div>
+    </div>
+  );
+}
+
+function RateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const n = Number(value || 0);
+  return (
+    <div>
+      <div className="mb-[6px] text-[11.5px] font-semibold text-[#766D60]">{label}</div>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-[#9A917F]">₩</span>
+        <input
+          inputMode="numeric"
+          maxLength={8}
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 8))}
+          placeholder="0"
+          className="w-full rounded-[11px] border border-[rgba(75,59,46,0.14)] bg-white py-[10px] pl-7 pr-3 text-[14px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+        />
+      </div>
+      {n > 0 ? <div className="mt-1 pl-1 text-[11px] font-medium text-sage-deep">{won(n)}</div> : null}
+    </div>
   );
 }

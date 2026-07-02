@@ -6,7 +6,6 @@ import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { Card, won, PBtn, OBtn, ConsoleModal } from "@/components/console/ui";
-import { setTrainerRates } from "@/lib/data/groups/settlement-actions";
 import { confirmSettlement, unconfirmSettlement } from "@/lib/data/groups/finance-actions";
 import type { Settlement, SettlementRow } from "@/lib/data/groups/settlement";
 
@@ -45,7 +44,7 @@ export function SettlementClient({ settlement }: { settlement: Settlement }) {
           <span className="flex-1">강사</span>
           <span className="w-[150px] text-center">진행 수업 (1:1 · 2:1)</span>
           <span className="w-[220px] text-center">회당 단가</span>
-          <span className="w-[110px] text-right">지급액</span>
+          <span className="w-[120px] text-right">지급액</span>
         </div>
         {rows.length === 0 ? (
           <div className="px-5 py-14 text-center">
@@ -60,7 +59,7 @@ export function SettlementClient({ settlement }: { settlement: Settlement }) {
       <div className="mt-4 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
         <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
         <span className="text-[12.5px] font-medium leading-relaxed text-[#766D60]">
-          정산은 해당 월에 <b className="font-semibold text-[#5B5345]">실제 진행(출석 확정)된 수업</b> 기준이에요. 2:1 팀 수업은 1회로 계산돼요. 지급액은 <b className="font-semibold text-[#5B5345]">각 수업 진행 시점의 단가</b>로 계산되며, 단가를 바꿔도 지난 정산은 바뀌지 않아요(다음 진행분부터 적용).{" "}<b className="font-semibold text-[#5B5345]">지급 확정</b>하면 이 달 인건비가 <b className="font-semibold text-[#5B5345]">손익</b> 화면에 지출로 반영돼요.
+          정산은 해당 월에 <b className="font-semibold text-[#5B5345]">실제 진행(출석 확정)된 수업</b> 기준이에요. 2:1 팀 수업은 1회로 계산돼요. 지급액은 <b className="font-semibold text-[#5B5345]">각 수업 진행 시점의 단가</b>로 계산되며, 단가를 바꿔도 지난 정산은 바뀌지 않아요(다음 진행분부터 적용). 회당 단가는 <b className="font-semibold text-[#5B5345]">강사 관리</b>에서 강사별로 수정해요.{" "}<b className="font-semibold text-[#5B5345]">지급 확정</b>하면 이 달 인건비가 <b className="font-semibold text-[#5B5345]">손익</b> 화면에 지출로 반영돼요.
         </span>
       </div>
     </>
@@ -78,23 +77,7 @@ function NavArrow({ to, dir, disabled }: { to: number; dir: "prev" | "next"; dis
 }
 
 function TrainerRow({ row }: { row: SettlementRow }) {
-  const router = useRouter();
-  const toast = useToast();
-  const [r1, setR1] = useState(String(row.rate1on1 || ""));
-  const [r2, setR2] = useState(String(row.rate2on1 || ""));
-  const [busy, setBusy] = useState(false);
-  const dirty = Number(r1 || 0) !== row.rate1on1 || Number(r2 || 0) !== row.rate2on1;
-
-  async function save() {
-    if (busy || !dirty) return;
-    setBusy(true);
-    const res = await setTrainerRates(row.trainerId, Number(r1 || 0), Number(r2 || 0));
-    setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
-    toast("단가를 저장했어요");
-    router.refresh();
-  }
-
+  const hasRate = row.rate1on1 > 0 || row.rate2on1 > 0;
   return (
     <div className="flex items-center border-b border-[rgba(75,59,46,0.05)] px-5 py-3.5">
       <div className="flex flex-1 items-center gap-3">
@@ -112,26 +95,22 @@ function TrainerRow({ row }: { row: SettlementRow }) {
         <span className="text-sage-deep">{row.count1on1}</span> · <span className="text-sage-deep">{row.count2on1}</span>
       </div>
 
-      <div className="flex w-[220px] items-center justify-center gap-1.5">
+      {/* 회당 단가: 읽기 전용 — 수정은 강사 관리에서 */}
+      <div className="flex w-[220px] items-center justify-center">
         {row.inactive ? (
-          <span className="text-[12px] font-medium text-[#B3AA9C]">단가 설정 불가</span>
+          <span className="text-[12px] font-medium text-[#B3AA9C]">비활성</span>
+        ) : hasRate ? (
+          <div className="text-center text-[12.5px] font-semibold text-[#5B5345]">
+            1:1 {won(row.rate1on1)} · 2:1 {won(row.rate2on1)}
+          </div>
         ) : (
-          <>
-            <RateInput value={r1} onChange={setR1} placeholder="1:1" />
-            <RateInput value={r2} onChange={setR2} placeholder="2:1" />
-            <button
-              onClick={save}
-              disabled={busy || !dirty}
-              className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-sage text-white transition disabled:opacity-30"
-              aria-label="단가 저장"
-            >
-              <Icon name="check-bold" size={14} />
-            </button>
-          </>
+          <Link href={`/console/trainers?sel=${row.trainerId}`} className="inline-flex items-center gap-1 rounded-[9px] bg-[#FBF3E9] px-2.5 py-1.5 text-[12px] font-semibold text-[#B5612F] transition hover:brightness-[0.97]">
+            <Icon name="pencil" size={12} />단가 설정
+          </Link>
         )}
       </div>
 
-      <span className="w-[110px] text-right text-[15px] font-bold text-ink">{won(row.payout)}</span>
+      <span className="w-[120px] text-right text-[15px] font-bold text-ink">{won(row.payout)}</span>
     </div>
   );
 }
@@ -219,18 +198,5 @@ function ConfirmControl({
         </ConsoleModal>
       ) : null}
     </div>
-  );
-}
-
-function RateInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
-  return (
-    <input
-      inputMode="numeric"
-      maxLength={8}
-      value={value}
-      onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 8))}
-      placeholder={placeholder}
-      className="w-[78px] rounded-[9px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-2 py-[7px] text-center text-[13px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
-    />
   );
 }

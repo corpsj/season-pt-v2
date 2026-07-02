@@ -130,6 +130,8 @@ export interface StaffMemberDetail {
   isMe: boolean;
   isOwner: boolean;
   hasLogin: boolean; // 로그인 계정 발급 여부(false = 명단만 등록된 강사)
+  rate1on1: number; // 회당 단가(정산 기준) — 강사 관리에서 수정
+  rate2on1: number;
 }
 
 /** Single staff member for the 강사 상세/관리 screen. */
@@ -137,7 +139,7 @@ export async function getStaffMember(id: string): Promise<StaffMemberDetail | nu
   const me = await getTrainerContext();
   const { data } = await sb
     .from("trainers")
-    .select("id, display_name, username, phone, role, status, auth_user_id")
+    .select("id, display_name, username, phone, role, status, auth_user_id, rate_1on1, rate_2on1")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -156,6 +158,8 @@ export async function getStaffMember(id: string): Promise<StaffMemberDetail | nu
     isMe: !!me && me.id === data.id,
     isOwner: data.role === "owner",
     hasLogin: !!data.auth_user_id,
+    rate1on1: (data.rate_1on1 as number | null) ?? 0,
+    rate2on1: (data.rate_2on1 as number | null) ?? 0,
   };
 }
 

@@ -5,7 +5,7 @@ import { Topbar } from "@/components/console/Topbar";
 import { Card, DPill, MicroLabel } from "@/components/console/ui";
 import { getStaff, getStaffMember } from "@/lib/data/groups/owner-ops";
 import { getTrainerConsoleDetail, getTrainerPerf } from "@/lib/data/groups/console";
-import { AddTrainerButton, TrainerActions } from "./ui";
+import { AddTrainerButton, TrainerActions, TrainerRates } from "./ui";
 
 function roleChip(role: string, hasLogin = true) {
   if (role === "owner") return <span className="rounded-[7px] bg-[#F3EAD2] px-2 py-[3px] text-[10.5px] font-bold text-[#9A7B2E]">대표</span>;
@@ -126,7 +126,11 @@ export default async function ConsoleTrainersPage({
                       <div className="mb-[18px] px-0.5 text-[12px] font-medium text-[#B3AA9C]">담당 회원이 없어요</div>
                     )}
 
-                    <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} />
+                    {!detail.isOwner ? <TrainerRates id={detail.id} rate1on1={detail.rate1on1} rate2on1={detail.rate2on1} /> : null}
+
+                    <div className="mt-[18px]">
+                      <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} />
+                    </div>
                   </>
                 )}
               </>
