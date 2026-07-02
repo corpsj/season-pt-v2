@@ -172,7 +172,8 @@ export async function updateMember(
 
   const { error } = await sb.from("members").update(patch).eq("id", id);
   if (error) return { ok: false, error: "이미 사용 중인 연락처이거나 수정에 실패했어요" };
-  if (birth6) await sb.from("member_login_attempts").delete().eq("phone", phone); // 잠금 해제(best-effort)
+  // 잠금 해제(best-effort) — 스로틀 테이블 오류가 회원 수정 자체를 실패시키지 않게(member-actions clearFails와 동일 관례)
+  try { if (birth6) await sb.from("member_login_attempts").delete().eq("phone", phone); } catch { /* best-effort */ }
 
   revalidatePath(`/t/members/${id}`);
   revalidatePath("/t/members");

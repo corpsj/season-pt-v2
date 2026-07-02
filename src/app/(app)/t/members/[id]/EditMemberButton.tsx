@@ -33,6 +33,7 @@ export function EditMemberButton({
     startTransition(async () => {
       const r = await updateMember(id, { name: f.name, phone: f.phone, gender: f.gender, injuryNote: f.injury, birth: f.birth });
       if (r.ok) {
+        setF((s) => ({ ...s, birth: "" })); // 저장 후 비움 — 다음 편집서 stale 값이 재차 비번초기화 트리거하지 않도록
         toast("회원 정보를 수정했어요");
         setOpen(false);
         router.refresh();
@@ -46,7 +47,7 @@ export function EditMemberButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => { setF((s) => ({ ...s, birth: "" })); setOpen(true); }}
         aria-label="회원 정보 수정"
         className="tappable flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-sage-deep/40 text-sage-deep hover:bg-sage/[0.07]"
       >
