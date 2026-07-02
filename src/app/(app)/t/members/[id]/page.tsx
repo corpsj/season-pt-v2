@@ -149,14 +149,14 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <span className="text-[13px] font-semibold text-ink">{m.schedule}</span>
         </Card>
 
-        {/* 2:1 팀 만들기 (대표 전용, 이미 팀이면 숨김 — 2:1은 고정 페어) */}
-        {me.isOwner && !m.isTeam ? (
+        {/* 2:1 팀 만들기/일정 편집 (대표 전용) — 팀이면 편집·해제, 아니면 새로 묶기 */}
+        {me.isOwner ? (
           <Link
             href={`/t/members/${id}/team`}
             className="tappable mb-3.5 flex items-center gap-2.5 rounded-[13px] border border-dashed border-gold/45 bg-gold-bg px-4 py-3.5"
           >
             <Icon name="persons" size={18} className="flex-none text-gold" />
-            <span className="flex-1 text-[13px] font-semibold text-ink-soft">2:1 팀으로 묶기</span>
+            <span className="flex-1 text-[13px] font-semibold text-ink-soft">{m.isTeam ? "2:1 팀 일정 편집" : "2:1 팀으로 묶기"}</span>
             <Icon name="chevron-right" size={16} className="flex-none text-gold" />
           </Link>
         ) : null}

@@ -57,6 +57,7 @@ export function MemberRegisterClient({
     6: { hour: 19, minute: 0 },
   });
   const [trainerId, setTrainerId] = useState(ownerId);
+  const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
   const [productFilter, setProductFilter] = useState<"all" | "1on1" | "2on1">("all");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
@@ -69,7 +70,12 @@ export function MemberRegisterClient({
     setSelectedProduct(id);
     if (id !== "later") {
       const p = products.find((p) => p.id === id);
-      if (p) setPayAmount(String(p.price));
+      if (p) {
+        setPayAmount(String(p.price));
+        // 상품명으로 수업 형태 자동 동기화 — "나중에 발급"은 토글로 직접 지정.
+        const pt = productType(p.name);
+        if (pt) setClassType(pt);
+      }
     } else {
       setPayAmount("");
     }
@@ -126,9 +132,10 @@ export function MemberRegisterClient({
   const staffOptions = trainers.map((s) => ({ value: s.id, label: s.name }));
 
   const selectedProductData = products.find((p) => p.id === selectedProduct);
-  // 2:1 상품 선택 시 정기 슬롯 입력을 숨긴다 — 팀 시간은 회원 등록 후 [회원 관리 → 팀 만들기]에서
-  // 두 회원을 함께 묶어 정한다. 여기서 슬롯을 받으면 잘못된 1:1 스케줄이 생성된다.
-  const is2on1 = selectedProductData ? productType(selectedProductData.name) === "2on1" : false;
+  // 2:1이면 정기 슬롯 입력을 숨긴다 — 팀 시간은 등록 후 회원 상세 [2:1 팀으로 묶기]에서 정한다.
+  // 여기서 슬롯을 받으면 잘못된 1:1 스케줄이 생성된다. 상품명 추론이 아니라 명시 토글이 기준
+  // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
+  const is2on1 = classType === "2on1";
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -180,6 +187,19 @@ export function MemberRegisterClient({
               value={trainerId}
               options={staffOptions}
               onChange={setTrainerId}
+            />
+          </div>
+
+          {/* 수업 형태 — 2:1은 정기 일정을 팀 만들기에서 정하므로 여기서 명시적으로 받는다 */}
+          <div>
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">수업 형태</div>
+            <SegmentedToggle
+              options={[
+                { value: "1on1", label: "1:1" },
+                { value: "2on1", label: "2:1" },
+              ]}
+              value={classType}
+              onChange={setClassType}
             />
           </div>
         </div>

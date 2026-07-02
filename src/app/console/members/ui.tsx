@@ -15,7 +15,7 @@ import { createMember } from "@/lib/data/groups/owner-ops-actions";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
-import { TeamCreateModal } from "./TeamCreate";
+import { TeamCreateModal, TeamEditModal } from "./TeamCreate";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
@@ -291,18 +291,16 @@ export function MembersClient({
                 </button>
               </div>
 
-              {/* 2:1 팀 만들기 — 이미 팀인 회원은 숨김(2:1은 고정 페어) */}
-              {!d.isTeam ? (
-                <button
-                  type="button"
-                  onClick={() => setModal("team")}
-                  className="mb-[18px] flex w-full items-center gap-2.5 rounded-[13px] border border-dashed border-[rgba(138,111,62,0.35)] bg-[#FBF7EF] px-4 py-3 text-left transition hover:bg-[#F6EFE2]"
-                >
-                  <Icon name="persons" size={16} className="flex-none text-[#8A6F3E]" />
-                  <span className="flex-1 text-[13px] font-semibold text-[#7A6338]">2:1 팀으로 묶기</span>
-                  <Icon name="chevron-right" size={15} className="flex-none text-[#B79A63]" />
-                </button>
-              ) : null}
+              {/* 2:1 팀 — 팀이면 일정 편집·해제, 아니면 새로 묶기 */}
+              <button
+                type="button"
+                onClick={() => setModal("team")}
+                className="mb-[18px] flex w-full items-center gap-2.5 rounded-[13px] border border-dashed border-[rgba(138,111,62,0.35)] bg-[#FBF7EF] px-4 py-3 text-left transition hover:bg-[#F6EFE2]"
+              >
+                <Icon name="persons" size={16} className="flex-none text-[#8A6F3E]" />
+                <span className="flex-1 text-[13px] font-semibold text-[#7A6338]">{d.isTeam ? "2:1 팀 일정 편집" : "2:1 팀으로 묶기"}</span>
+                <Icon name="chevron-right" size={15} className="flex-none text-[#B79A63]" />
+              </button>
 
               {d.injury ? (
                 <div className="mb-[18px] flex items-start gap-2.5 rounded-[13px] bg-[#FBF3E9] px-4 py-3">
@@ -413,12 +411,21 @@ export function MembersClient({
       ) : null}
 
       {modal === "team" && d ? (
-        <TeamCreateModal
-          memberId={d.id}
-          memberName={d.name}
-          onClose={() => setModal(null)}
-          onDone={async () => { await reload(); router.refresh(); }}
-        />
+        d.isTeam ? (
+          <TeamEditModal
+            memberId={d.id}
+            memberName={d.name}
+            onClose={() => setModal(null)}
+            onDone={async () => { await reload(); router.refresh(); }}
+          />
+        ) : (
+          <TeamCreateModal
+            memberId={d.id}
+            memberName={d.name}
+            onClose={() => setModal(null)}
+            onDone={async () => { await reload(); router.refresh(); }}
+          />
+        )
       ) : null}
 
       {modal === "issue" && d ? (

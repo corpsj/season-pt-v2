@@ -8,10 +8,10 @@ import { Banner } from "@/components/ui/Banner";
 import { Select } from "@/components/ui/Select";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { TextInput } from "@/components/ui/Field";
-import { PrimaryButton } from "@/components/ui/Button";
+import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
-import { createTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
+import { createTeamSchedule, setTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 function hourLabel(h: number) {
@@ -26,16 +26,27 @@ export function TeamCreateClient({
   memberId,
   memberName,
   candidates,
+  mode = "create",
+  partnerName,
+  initialSlots,
 }: {
   memberId: string;
   memberName: string;
   candidates: { id: string; name: string }[];
+  mode?: "create" | "edit"; // edit = 이미 팀인 회원의 일정 편집·해제
+  partnerName?: string;
+  initialSlots?: { weekday: number; hour: number; minute: number }[];
 }) {
   const router = useRouter();
   const toast = useToast();
+  const isEdit = mode === "edit";
   const [q, setQ] = useState("");
   const [partnerId, setPartnerId] = useState<string | null>(null);
-  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
+  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>(() => {
+    const dt: Record<number, { hour: number; minute: number }> = {};
+    for (const s of initialSlots ?? []) dt[s.weekday] ??= { hour: s.hour, minute: s.minute };
+    return dt;
+  });
   const [pending, setPending] = useState(false);
 
   const partner = candidates.find((c) => c.id === partnerId) ?? null;
@@ -57,16 +68,32 @@ export function TeamCreateClient({
 
   async function submit() {
     if (pending) return;
-    if (!partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요");
+    if (!isEdit && !partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요");
     const slots = selectedDays.map((wd) => ({ weekday: wd, hour: dayTimes[wd].hour, minute: dayTimes[wd].minute }));
     if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요");
     setPending(true);
-    const res = await createTeamSchedule({ memberIds: [memberId, partnerId], slots });
+    const res = isEdit
+      ? await setTeamSchedule(memberId, slots)
+      : await createTeamSchedule({ memberIds: [memberId, partnerId!], slots });
     if (!res.ok) {
       setPending(false);
-      return toast(res.error ?? "팀 만들기에 실패했어요");
+      return toast(res.error ?? (isEdit ? "일정 변경에 실패했어요" : "팀 만들기에 실패했어요"));
     }
-    toast(res.warn ?? "2:1 팀을 만들었어요");
+    toast(res.warn ?? (isEdit ? "팀 일정을 변경했어요" : "2:1 팀을 만들었어요"));
+    router.push(`/t/members/${memberId}`);
+    router.refresh();
+  }
+
+  async function dissolve() {
+    if (pending) return;
+    if (!confirm("2:1 팀을 해제할까요? 앞으로의 팀 수업이 모두 삭제돼요 (지난·처리된 수업은 그대로예요).")) return;
+    setPending(true);
+    const res = await setTeamSchedule(memberId, []);
+    if (!res.ok) {
+      setPending(false);
+      return toast(res.error ?? "팀 해제에 실패했어요");
+    }
+    toast("팀을 해제했어요 — 각 회원의 정기 일정을 다시 설정해주세요");
     router.push(`/t/members/${memberId}`);
     router.refresh();
   }
@@ -76,18 +103,26 @@ export function TeamCreateClient({
       <Body>
         <div className="mb-5 flex items-center gap-3">
           <BackButton fallback={`/t/members/${memberId}`} />
-          <span className="text-[19px] font-bold text-ink">2:1 팀 만들기</span>
+          <span className="text-[19px] font-bold text-ink">{isEdit ? "2:1 팀 일정" : "2:1 팀 만들기"}</span>
         </div>
 
         <Banner tone="team" className="mb-4">
-          {memberName}님과 팀을 이룰 회원을 골라 시간을 정하면, 출석·차감·일정 변경이 항상 두 분 함께 처리돼요. 회원권은 각자 유지돼요.
+          {isEdit
+            ? <>{memberName}님{partnerName ? ` · ${partnerName}님` : ""} 팀이에요. 요일·시간을 바꾸면 앞으로의 팀 수업도 함께 바뀌어요.</>
+            : <>{memberName}님과 팀을 이룰 회원을 골라 시간을 정하면, 출석·차감·일정 변경이 항상 두 분 함께 처리돼요. 회원권은 각자 유지돼요.</>}
         </Banner>
 
-        {/* 파트너 선택 */}
+        {/* 파트너 선택(만들기) / 파트너 표시(편집 — 고정 페어) */}
         <div className="mb-2.5">
           <Kicker>파트너 회원</Kicker>
         </div>
-        {partner ? (
+        {isEdit ? (
+          <div className="mb-4 flex items-center gap-2.5 rounded-[13px] border border-sage/40 bg-sage-banner2 px-4 py-3">
+            <Icon name="person" size={16} className="flex-none text-sage-deep" />
+            <span className="flex-1 text-[14px] font-bold text-ink">{partnerName ?? "팀원"}</span>
+            <span className="text-[11.5px] font-medium text-muted5">파트너 변경은 해제 후 다시 묶기</span>
+          </div>
+        ) : partner ? (
           <div className="mb-4 flex items-center gap-2.5 rounded-[13px] border border-sage/40 bg-sage-banner2 px-4 py-3">
             <Icon name="person" size={16} className="flex-none text-sage-deep" />
             <span className="flex-1 text-[14px] font-bold text-ink">{partner.name}</span>
@@ -175,9 +210,20 @@ export function TeamCreateClient({
       </Body>
 
       <Footer>
-        <PrimaryButton icon="persons" onClick={submit} disabled={pending || !partnerId || selectedDays.length === 0}>
-          2:1 팀 만들기
-        </PrimaryButton>
+        {isEdit ? (
+          <div className="flex gap-2.5">
+            <OutlineButton onClick={dissolve} disabled={pending} className="flex-1">
+              팀 해제
+            </OutlineButton>
+            <PrimaryButton icon="check" onClick={submit} disabled={pending || selectedDays.length === 0} className="flex-[1.6]">
+              일정 저장
+            </PrimaryButton>
+          </div>
+        ) : (
+          <PrimaryButton icon="persons" onClick={submit} disabled={pending || !partnerId || selectedDays.length === 0}>
+            2:1 팀 만들기
+          </PrimaryButton>
+        )}
       </Footer>
     </div>
   );

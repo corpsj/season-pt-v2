@@ -5,6 +5,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
+import { normalizeTeamSlots } from "@/lib/data/team-slots";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -724,4 +725,109 @@ export async function createTeamSchedule(input: {
   revalidatePath("/t/members");
   revalidatePath("/console");
   return { ok: true, warn: built.warn };
+}
+
+/**
+ * 2:1 팀 정기 일정을 목표 슬롯 집합으로 맞춘다(대표 전용). 빈 배열이면 팀 해제(모든 팀 스케줄 중지).
+ * 삭제된 슬롯: 스케줄 비활성 + 미래 예정 세션 삭제(과거·처리분 불변). 추가: 더블부킹 사전 가드 후
+ * 생성 → 즉시 materialize. 잘못 만든 팀의 정정·부분 생성 실패 복구 경로(감사 후속).
+ * 팀 구성원 자체는 바꾸지 않는다(고정 페어) — 파트너를 바꾸려면 해제 후 다시 묶는다.
+ */
+export async function setTeamSchedule(
+  memberId: string,
+  slots: { weekday: number; hour: number; minute: number }[],
+): Promise<Result & { warn?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  // 목표 슬롯 검증 — 빈 배열은 '해제'로 허용.
+  let desired: { weekday: number; hour: number; minute: number }[] = [];
+  if (slots.length > 0) {
+    const norm = normalizeTeamSlots(slots);
+    if ("error" in norm) return { ok: false, error: norm.error };
+    desired = norm.slots;
+  }
+
+  // 현재: 이 회원이 속한 활성 2:1 팀 스케줄.
+  const { data: links } = await sb.from("schedule_members").select("schedule_id").eq("member_id", memberId);
+  const ids = (links ?? []).map((l) => l.schedule_id as string);
+  type Row = { id: string; trainer_id: string; weekday: number; hour: number; minute: number | null; schedule_members: { member_id: string }[] };
+  let current: { id: string; weekday: number; hour: number; minute: number }[] = [];
+  let trainerId: string | null = null;
+  let memberIds: string[] = [];
+  if (ids.length) {
+    const { data: rows } = await sb
+      .from("schedules")
+      .select("id, trainer_id, weekday, hour, minute, schedule_members(member_id)")
+      .in("id", ids)
+      .eq("active", true)
+      .eq("type", "2on1");
+    const team = ((rows ?? []) as unknown as Row[]);
+    if (team.length) {
+      trainerId = team[0].trainer_id;
+      memberIds = (team[0].schedule_members ?? []).map((m) => m.member_id); // 고정 페어
+      current = team.map((s) => ({ id: s.id, weekday: s.weekday, hour: s.hour, minute: s.minute ?? 0 }));
+    }
+  }
+  if (!trainerId || current.length === 0) return { ok: false, error: "활성 2:1 팀 일정이 없어요." };
+
+  const key = (x: { weekday: number; hour: number; minute: number }) => `${x.weekday}|${x.hour}|${x.minute}`;
+  const curKeys = new Set(current.map(key));
+  const desKeys = new Set(desired.map(key));
+  const toRemove = current.filter((c) => !desKeys.has(key(c)));
+  const toAdd = desired.filter((d) => !curKeys.has(key(d)));
+
+  // 추가분 더블부킹 사전 가드 — 뮤테이션 전에 전부 검사해 반쪽 적용을 막는다(setMemberSchedule과 동일).
+  // toAdd 키는 현재 팀 키와 겹칠 수 없으므로(차집합) 자기 스케줄과의 충돌은 없다.
+  const WD = ["일", "월", "화", "수", "목", "금", "토"];
+  for (const s of toAdd) {
+    const { data: clash } = await sb
+      .from("schedules")
+      .select("id")
+      .eq("trainer_id", trainerId)
+      .eq("active", true)
+      .eq("weekday", s.weekday)
+      .eq("hour", s.hour)
+      .eq("minute", s.minute)
+      .limit(1)
+      .maybeSingle();
+    if (clash) {
+      return { ok: false, error: `${WD[s.weekday]} ${s.hour}시${s.minute ? " " + s.minute + "분" : ""}에 이미 다른 수업이 있어요. 다른 시간을 선택해주세요.` };
+    }
+  }
+
+  const nowISO = new Date().toISOString();
+  let warn: string | undefined;
+
+  // 삭제: 스케줄 비활성(재생성 중단) 후 그 슬롯의 미래 예정 세션 삭제.
+  for (const c of toRemove) {
+    const { error: deErr } = await sb.from("schedules").update({ active: false }).eq("id", c.id);
+    if (deErr) { warn = "일부 팀 일정 삭제에 실패했어요. 다시 시도해주세요."; continue; }
+    await sb.from("sessions").delete().eq("source_schedule_id", c.id).eq("status", "scheduled").gte("scheduled_at", nowISO);
+  }
+
+  // 추가: 2on1 스케줄 + 두 회원 연결. 연결 실패 시 방금 만든 스케줄 회수.
+  for (const s of toAdd) {
+    const { data: sched, error: schedErr } = await sb
+      .from("schedules")
+      .insert({ trainer_id: trainerId, type: "2on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
+      .select("id")
+      .single();
+    if (schedErr || !sched) { warn = "일부 팀 일정 추가에 실패했어요. 다시 시도해주세요."; continue; }
+    const { error: linkErr } = await sb
+      .from("schedule_members")
+      .insert(memberIds.map((mid) => ({ schedule_id: sched.id, member_id: mid })));
+    if (linkErr) {
+      await sb.from("schedules").delete().eq("id", sched.id);
+      warn = "일부 팀 일정 추가에 실패했어요. 다시 시도해주세요.";
+    }
+  }
+
+  if (toAdd.length) await generateUpcomingSessions().catch(() => {});
+
+  revalidatePath("/t");
+  revalidatePath("/t/members");
+  revalidatePath("/console");
+  return { ok: true, warn };
 }

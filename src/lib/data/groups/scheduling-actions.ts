@@ -69,7 +69,12 @@ async function deductForMembers(args: {
         .in("status", ["active", "paused"])
         .limit(1)
         .maybeSingle();
-      if (!anyActive) return "활성 회원권이 없어요 — 재등록/일시정지 재개를 먼저 확인해주세요.";
+      if (!anyActive) {
+        // 2:1 팀은 누구의 회원권이 문제인지 알려야 대표가 바로 조치할 수 있다(감사 후속).
+        const { data: mrow } = await sb.from("members").select("name").eq("id", memberId).maybeSingle();
+        const who = mrow?.name ? `${mrow.name}님의 ` : "";
+        return `${who}활성 회원권이 없어요 — 재등록/일시정지 재개를 먼저 확인해주세요.`;
+      }
     }
     let before = ms?.remaining_sessions ?? null;
     let after = before;

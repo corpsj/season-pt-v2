@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { ConsoleModal, OBtn, PBtn } from "@/components/console/ui";
-import { createTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
-import { loadTeamCandidates } from "@/lib/data/groups/console-actions";
+import { createTeamSchedule, setTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
+import { loadTeamCandidates, loadMemberSchedule } from "@/lib/data/groups/console-actions";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6~22시
@@ -49,15 +49,6 @@ export function TeamCreateModal({
   const filtered = q.trim()
     ? candidates.filter((c) => c.name.toLowerCase().includes(q.trim().toLowerCase()))
     : candidates;
-
-  function toggleDay(i: number) {
-    setDayTimes((prev) => {
-      const next = { ...prev };
-      if (next[i]) delete next[i];
-      else next[i] = { hour: 19, minute: 0 };
-      return next;
-    });
-  }
 
   const selectedDays = Object.keys(dayTimes).map(Number).sort((a, b) => a - b);
 
@@ -137,6 +128,30 @@ export function TeamCreateModal({
 
       {/* 요일·시간 */}
       <div className="mb-2 mt-4 text-[11.5px] font-semibold text-[#9A917F]">팀 수업 요일·시간</div>
+      <TeamSlotPicker dayTimes={dayTimes} setDayTimes={setDayTimes} />
+    </ConsoleModal>
+  );
+}
+
+/** 요일 토글 + 요일별 시간 선택 — 팀 만들기/편집 모달 공용. */
+function TeamSlotPicker({
+  dayTimes,
+  setDayTimes,
+}: {
+  dayTimes: DayTimes;
+  setDayTimes: React.Dispatch<React.SetStateAction<DayTimes>>;
+}) {
+  const selectedDays = Object.keys(dayTimes).map(Number).sort((a, b) => a - b);
+  function toggleDay(i: number) {
+    setDayTimes((prev) => {
+      const next = { ...prev };
+      if (next[i]) delete next[i];
+      else next[i] = { hour: 19, minute: 0 };
+      return next;
+    });
+  }
+  return (
+    <>
       <div className="mb-3 flex gap-1.5">
         {DAYS.map((d, i) => {
           const on = !!dayTimes[i];
@@ -183,6 +198,93 @@ export function TeamCreateModal({
         <div className="rounded-[13px] bg-[#FBF7F1] py-4 text-center text-[12.5px] font-medium text-[#A89F92]">
           요일을 선택하면 매주 그 시간에 팀 수업이 자동 생성돼요
         </div>
+      )}
+    </>
+  );
+}
+
+/** 2:1 팀 일정 편집·해제(콘솔): 현재 팀 슬롯을 불러와 팀 단위로 변경. 파트너 교체는 해제 후 재구성. */
+export function TeamEditModal({
+  memberId,
+  memberName,
+  onClose,
+  onDone,
+}: {
+  memberId: string;
+  memberName: string;
+  onClose: () => void;
+  onDone: () => void | Promise<void>;
+}) {
+  const toast = useToast();
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [dayTimes, setDayTimes] = useState<DayTimes>({});
+  const [partnerName, setPartnerName] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let alive = true;
+    loadMemberSchedule(memberId).then((res) => {
+      if (!alive) return;
+      const team = (res?.slots ?? []).filter((s) => s.type === "2on1");
+      const dt: DayTimes = {};
+      for (const s of team) dt[s.weekday] ??= { hour: s.hour, minute: s.minute };
+      setDayTimes(dt);
+      setPartnerName(team[0]?.partnerName);
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, [memberId]);
+
+  async function save() {
+    if (busy) return;
+    const slots = Object.entries(dayTimes).map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }));
+    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요 (팀을 끝내려면 '팀 해제')");
+    setBusy(true);
+    const r = await setTeamSchedule(memberId, slots);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요");
+    toast(r.warn ?? "팀 일정을 변경했어요");
+    await onDone();
+    onClose();
+  }
+
+  async function dissolve() {
+    if (busy) return;
+    if (!confirm("2:1 팀을 해제할까요? 앞으로의 팀 수업이 모두 삭제돼요 (지난·처리된 수업은 그대로예요).")) return;
+    setBusy(true);
+    const r = await setTeamSchedule(memberId, []);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "팀 해제에 실패했어요");
+    toast("팀을 해제했어요 — 각 회원의 정기 일정을 다시 설정해주세요");
+    await onDone();
+    onClose();
+  }
+
+  return (
+    <ConsoleModal
+      title={`${memberName} · 2:1 팀 일정`}
+      onClose={onClose}
+      footer={
+        <>
+          <OBtn className="flex-1" onClick={dissolve}>팀 해제</OBtn>
+          <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || loading} onClick={save}>저장</PBtn>
+        </>
+      }
+    >
+      {loading ? (
+        <div className="py-10 text-center text-[13px] font-medium text-[#A89F92]">불러오는 중…</div>
+      ) : (
+        <>
+          <div className="mb-4 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
+            <Icon name="persons" size={16} className="mt-px flex-none text-[#8A6F3E]" />
+            <span className="text-[12.5px] font-medium leading-relaxed text-[#766D60]">
+              {partnerName ? <><b className="font-semibold text-[#5B5345]">{partnerName}님</b>과의 팀 일정이에요. </> : null}
+              요일·시간을 바꾸면 <b className="font-semibold text-[#5B5345]">앞으로의 팀 수업도 함께</b> 바뀌어요. 파트너를 바꾸려면 해제 후 다시 묶어주세요.
+            </span>
+          </div>
+          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">팀 수업 요일·시간</div>
+          <TeamSlotPicker dayTimes={dayTimes} setDayTimes={setDayTimes} />
+        </>
       )}
     </ConsoleModal>
   );

@@ -145,7 +145,7 @@ export function ScheduleEditModal({
           {/* 2:1 팀 수업 (읽기 전용) */}
           {teamSlots.length > 0 ? (
             <div className="mt-4">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">2:1 팀 수업 · 여기서 변경 불가</div>
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">2:1 팀 수업 · [2:1 팀 일정 편집]에서 변경</div>
               <div className="flex flex-col gap-1.5">
                 {teamSlots.map((s) => (
                   <div key={s.scheduleId} className="flex items-center gap-2 rounded-[11px] bg-[#F4EEE3] px-3.5 py-2.5">
