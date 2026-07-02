@@ -208,10 +208,10 @@ export async function getStudioCalendarMonth(offset = 0): Promise<StudioCalendar
     if (cls.status !== "cancelled") monthTotal += 1;
   }
 
-  // Mon-first grid
+  // Sun-first grid (일~토)
   const daysInMonth = new Date(Date.UTC(y, m0 + 1, 0)).getUTCDate();
   const firstDow = new Date(Date.UTC(y, m0, 1)).getUTCDay(); // 0=Sun
-  const lead = (firstDow + 6) % 7;
+  const lead = firstDow;
   const cells: CalendarCell[] = [];
   const blank = (): CalendarCell => ({ date: null, dateISO: "", isToday: false, isSunday: false, isSaturday: false, count: 0 });
   for (let i = 0; i < lead; i++) cells.push(blank());

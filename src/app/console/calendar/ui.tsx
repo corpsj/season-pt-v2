@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
-import { confirmAttendance, revertAttendance, sendPropose } from "@/lib/data/groups/scheduling-actions";
+import { confirmAttendance, revertAttendance, sendPropose, moveSessionDirect } from "@/lib/data/groups/scheduling-actions";
 import { loadSessionSignature, loadProposeSlots } from "@/lib/data/groups/console-actions";
 import type { StudioCalendarMonth, StudioClass } from "@/lib/data/groups/console";
 
 type ProposeView = NonNullable<Awaited<ReturnType<typeof loadProposeSlots>>>;
 
-const WD = ["월", "화", "수", "목", "금", "토", "일"];
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
 function shortTime(t: string): string {
   return t.replace(/^오전 |^오후 /, "");
@@ -35,13 +35,16 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [sig, setSig] = useState<{ member: string; url: string } | null>(null);
 
-  // 일정 조율 요청 모달 상태 — 캘린더 날짜 모달에서 예정 수업을 클릭하면 열린다.
+  // 일정 조율 모달 상태 — 캘린더 날짜 모달에서 예정 수업을 클릭하면 열린다.
   const [prop, setProp] = useState<{ c: StudioClass; view: ProposeView } | null>(null);
+  const [propMode, setPropMode] = useState<"direct" | "propose">("direct"); // 직접 변경 vs 회원에게 제안
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState<string | null>(null);
   const [reasonText, setReasonText] = useState("");
-  const [customDate, setCustomDate] = useState("");
+  const [customDate, setCustomDate] = useState(""); // propose 모드의 추가 제안 슬롯
   const [customTime, setCustomTime] = useState("");
+  const [directDate, setDirectDate] = useState(""); // direct 모드의 새 시각(현재 시각 프리필)
+  const [directTime, setDirectTime] = useState("");
   const [sending, setSending] = useState(false);
 
   async function openSignature(c: StudioClass) {
@@ -55,12 +58,31 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     const view = await loadProposeSlots(c.sessionId);
     setBusy(null);
     if (!view) return toast("조율 정보를 불러오지 못했어요");
+    setPropMode("direct");
     setPicked(new Set());
     setReason(null);
     setReasonText("");
     setCustomDate("");
     setCustomTime("");
+    // 직접 변경 기본값 = 현재 수업 시각(KST) 프리필 → 대표가 시간만 살짝 바꾸면 됨
+    const kst = new Date(new Date(c.scheduledAt).getTime() + 9 * 3600 * 1000);
+    setDirectDate(kst.toISOString().slice(0, 10));
+    setDirectTime(kst.toISOString().slice(11, 16));
     setProp({ c, view });
+  }
+
+  async function submitDirect() {
+    if (!prop || !directDate || !directTime) return;
+    const iso = new Date(`${directDate}T${directTime}:00+09:00`).toISOString();
+    if (iso <= new Date().toISOString()) return toast("지난 시간으로는 옮길 수 없어요");
+    setSending(true);
+    const r = await moveSessionDirect(prop.c.sessionId, iso);
+    setSending(false);
+    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요");
+    toast("일정을 변경했어요");
+    setProp(null);
+    setDay(null);
+    router.refresh();
   }
 
   function toggleSlot(id: string) {
@@ -157,7 +179,7 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
       <Card className="overflow-hidden">
         <div className="grid grid-cols-7 border-b border-[rgba(75,59,46,0.08)]">
           {WD.map((w, i) => (
-            <div key={w} className={`py-[11px] text-center text-[11.5px] font-semibold ${i >= 5 ? "text-[#B89A5E]" : "text-[#9A917F]"}`}>{w}</div>
+            <div key={w} className={`py-[11px] text-center text-[11.5px] font-semibold ${i === 0 ? "text-[#C0796A]" : i === 6 ? "text-[#B89A5E]" : "text-[#9A917F]"}`}>{w}</div>
           ))}
         </div>
         {month.weeks.map((week, wi) => (
@@ -174,8 +196,12 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
                   style={{ background: cell.isToday ? "#F3F7EC" : "transparent" }}
                 >
                   <div className="mb-1.5 flex items-start justify-between">
-                    {/* 날짜는 셀(박스) 왼쪽 상단 코너에 밀착 — 오늘만 pill 하이라이트 */}
-                    <span className={`inline-flex h-[22px] items-center text-[12.5px] font-bold ${cell.isToday ? "min-w-[22px] justify-center rounded-[7px] px-1.5" : ""}`} style={cell.isToday ? { color: "#FAF8F4", background: "#768C6A" } : { color: cell.isSunday ? "#C0796A" : cell.isSaturday ? "#B89A5E" : "#5B5345" }}>{cell.date}</span>
+                    {/* 날짜는 셀 왼쪽 상단 코너에 밀착(flush) — 오늘만 pill 하이라이트 */}
+                    {cell.isToday ? (
+                      <span className="inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[6px] px-1 text-[12.5px] font-bold" style={{ color: "#FAF8F4", background: "#768C6A" }}>{cell.date}</span>
+                    ) : (
+                      <span className="text-[12.5px] font-bold leading-none" style={{ color: cell.isSunday ? "#C0796A" : cell.isSaturday ? "#B89A5E" : "#5B5345" }}>{cell.date}</span>
+                    )}
                     {live.length > 0 ? <span className="text-[10px] font-semibold text-[#B3AA9C]">{live.length}</span> : null}
                   </div>
                   <div className="flex flex-col gap-[3px]">
@@ -269,18 +295,27 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
         </div>
       ) : null}
 
-      {/* 일정 조율 요청 — 예정 수업 클릭 시. 모바일 propose와 동일 흐름(sendPropose)·회원이 받은 요청에서 응답 */}
+      {/* 일정 조율 — 예정 수업 클릭 시. 직접 변경(즉시 이동) 또는 회원에게 제안(회원 승인). */}
       {prop ? (
         <ConsoleModal
-          title="일정 조율 요청"
+          title="일정 조율"
           onClose={() => setProp(null)}
           footer={
-            <>
-              <GBtn className="flex-1" onClick={() => setProp(null)}>취소</GBtn>
-              <PBtn className="flex-[2]" disabled={proposeCount === 0 || sending} onClick={submitPropose}>
-                조율 요청 보내기 · {proposeCount}개 제안
-              </PBtn>
-            </>
+            propMode === "direct" ? (
+              <>
+                <GBtn className="flex-1" onClick={() => setProp(null)}>취소</GBtn>
+                <PBtn className="flex-[2]" icon="check-bold" disabled={!directDate || !directTime || sending} onClick={submitDirect}>
+                  이 시간으로 변경
+                </PBtn>
+              </>
+            ) : (
+              <>
+                <GBtn className="flex-1" onClick={() => setProp(null)}>취소</GBtn>
+                <PBtn className="flex-[2]" disabled={proposeCount === 0 || sending} onClick={submitPropose}>
+                  조율 요청 보내기 · {proposeCount}개 제안
+                </PBtn>
+              </>
+            )
           }
         >
           <div className="mb-4 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.1)] bg-[#FAF8F4] px-3.5 py-3">
@@ -289,62 +324,103 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
             <span className="ml-auto text-[11px] font-medium text-[#9A917F]">{prop.c.trainerName}</span>
           </div>
 
-          <MicroLabel className="mb-2">새 시간 제안 · 최대 3개</MicroLabel>
-          <div className="flex flex-col gap-2">
-            {prop.view.slots.map((s) => {
-              const on = picked.has(s.id);
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => toggleSlot(s.id)}
-                  className={`w-full rounded-[11px] border px-3.5 py-2.5 text-left text-[13.5px] font-semibold transition ${on ? "border-sage bg-[#F3F7EC] text-ink" : "border-[rgba(75,59,46,0.12)] bg-white text-[#5B5345] hover:bg-[#F7F4ED]"}`}
-                >
-                  {s.label}
-                </button>
-              );
-            })}
-            <div className="flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5">
-              <input
-                type="date"
-                value={customDate}
-                onChange={(e) => setCustomDate(e.target.value)}
-                className="flex-1 bg-transparent text-[13.5px] font-semibold text-ink"
-              />
-              <input
-                type="time"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                step={1800}
-                className="bg-transparent text-[13.5px] font-semibold text-ink"
-              />
-            </div>
+          {/* 모드 토글 */}
+          <div className="mb-4 grid grid-cols-2 gap-1.5 rounded-[12px] bg-[#F1ECE2] p-1">
+            {([["direct", "직접 변경"], ["propose", "회원에게 제안"]] as const).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setPropMode(m)}
+                className={`rounded-[9px] py-2 text-[13px] font-semibold transition ${propMode === m ? "bg-white text-ink shadow-sm" : "text-[#847A66]"}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          <MicroLabel className="mb-2 mt-4">사유 (선택)</MicroLabel>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {prop.view.reasons.map((r) => {
-              const on = reason === r;
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setReason((prev) => (prev === r ? null : r))}
-                  className={`rounded-[20px] border px-3 py-1.5 text-[12.5px] font-semibold transition ${on ? "border-sage bg-sage text-white" : "border-[rgba(75,59,46,0.12)] bg-white text-[#766D60] hover:bg-[#F7F4ED]"}`}
-                >
-                  {r}
-                </button>
-              );
-            })}
-          </div>
-          {reason === "직접 입력" ? (
-            <input
-              value={reasonText}
-              onChange={(e) => setReasonText(e.target.value)}
-              placeholder="사유를 입력해주세요"
-              className="mb-4 w-full rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5 text-[13px]"
-            />
-          ) : null}
+          {propMode === "direct" ? (
+            <>
+              <MicroLabel className="mb-2">새 시간 지정</MicroLabel>
+              <div className="flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5">
+                <input
+                  type="date"
+                  value={directDate}
+                  onChange={(e) => setDirectDate(e.target.value)}
+                  className="flex-1 bg-transparent text-[13.5px] font-semibold text-ink"
+                />
+                <input
+                  type="time"
+                  value={directTime}
+                  onChange={(e) => setDirectTime(e.target.value)}
+                  step={1800}
+                  className="bg-transparent text-[13.5px] font-semibold text-ink"
+                />
+              </div>
+              <div className="mt-3 flex items-start gap-2.5 rounded-[11px] bg-[#F3F7EC] px-3.5 py-2.5">
+                <Icon name="circle-info" size={15} className="mt-px flex-none text-sage-deep" />
+                <span className="text-[12px] font-medium leading-relaxed text-[#5B6452]">회원 승인 없이 <b className="font-semibold">바로 이 시간으로</b> 옮겨져요. 이미 통화·확인된 변경을 손수 반영할 때 쓰세요.</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <MicroLabel className="mb-2">새 시간 제안 · 최대 3개</MicroLabel>
+              <div className="flex flex-col gap-2">
+                {prop.view.slots.map((s) => {
+                  const on = picked.has(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => toggleSlot(s.id)}
+                      className={`w-full rounded-[11px] border px-3.5 py-2.5 text-left text-[13.5px] font-semibold transition ${on ? "border-sage bg-[#F3F7EC] text-ink" : "border-[rgba(75,59,46,0.12)] bg-white text-[#5B5345] hover:bg-[#F7F4ED]"}`}
+                    >
+                      {s.label}
+                    </button>
+                  );
+                })}
+                <div className="flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5">
+                  <input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="flex-1 bg-transparent text-[13.5px] font-semibold text-ink"
+                  />
+                  <input
+                    type="time"
+                    value={customTime}
+                    onChange={(e) => setCustomTime(e.target.value)}
+                    step={1800}
+                    className="bg-transparent text-[13.5px] font-semibold text-ink"
+                  />
+                </div>
+              </div>
+
+              <MicroLabel className="mb-2 mt-4">사유 (선택)</MicroLabel>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {prop.view.reasons.map((r) => {
+                  const on = reason === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setReason((prev) => (prev === r ? null : r))}
+                      className={`rounded-[20px] border px-3 py-1.5 text-[12.5px] font-semibold transition ${on ? "border-sage bg-sage text-white" : "border-[rgba(75,59,46,0.12)] bg-white text-[#766D60] hover:bg-[#F7F4ED]"}`}
+                    >
+                      {r}
+                    </button>
+                  );
+                })}
+              </div>
+              {reason === "직접 입력" ? (
+                <input
+                  value={reasonText}
+                  onChange={(e) => setReasonText(e.target.value)}
+                  placeholder="사유를 입력해주세요"
+                  className="mb-4 w-full rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5 text-[13px]"
+                />
+              ) : null}
+            </>
+          )}
         </ConsoleModal>
       ) : null}
 

@@ -321,6 +321,40 @@ export async function sendPropose(
   return { ok: true };
 }
 
+/**
+ * 대표/담당 강사가 회원 승인 없이 수업을 새 시각으로 즉시 이동(수동 지정). 제안(sendPropose)과 달리 바로 반영된다.
+ * 더블부킹 가드 + 원자적 이동(유령 방지 tombstone) 재사용. 대표가 이미 회원과 합의한 변경을 손수 반영할 때.
+ */
+export async function moveSessionDirect(sessionId: string, newISO: string): Promise<ActionResult> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "권한이 없어요." };
+
+  const target = new Date(newISO);
+  if (Number.isNaN(target.getTime())) return { ok: false, error: "시간이 올바르지 않아요." };
+  if (target.getTime() <= Date.now()) return { ok: false, error: "지난 시간으로는 옮길 수 없어요." };
+
+  const { data: session } = await sb
+    .from("sessions")
+    .select("status, trainer_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  if (session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요." };
+
+  if (await hasSlotConflict(session.trainer_id as string, target.toISOString(), sessionId)) {
+    return { ok: false, error: "그 시간엔 이미 다른 수업이 있어요. 다른 시간을 골라주세요." };
+  }
+
+  const moved = await moveSessionWithTombstone(sessionId, target.toISOString());
+  if (!moved) return { ok: false, error: "이동에 실패했어요. 다시 시도해주세요." };
+
+  revalidatePath("/t");
+  revalidatePath("/console");
+  revalidatePath("/m");
+  return { ok: true };
+}
+
 /** Trainer requests to cancel this session: insert a pending cancel request (회원 확인 대상). */
 export async function sendCancelRequest(sessionId: string, reason?: string): Promise<ActionResult> {
   const t = await getTrainerContext();
