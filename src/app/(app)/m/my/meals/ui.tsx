@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { downscaleImage } from "@/lib/media/downscale";
-import { logMeal, deleteMeal } from "@/lib/data/groups/meals-actions";
+import { logMeal, deleteMeal, loadMoreMeals } from "@/lib/data/groups/meals-actions";
 import type { MealLog } from "@/lib/data/groups/meals";
 
 const TYPES = ["아침", "점심", "저녁", "간식"] as const;
@@ -25,7 +25,7 @@ function dayLabel(iso: string): string {
   return kst(iso, { month: "long", day: "numeric", weekday: "short" });
 }
 
-export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
+export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLog[]; initialHasMore: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -36,6 +36,29 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
   const [memo, setMemo] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [extra, setExtra] = useState<MealLog[]>([]);
+  const [offset, setOffset] = useState(60);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  async function loadMore() {
+    if (busy || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const r = await loadMoreMeals(offset);
+      setExtra((prev) => [...prev, ...r.meals]);
+      setOffset((o) => o + 60);
+      setHasMore(r.hasMore);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+  // 목록이 바뀌면(추가·삭제) 절대 offset 기반 페이지 창이 어긋난다 — 페이지네이션 리셋 후 router.refresh()로 top-60만 다시 그린다(다음 더보기는 깨끗한 상태에서 재요청).
+  function resetPaging() {
+    setExtra([]);
+    setOffset(60);
+    setHasMore(initialHasMore);
+  }
 
   function pickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -65,6 +88,7 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
       if (!r.ok) return toast(r.error ?? "기록에 실패했어요");
       toast("식단을 기록했어요");
       reset();
+      resetPaging();
       refresh(() => router.refresh());
     } catch {
       toast("기록에 실패했어요");
@@ -73,11 +97,13 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
     }
   }
   async function remove(id: string) {
+    if (!confirm("이 식단 기록을 삭제할까요? 사진과 선생님 피드백도 함께 삭제되고 되돌릴 수 없어요.")) return;
     if (busy) return;
     setBusy(true);
     try {
       const r = await deleteMeal(id);
       if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+      resetPaging();
       refresh(() => router.refresh());
     } finally {
       setBusy(false);
@@ -86,7 +112,7 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
 
   // group by day
   const groups: { label: string; items: MealLog[] }[] = [];
-  for (const m of initial) {
+  for (const m of [...initial, ...extra]) {
     const label = dayLabel(m.eatenAt);
     const g = groups.find((x) => x.label === label);
     if (g) g.items.push(m);
@@ -199,6 +225,15 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
             </div>
           ))
         )}
+        {hasMore ? (
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="mt-1 w-full rounded-[13px] border border-ink/[0.12] bg-white py-3 text-[13.5px] font-semibold text-muted disabled:opacity-50"
+          >
+            {loadingMore ? "불러오는 중…" : "더보기"}
+          </button>
+        ) : null}
         <div className="h-2" />
       </Body>
     </div>

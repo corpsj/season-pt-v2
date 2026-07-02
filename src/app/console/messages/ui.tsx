@@ -158,6 +158,11 @@ export function MessagesClient({
               </div>
             </div>
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-5">
+              {room.truncated ? (
+                <div className="mx-auto mb-3 w-fit rounded-full bg-[#EDF4E3] px-3 py-1 text-[11px] font-medium text-[#6B7A5C]">
+                  최근 100개 메시지만 표시돼요
+                </div>
+              ) : null}
               {messages.map((m) => (
                 <div key={m.id} className={`mb-2.5 flex flex-col ${m.mine ? "items-end" : "items-start"}`}>
                   {m.sender && !m.mine ? <span className="mb-0.5 px-1 text-[10.5px] font-medium text-[#9A917F]">{m.sender}</span> : null}

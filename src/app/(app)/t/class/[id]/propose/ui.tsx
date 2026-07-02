@@ -30,6 +30,9 @@ export default function ProposeClient({
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [reason, setReason] = useState<string | null>(null);
+  const [customDate, setCustomDate] = useState("");
+  const [customTime, setCustomTime] = useState("");
+  const [reasonText, setReasonText] = useState("");
 
   function toggleSlot(id: string) {
     setPicked((prev) => {
@@ -40,7 +43,7 @@ export default function ProposeClient({
     });
   }
 
-  const count = picked.size;
+  const count = picked.size + (customDate && customTime ? 1 : 0);
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -74,6 +77,22 @@ export default function ProposeClient({
           ))}
         </div>
 
+        <div className="mt-2.5 flex items-center gap-2 rounded-[13px] border border-ink/[0.08] bg-card px-4 py-3">
+          <input
+            type="date"
+            value={customDate}
+            onChange={(e) => setCustomDate(e.target.value)}
+            className="flex-1 bg-transparent text-[14px] font-semibold text-ink"
+          />
+          <input
+            type="time"
+            value={customTime}
+            onChange={(e) => setCustomTime(e.target.value)}
+            step={1800}
+            className="bg-transparent text-[14px] font-semibold text-ink"
+          />
+        </div>
+
         <div className="mb-2.5 mt-5">
           <Kicker>사유 (선택)</Kicker>
         </div>
@@ -89,6 +108,14 @@ export default function ProposeClient({
             </Chip>
           ))}
         </div>
+        {reason === "직접 입력" ? (
+          <input
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            placeholder="사유를 입력해주세요"
+            className="mt-2.5 w-full rounded-[12px] border border-ink/[0.08] bg-card px-3.5 py-2.5 text-[13.5px]"
+          />
+        ) : null}
         <div className="h-3.5" />
       </Body>
 
@@ -97,8 +124,28 @@ export default function ProposeClient({
           icon="send"
           disabled={count === 0}
           onClick={async () => {
-            const slotsIso = view.slots.filter((s) => picked.has(s.id)).map((s) => s.iso);
-            await sendPropose(sessionId, slotsIso, reason ?? undefined);
+            const customIso =
+              customDate && customTime
+                ? new Date(`${customDate}T${customTime}:00+09:00`).toISOString()
+                : null;
+            if (customIso && customIso <= new Date().toISOString()) {
+              toast("지난 시간은 제안할 수 없어요");
+              return;
+            }
+            const slotsIso = [
+              ...view.slots.filter((s) => picked.has(s.id)).map((s) => s.iso),
+              ...(customIso ? [customIso] : []),
+            ];
+            if (slotsIso.length === 0) return;
+            const r = await sendPropose(
+              sessionId,
+              slotsIso,
+              reason === "직접 입력" ? reasonText.trim() || undefined : reason ?? undefined,
+            );
+            if (!r.ok) {
+              toast(r.error ?? "요청 전송에 실패했어요");
+              return;
+            }
             toast("변경 요청을 보냈어요");
             router.push("/t");
           }}

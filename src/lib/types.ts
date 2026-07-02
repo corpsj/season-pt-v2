@@ -364,6 +364,7 @@ export interface ChatRoomView {
   sub: string;
   messages: ChatMessageView[];
   cursor?: string | null; // newest message's created_at; initial poll cursor
+  truncated?: boolean; // true when the initial load hit the 100-message cap(older history not shown)
 }
 /** A member a trainer can start a chat with (new-message picker). */
 export interface ChatMemberPick {
@@ -379,7 +380,8 @@ export interface MemberCalendarView {
   remaining: number;
   dDay: number;
   hasMembership: boolean; // false → 회원권 없음(배지 숨김)
-  expired: boolean; // 만료일 지남 → 배지에 "만료"
+  expired: boolean; // 만료일 지남 → 배지에 "만료" (paused면 false — 일시정지가 우선)
+  paused: boolean; // 회원권 일시정지 중 → 배지에 "일시정지"
   hasTrainerReq: boolean;
   monthLabel: string;
   calDays: CalendarDay[];
@@ -423,7 +425,8 @@ export interface MemberMyMembership {
   dDay: number;
   endLabel: string; // "2026.08.21"
   barPct: number;
-  expired: boolean;
+  expired: boolean; // paused면 false — 일시정지가 우선
+  paused: boolean;
 }
 export interface MemberMyView {
   name: string;

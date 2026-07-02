@@ -12,6 +12,7 @@ export default async function MemberChatPage() {
       isTeam={room.isTeam}
       messages={room.messages}
       cursor={room.cursor}
+      truncated={room.truncated}
     />
   );
 }

@@ -161,6 +161,7 @@ export interface RevenueEntry {
   amount: number;
   methodLabel: string;
   label: string; // 회원명·상품 or note
+  membershipId: string | null; // 환불 취소(undoRefund) 대상 식별용
 }
 export interface RevenueMonth {
   key: string; // YYYY-MM
@@ -232,6 +233,7 @@ export async function getRevenue(): Promise<RevenueView> {
       dateLabel: `${r.paid_at.slice(5, 7)}.${r.paid_at.slice(8, 10)}`,
       amount,
       methodLabel: METHOD_LABEL[r.method] ?? "기타",
+      membershipId: r.membership_id,
       label:
         amount < 0
           ? r.membership_id
@@ -244,6 +246,16 @@ export async function getRevenue(): Promise<RevenueView> {
   }
   const months = [...byMonth.values()].sort((a, b) => b.key.localeCompare(a.key));
   return { totalAmount, totalCount: rows.filter((r) => (r.amount ?? 0) > 0 && r.membership_id != null).length, months };
+}
+
+/** 배정 가능한 강사(비활성 제외) — 한꺼번에 입력 담당강사 드롭다운용. */
+export async function getAssignableTrainers(): Promise<{ id: string; name: string }[]> {
+  const { data } = await sb
+    .from("trainers")
+    .select("id, display_name")
+    .neq("status", "inactive")
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((t) => ({ id: t.id as string, name: t.display_name as string }));
 }
 
 /* ------------------------- membership products ------------------------ */

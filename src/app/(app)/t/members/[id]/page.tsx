@@ -22,7 +22,7 @@ const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", t
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me, photos, inbodies, meals] = await Promise.all([
+  const [m, recordHref, me, photos, inbodies, mealsPage] = await Promise.all([
     getMemberDetail(id),
     getMemberRecordHref(id),
     getMe(),
@@ -30,6 +30,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
     getMemberFiles(id, "inbody"),
     getMemberMeals(id),
   ]);
+  const meals = mealsPage.meals;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">

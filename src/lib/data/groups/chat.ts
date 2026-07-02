@@ -233,11 +233,15 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
       .eq("sender_type", "member");
   }
 
-  const { data: msgRows } = await sb
+  // 최근 100건만(감사3 #19) — 오래된 대화는 무제한 로드하지 않음. desc로 뽑은 뒤 원래 순서(오름차순)로 되돌린다.
+  const { data: msgRowsDesc } = await sb
     .from("chat_messages")
     .select("id, sender_type, sender_id, text, created_at")
     .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const truncated = (msgRowsDesc ?? []).length === 100;
+  const msgRows = (msgRowsDesc ?? []).slice().reverse();
 
   const senderName = new Map<string, string>();
   for (const m of participants) senderName.set(m.id, m.name);
@@ -272,6 +276,7 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
       sub,
       messages,
       cursor,
+      truncated,
     };
   }
   const m = participants[0];
@@ -284,6 +289,7 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
     sub,
     messages,
     cursor,
+    truncated,
   };
 }
 

@@ -47,7 +47,7 @@ export function MemberCalendarClient({
           </div>
           {view.hasMembership ? (
             <Badge variant="remaining" icon="ticket-fill">
-              잔여 {view.remaining} · {view.expired ? "만료" : `D-${view.dDay}`}
+              잔여 {view.remaining} · {view.expired ? "만료" : view.paused ? "일시정지" : `D-${view.dDay}`}
             </Badge>
           ) : null}
         </div>

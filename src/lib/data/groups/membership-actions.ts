@@ -87,21 +87,31 @@ export async function previewRefund(membershipId: string) {
     .select("total_sessions, remaining_sessions, list_unit_price, status").eq("id", membershipId).maybeSingle();
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   const bal = await getMembershipBalance(membershipId);
-  return { ok: true, status: ms.status, ...computeRefund({ paidSum: bal.paid, totalSessions: ms.total_sessions, remainingSessions: ms.remaining_sessions, listUnitPrice: (ms.list_unit_price as number | null) ?? 0 }) };
+  return {
+    ok: true, status: ms.status, noBaseline: bal.paid <= 0,
+    ...computeRefund({ paidSum: bal.paid, totalSessions: ms.total_sessions, remainingSessions: ms.remaining_sessions, listUnitPrice: (ms.list_unit_price as number | null) ?? 0 }),
+  };
 }
 
-/** 환불: 음수 결제 행 + status refunded + remaining 0 + events. */
-export async function refundMembership(input: { membershipId: string; method: PaymentMethod }): Promise<Result & { refund?: number }> {
+/** 환불: 음수 결제 행 + status refunded + remaining 0 + events. amountOverride로 협의 금액 지정 가능(감사3 #6·#7). */
+export async function refundMembership(input: { membershipId: string; method: PaymentMethod; amountOverride?: number; note?: string }): Promise<Result & { refund?: number }> {
   const { t, err } = await requireOwner();
   if (!t) return { ok: false, error: err! };
   const pre = await previewRefund(input.membershipId);
   if (!pre.ok) return { ok: false, error: pre.error };
   // ponytail: cast after guard — tsc can't narrow inferred union without explicit discriminant
-  const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty } = pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number };
+  const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty, noBaseline } =
+    pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number; noBaseline: boolean };
   if (preStatus === "refunded") return { ok: false, error: "이미 환불된 회원권이에요" };
-  // 실패 시 원복용 스냅샷(감사 #3: 음수 결제행 insert 실패가 영구 누락으로 남던 문제).
+  if (input.amountOverride != null && (!Number.isInteger(input.amountOverride) || input.amountOverride < 0))
+    return { ok: false, error: "환불 금액을 0 이상 정수로 입력해주세요" };
+  // 이관 회원권(기납부 0)은 자동 산식이 0원 확정으로 이어지므로, 협의 금액 직접 입력을 요구.
+  if (noBaseline && input.amountOverride == null)
+    return { ok: false, error: "결제 기록이 없는 회원권이에요. 환불 금액을 직접 입력해주세요." };
+  const refundAmt = input.amountOverride ?? preRefund;
+  // 실패 시 원복용 스냅샷(감사 #3: 음수 결제행 insert 실패가 영구 누락으로 남던 문제) + 이벤트 meta 스냅샷 겸용.
   const { data: msPre } = await sb.from("memberships")
-    .select("status, remaining_sessions").eq("id", input.membershipId).maybeSingle();
+    .select("status, remaining_sessions, end_date, member_id").eq("id", input.membershipId).maybeSingle();
   // Atomic claim: flip to refunded only if not already. The DB enforces a single transition,
   // so a double-click / concurrent refund can't insert two negative-payment rows (double payout).
   const { data: claimed } = await sb.from("memberships")
@@ -110,8 +120,12 @@ export async function refundMembership(input: { membershipId: string; method: Pa
     .neq("status", "refunded")
     .select("id");
   if (!claimed || claimed.length === 0) return { ok: false, error: "이미 환불된 회원권이에요" };
-  if (preRefund > 0) {
-    const { error: payErr } = await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
+  if (refundAmt > 0) {
+    const { error: payErr } = await sb.from("payments").insert({
+      membership_id: input.membershipId, method: input.method, amount: -refundAmt, paid_at: todayISO(),
+      note: input.note?.trim() || `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`,
+      payer_member_id: msPre?.member_id ?? null, recorded_by: t.id,
+    });
     if (payErr) {
       // 보상: 환불 표시를 원복해 재시도 가능하게 — 표시만 남고 장부에 환불이 빠지는 반쪽 상태 방지.
       await sb.from("memberships")
@@ -120,19 +134,56 @@ export async function refundMembership(input: { membershipId: string; method: Pa
       return { ok: false, error: "환불 기록 저장에 실패했어요. 다시 시도해주세요." };
     }
   }
-  const { error: evErr } = await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "refund", amount: -preRefund, note: `환불 ${preRefund.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})`, created_by: t.id });
+  const { error: evErr } = await sb.from("membership_events").insert({
+    membership_id: input.membershipId, type: "refund", amount: -refundAmt,
+    note: `환불 ${refundAmt.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})${input.amountOverride != null ? " · 협의 금액" : ""}`,
+    meta: { prev_status: msPre?.status ?? "active", prev_remaining: msPre?.remaining_sessions ?? 0, prev_end_date: msPre?.end_date ?? null },
+    created_by: t.id,
+  });
   if (evErr) console.error("[refund] event insert failed:", input.membershipId, evErr.message); // 이벤트는 이력 — 환불 자체는 확정
   // 환불 후 그 회원의 1:1 정기 스케줄 중지 — 떠난 회원 세션이 매주 무한 생성되던 문제(감사 H3).
   // 단, 그 회원에게 다른 활성 회원권이 남아 있으면(추가 결제·병행) 수업을 계속해야 하므로 건드리지 않는다(검증 후속).
-  const { data: refunded } = await sb.from("memberships").select("member_id").eq("id", input.membershipId).maybeSingle();
-  if (refunded?.member_id) {
+  const memberId = msPre?.member_id as string | undefined;
+  if (memberId) {
     const { data: others } = await sb
       .from("memberships").select("id")
-      .eq("member_id", refunded.member_id as string).eq("status", "active").limit(1).maybeSingle();
-    if (!others) await deactivateSoloSchedules(refunded.member_id as string);
+      .eq("member_id", memberId).eq("status", "active").limit(1).maybeSingle();
+    if (!others) await deactivateSoloSchedules(memberId);
   }
   revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
-  return { ok: true, refund: preRefund };
+  return { ok: true, refund: refundAmt };
+}
+
+/** 환불 취소: 오클릭·금액 오류 복구. 음수 결제행 삭제 + 환불 직전 상태로 복원(스냅샷). 대표 전용. */
+export async function undoRefund(membershipId: string): Promise<Result> {
+  const { t, err } = await requireOwner();
+  if (!t) return { ok: false, error: err! };
+  // 최신 refund 이벤트의 스냅샷 (undone 제외)
+  const { data: ev } = await sb.from("membership_events")
+    .select("id, meta").eq("membership_id", membershipId).eq("type", "refund")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const meta = (ev?.meta ?? null) as { prev_status?: string; prev_remaining?: number; prev_end_date?: string; undone?: boolean } | null;
+  if (!ev || !meta || meta.undone) return { ok: false, error: "취소할 환불 기록을 찾을 수 없어요" };
+  // 원자 복원: refunded일 때만 전이(중복 취소 방지)
+  const { data: claimed } = await sb.from("memberships")
+    .update({ status: meta.prev_status ?? "active", remaining_sessions: meta.prev_remaining ?? 0, end_date: meta.prev_end_date ?? undefined })
+    .eq("id", membershipId).eq("status", "refunded").select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "환불 상태가 아니에요" };
+  // 환불 음수 결제행 제거 — 실패 시 refunded로 되돌려 반쪽 상태 방지(refundMembership 보상 패턴과 대칭)
+  const { error: delErr } = await sb.from("payments")
+    .delete().eq("membership_id", membershipId).lt("amount", 0);
+  if (delErr) {
+    await sb.from("memberships").update({ status: "refunded", remaining_sessions: 0 }).eq("id", membershipId);
+    return { ok: false, error: "환불 내역 삭제에 실패했어요. 다시 시도해주세요." };
+  }
+  // 이벤트 기록은 이력 — 환불 취소 자체는 위에서 확정. 실패해도 삼키지 않고 로그만(refundMembership evErr 패턴과 대칭).
+  const { error: markErr } = await sb.from("membership_events").update({ meta: { ...meta, undone: true } }).eq("id", ev.id);
+  if (markErr) console.error("[undoRefund] event undone-mark failed:", membershipId, markErr.message);
+  const { error: logErr } = await sb.from("membership_events").insert({ membership_id: membershipId, type: "refund", amount: 0, note: "취소(복원)", meta: { undone: true, undo_of: ev.id }, created_by: t.id });
+  if (logErr) console.error("[undoRefund] audit event insert failed:", membershipId, logErr.message);
+  revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
+  revalidatePath("/console/revenue"); revalidatePath("/console/finance"); revalidatePath("/console/members"); // 콘솔 화면도 즉시 반영(감사3 #8)
+  return { ok: true }; // 정기 스케줄은 자동 재활성화하지 않음 — UI 토스트로 안내
 }
 
 /** 양도: 회원권 통째 이전(member_id 교체). 대상=기존 회원 또는 신규 즉시 등록(새 결제 없음). */

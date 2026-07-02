@@ -40,7 +40,8 @@ async function listFiles(memberId: string, kind?: FileKind): Promise<MemberFileV
     .order("taken_at", { ascending: false })
     .order("created_at", { ascending: false });
   if (kind) q = q.eq("kind", kind);
-  const { data } = await q;
+  // ponytail: 최근 60건 상한(감사3 #19) — 더보기는 스킵, 파일 화면이 서버 컴포넌트라 접합점 없고 60장 초과는 드묾
+  const { data } = await q.limit(60);
   return Promise.all(
     (data ?? []).map(async (r) => ({
       id: r.id as string,

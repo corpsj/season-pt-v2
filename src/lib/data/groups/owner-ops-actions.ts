@@ -126,30 +126,11 @@ export async function createMember(input: {
   return { ok: true, memberId: member.id, warn };
 }
 
-/** CSV 일괄 회원 등록. 행마다 createMember를 재사용해 검증·삽입을 공유한다. 대표 전용. */
-export async function createMembersCsv(
-  rows: { name: string; phone: string; birth: string; gender: Gender }[],
-): Promise<Result & { created: number; failed: { name: string; phone: string; error: string }[] }> {
-  const t = await getTrainerContext();
-  if (!t) return { ok: false, error: "로그인이 필요해요", created: 0, failed: [] };
-  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR, created: 0, failed: [] };
-  if (rows.length === 0) return { ok: false, error: "등록할 회원이 없어요", created: 0, failed: [] };
-
-  const failed: { name: string; phone: string; error: string }[] = [];
-  let created = 0;
-  for (const r of rows) {
-    // ponytail: 행마다 createMember가 트레이너 컨텍스트를 다시 조회한다. CSV 규모(수십~수백 행)엔 충분; 대량 임포트로 커지면 컨텍스트 1회 캐시 + 일괄 insert로 승급.
-    const res = await createMember({ name: r.name, phone: r.phone, birth: r.birth, gender: r.gender, slots: [] });
-    if (res.ok) created++;
-    else failed.push({ name: r.name, phone: r.phone, error: res.error ?? "등록 실패" });
-  }
-  return { ok: created > 0, created, failed };
-}
-
-/** 회원 정보 수정(이름·연락처·성별·부상메모). 대표 전용. 연락처는 정규화 후 중복 시 거부. */
+/** 회원 정보 수정(이름·연락처·성별·부상메모·생년월일). 대표 전용. 연락처는 정규화 후 중복 시 거부.
+ *  생년월일을 바꾸면 비밀번호(=생년월일 6자리)도 재설정하고 로그인 잠금을 해제한다 — 비번 분실 복구 수단 겸용. */
 export async function updateMember(
   id: string,
-  input: { name: string; phone: string; gender: Gender; injuryNote?: string },
+  input: { name: string; phone: string; gender: Gender; injuryNote?: string; birth?: string },
 ): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -160,11 +141,19 @@ export async function updateMember(
   if (!name) return { ok: false, error: "이름을 입력해주세요" };
   if (!phone) return { ok: false, error: "연락처를 입력해주세요" };
 
-  const { error } = await sb
-    .from("members")
-    .update({ name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null })
-    .eq("id", id);
+  const patch: Record<string, unknown> = { name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null };
+  const birth6 = input.birth?.replace(/\D/g, "") ?? "";
+  if (birth6) {
+    const birthdate = parseBirth6(birth6);
+    if (!birthdate) return { ok: false, error: "생년월일을 올바른 6자리(YYMMDD) 날짜로 입력해주세요" };
+    patch.birthdate = birthdate;
+    patch.password_hash = hashPassword(birth6); // 비번=생년월일 고정 정책
+  }
+
+  const { error } = await sb.from("members").update(patch).eq("id", id);
   if (error) return { ok: false, error: "이미 사용 중인 연락처이거나 수정에 실패했어요" };
+  // 잠금 해제(best-effort) — 스로틀 테이블 오류가 회원 수정 자체를 실패시키지 않게(member-actions clearFails와 동일 관례)
+  try { if (birth6) await sb.from("member_login_attempts").delete().eq("phone", phone); } catch { /* best-effort */ }
 
   revalidatePath(`/t/members/${id}`);
   revalidatePath("/t/members");
@@ -254,6 +243,10 @@ export async function recordPayment(input: {
   }
 
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+  // 결제자 스냅샷은 회원권 소유자를 단일 소스로 확정 조회(양도 후에도 결제내역이 원 결제자에게 남도록, 감사3 #14).
+  // input.memberId를 신뢰하면 페이지 로드~제출 사이 양도 시 stale 결제자가 박힘 → 항상 membership row에서 새로 읽는다.
+  const { data: payerRow } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+  const payerMemberId: string | null = payerRow?.member_id ?? null;
   // 0원·null·음수 결제가 '기록 완료'로 통과해 장부에서 조용히 누락되던 문제(감사 #28).
   if (amount == null || !Number.isFinite(amount) || amount <= 0) {
     return { ok: false, error: "결제 금액을 확인해주세요" };
@@ -277,6 +270,7 @@ export async function recordPayment(input: {
     amount,
     paid_at: paidAt,
     recorded_by: t.id,
+    payer_member_id: payerMemberId,
   });
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
 
@@ -311,6 +305,10 @@ export async function recordPayments(input: {
     membershipId = ms?.id;
   }
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+  // 결제자 스냅샷은 회원권 소유자를 단일 소스로 확정 조회(양도 후에도 결제내역이 원 결제자에게 남도록, 감사3 #14).
+  // input.memberId를 신뢰하면 페이지 로드~제출 사이 양도 시 stale 결제자가 박힘 → 항상 membership row에서 새로 읽는다.
+  const { data: payerRow } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+  const payerMemberId: string | null = payerRow?.member_id ?? null;
 
   const paidAt = input.paidAt ?? todayISO();
   // 재시도 이중기록 방어: 직전 20초 내 '같은 시그니처(합계·건수)'의 배치가 이미 있으면 멱등 처리.
@@ -325,7 +323,7 @@ export async function recordPayments(input: {
   }
   // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록 없음
   const { error } = await sb.from("payments").insert(
-    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id })),
+    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id, payer_member_id: payerMemberId })),
   );
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
   revalidatePath("/t");

@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { MiniButton } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { MiniButton, OutlineButton, PrimaryButton } from "@/components/ui/Button";
+import { Field, TextInput } from "@/components/ui/Field";
+import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { useToast } from "@/components/ui/Toast";
 import {
   extendMembership,
@@ -12,6 +13,7 @@ import {
   pauseMembership,
   resumeMembership,
 } from "@/lib/data/groups/membership-actions";
+import type { PaymentMethod } from "@/lib/types";
 
 export function MembershipActions({
   membershipId,
@@ -25,11 +27,13 @@ export function MembershipActions({
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [refundOpen, setRefundOpen] = useState(false);
-  const [refundDesc, setRefundDesc] = useState("");
+  const [refundModal, setRefundModal] = useState<null | { base: number; used: number; noBaseline: boolean }>(null);
+  const [amt, setAmt] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("account");
 
   async function onExtend() {
     if (busy) return;
+    if (!confirm("유효기간을 상품 기간만큼 연장할까요?")) return;
     setBusy(true);
     const r = await extendMembership(membershipId);
     setBusy(false);
@@ -44,17 +48,22 @@ export function MembershipActions({
       return;
     }
     // ponytail: cast — ok:true branch not a proper discriminant in inferred union
-    const pp = p as { ok: true; refund: number; used: number; deduction: number; penalty: number };
-    setRefundDesc(
-      `환불 ${pp.refund.toLocaleString()}원 (사용 ${pp.used}회 정상가 차감 ${pp.deduction.toLocaleString()} · 위약금 ${pp.penalty.toLocaleString()})`,
-    );
-    setRefundOpen(true);
+    const pp = p as { ok: true; refund: number; used: number; noBaseline?: boolean };
+    // noBaseline(이관): 산식 항상 0원 → prefill하면 0원 원클릭 환불 가능(감사3 #7). 직접 입력 강제.
+    setAmt(pp.noBaseline ? "" : String(pp.refund));
+    setMethod("account");
+    setRefundModal({ base: pp.refund, used: pp.used, noBaseline: !!pp.noBaseline });
   }
 
   async function doRefund() {
-    setRefundOpen(false);
+    const n = Number(amt);
+    if (amt === "" || !Number.isInteger(n) || n < 0) {
+      toast("환불 금액을 확인해주세요");
+      return;
+    }
+    setRefundModal(null);
     setBusy(true);
-    const r = await refundMembership({ membershipId, method: "account" });
+    const r = await refundMembership({ membershipId, method, amountOverride: n });
     setBusy(false);
     toast(r.ok ? `환불 처리했어요 (${r.refund!.toLocaleString()}원)` : (r.error ?? "환불 실패"));
     if (r.ok) router.refresh();
@@ -113,14 +122,53 @@ export function MembershipActions({
           </MiniButton>
         </>
       )}
-      <ConfirmDialog
-        open={refundOpen}
-        title="환불을 진행할까요?"
-        description={refundDesc}
-        confirmLabel="환불"
-        onConfirm={doRefund}
-        onCancel={() => setRefundOpen(false)}
-      />
+      {refundModal && (
+        <div
+          onClick={() => setRefundModal(null)}
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(38,35,30,0.42)] sm:items-center"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+          >
+            <div className="mb-3.5 text-[16px] font-bold text-ink">환불을 진행할까요?</div>
+            <div className="flex flex-col gap-3">
+              <p className="text-[12.5px] text-muted5">
+                산식 기준 {refundModal.base.toLocaleString()}원 (사용 {refundModal.used}회)
+                {refundModal.noBaseline ? " · 이관 회원권 — 금액을 직접 입력하세요" : ""}
+              </p>
+              <Field icon="coins" label="환불 금액">
+                <TextInput
+                  value={amt}
+                  onChange={(e) => setAmt(e.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                  placeholder="환불 금액(원)"
+                />
+              </Field>
+              <div>
+                <div className="mb-2 text-[12.5px] font-semibold text-muted5">환불 수단</div>
+                <SegmentedToggle
+                  value={method}
+                  onChange={setMethod}
+                  options={[
+                    { value: "card", label: "카드" },
+                    { value: "cash", label: "현금" },
+                    { value: "account", label: "계좌" },
+                  ]}
+                />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2.5">
+              <OutlineButton onClick={() => setRefundModal(null)} className="flex-1">
+                취소
+              </OutlineButton>
+              <PrimaryButton onClick={doRefund} disabled={busy || amt === ""} className="flex-1">
+                환불
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
