@@ -161,6 +161,7 @@ export interface RevenueEntry {
   amount: number;
   methodLabel: string;
   label: string; // 회원명·상품 or note
+  membershipId: string | null; // 환불 취소(undoRefund) 대상 식별용
 }
 export interface RevenueMonth {
   key: string; // YYYY-MM
@@ -232,6 +233,7 @@ export async function getRevenue(): Promise<RevenueView> {
       dateLabel: `${r.paid_at.slice(5, 7)}.${r.paid_at.slice(8, 10)}`,
       amount,
       methodLabel: METHOD_LABEL[r.method] ?? "기타",
+      membershipId: r.membership_id,
       label:
         amount < 0
           ? r.membership_id

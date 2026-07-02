@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, GBtn, ConsoleModal, won, pill } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
 import { recordPayment, addRevenue, deletePayment } from "@/lib/data/groups/owner-ops-actions";
+import { undoRefund } from "@/lib/data/groups/membership-actions";
 import type { RevenueEntry } from "@/lib/data/groups/owner-ops";
 import type { AvatarTone, PaymentMethod } from "@/lib/types";
 
@@ -48,6 +49,17 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
     router.refresh();
   }
 
+  // 환불 취소(undoRefund, 감사3 #8): 오클릭·금액 오류로 환불한 건을 스냅샷 상태로 복원.
+  async function undo(membershipId: string, rowId: string) {
+    if (busy) return;
+    if (typeof window !== "undefined" && !window.confirm("이 환불을 취소하고 회원권을 복원할까요?")) return;
+    setBusy(rowId);
+    const r = await undoRefund(membershipId);
+    setBusy(null);
+    toast(r.ok ? "환불을 취소했어요. 정기 수업이 있었다면 스케줄을 다시 켜주세요." : (r.error ?? "취소에 실패했어요"));
+    if (r.ok) router.refresh();
+  }
+
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center gap-2.5 border-b border-[rgba(75,59,46,0.07)] px-[22px] py-4">
@@ -85,7 +97,20 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
               <span className="w-[74px]"><span className="rounded-[7px] bg-[#F4EFE6] px-2.5 py-1 text-[11.5px] font-semibold text-[#5B5345]">{it.methodLabel}</span></span>
               <Money className="w-[120px] text-right text-[14px] font-bold" >{<span style={{ color: refund ? "#C67352" : "#4B3B2E" }}>{won(it.amount)}</span>}</Money>
               <span className="w-[34px] text-right">
-                {refund ? null : (
+                {refund ? (
+                  it.membershipId ? (
+                    <button
+                      type="button"
+                      aria-label="환불 취소"
+                      title="환불 취소"
+                      disabled={busy === it.id}
+                      onClick={() => undo(it.membershipId!, it.id)}
+                      className="tappable inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[#B3AA9C] transition hover:bg-[#EDF4E3] hover:text-[#5B6452] disabled:opacity-40"
+                    >
+                      <Icon name="refresh" size={15} />
+                    </button>
+                  ) : null
+                ) : (
                   <button
                     type="button"
                     aria-label="결제 삭제"

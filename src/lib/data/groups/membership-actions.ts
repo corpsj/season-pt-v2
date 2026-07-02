@@ -154,6 +154,35 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   return { ok: true, refund: refundAmt };
 }
 
+/** 환불 취소: 오클릭·금액 오류 복구. 음수 결제행 삭제 + 환불 직전 상태로 복원(스냅샷). 대표 전용. */
+export async function undoRefund(membershipId: string): Promise<Result> {
+  const { t, err } = await requireOwner();
+  if (!t) return { ok: false, error: err! };
+  // 최신 refund 이벤트의 스냅샷 (undone 제외)
+  const { data: ev } = await sb.from("membership_events")
+    .select("id, meta").eq("membership_id", membershipId).eq("type", "refund")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const meta = (ev?.meta ?? null) as { prev_status?: string; prev_remaining?: number; prev_end_date?: string; undone?: boolean } | null;
+  if (!ev || !meta || meta.undone) return { ok: false, error: "취소할 환불 기록을 찾을 수 없어요" };
+  // 원자 복원: refunded일 때만 전이(중복 취소 방지)
+  const { data: claimed } = await sb.from("memberships")
+    .update({ status: meta.prev_status ?? "active", remaining_sessions: meta.prev_remaining ?? 0, end_date: meta.prev_end_date ?? undefined })
+    .eq("id", membershipId).eq("status", "refunded").select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "환불 상태가 아니에요" };
+  // 환불 음수 결제행 제거 — 실패 시 refunded로 되돌려 반쪽 상태 방지(refundMembership 보상 패턴과 대칭)
+  const { error: delErr } = await sb.from("payments")
+    .delete().eq("membership_id", membershipId).lt("amount", 0);
+  if (delErr) {
+    await sb.from("memberships").update({ status: "refunded", remaining_sessions: 0 }).eq("id", membershipId);
+    return { ok: false, error: "환불 내역 삭제에 실패했어요. 다시 시도해주세요." };
+  }
+  await sb.from("membership_events").update({ meta: { ...meta, undone: true } }).eq("id", ev.id);
+  await sb.from("membership_events").insert({ membership_id: membershipId, type: "refund", amount: 0, note: "환불 취소(복원)", meta: { undone: true, undo_of: ev.id }, created_by: t.id });
+  revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
+  revalidatePath("/console/revenue"); revalidatePath("/console/finance"); revalidatePath("/console/members"); // 콘솔 화면도 즉시 반영(감사3 #8)
+  return { ok: true }; // 정기 스케줄은 자동 재활성화하지 않음 — UI 토스트로 안내
+}
+
 /** 양도: 회원권 통째 이전(member_id 교체). 대상=기존 회원 또는 신규 즉시 등록(새 결제 없음). */
 export async function transferMembership(input: { membershipId: string; toMemberId?: string; toPhone?: string; newMember?: { name: string; phone: string; birth: string; gender: Gender } }): Promise<Result & { toMemberId?: string }> {
   const { t, err } = await requireOwner();
