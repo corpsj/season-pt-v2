@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, MicroLabel, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
 import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
+import { productTier, productType, composeProductName, type ProductTier } from "@/lib/data/product-class";
 import type { MembershipProduct, StudioSettings } from "@/lib/types";
 
 export function SettingsClient({ products, settings }: { products: MembershipProduct[]; settings: StudioSettings }) {
@@ -92,7 +93,7 @@ export function SettingsClient({ products, settings }: { products: MembershipPro
    active 토글만 즉시 반영(낙관적) — 나머지 필드는 배치 저장.
    ============================================================ */
 
-type Row = { key: number; id?: string; name: string; sessions: string; durationDays: string; price: string; unitListPrice: string; active: boolean };
+type Row = { key: number; id?: string; name: string; sessions: string; durationDays: string; price: string; unitListPrice: string; active: boolean; auto?: boolean };
 
 const digits = (s: string) => s.replace(/[^\d]/g, "");
 const toInt = (s: string) => parseInt(digits(s) || "0", 10);
@@ -120,7 +121,11 @@ const ERR_B = "border-terracotta/60 bg-[#FDF4EE]";
 const COLS = "grid grid-cols-[minmax(150px,1.5fr)_62px_78px_minmax(120px,1fr)_minmax(94px,0.9fr)_54px_24px] items-start gap-x-2";
 
 let keySeq = 0;
-const blank = (): Row => ({ key: keySeq++, name: "", sessions: "", durationDays: "60", price: "", unitListPrice: "", active: true });
+const blank = (): Row => ({ key: keySeq++, name: "", sessions: "", durationDays: "60", price: "", unitListPrice: "", active: true, auto: true });
+
+const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
+/** 목록 정렬: 유형(1:1→2:1→기타) 다음 회차 오름차순 — 가격표처럼 위치를 예측할 수 있게. */
+const typeOrd = (name: string) => (productType(name) === "1on1" ? 0 : productType(name) === "2on1" ? 1 : 2);
 
 function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
@@ -134,6 +139,10 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   );
   const [news, setNews] = useState<Row[]>(() => [blank()]);
   const [busy, setBusy] = useState(false);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  // 새 상품 이름 자동 조합 기본값 — 담당·유형을 정해두면 회차만 입력해도 규칙에 맞는 이름이 생성된다.
+  const [newTier, setNewTier] = useState<ProductTier>("common");
+  const [newType, setNewType] = useState<"1on1" | "2on1">("1on1");
 
   const byId = new Map(products.map((p) => [p.id, p]));
   function dirty(r: Row): boolean {
@@ -153,10 +162,29 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   }
   function patchNew(key: number, part: Partial<Row>) {
     setNews((prev) => {
-      const next = prev.map((r) => (r.key === key ? { ...r, ...part } : r));
+      const next = prev.map((r) => {
+        if (r.key !== key) return r;
+        // 이름을 직접 수정하면 자동 조합 중단, 아니면 회차 입력에 맞춰 이름 자동 생성.
+        const merged = { ...r, ...part, ...("name" in part ? { auto: false } : {}) };
+        if (merged.auto !== false && !("name" in part)) {
+          const n = toInt(merged.sessions);
+          if (n > 0) merged.name = composeProductName(newTier, newType, n);
+        }
+        return merged;
+      });
       if (!isBlank(next[next.length - 1])) next.push(blank()); // 스프레드시트: 마지막 줄 채워지면 빈 줄 추가
       return next;
     });
+  }
+  /** 담당/유형 조합 변경 — 자동 이름 상태인 신규 줄들의 이름을 새 조합으로 재생성. */
+  function setComposer(tier: ProductTier, type: "1on1" | "2on1") {
+    setNewTier(tier);
+    setNewType(type);
+    setNews((prev) =>
+      prev.map((r) =>
+        r.auto !== false && toInt(r.sessions) > 0 ? { ...r, name: composeProductName(tier, type, toInt(r.sessions)) } : r,
+      ),
+    );
   }
   function removeNew(key: number) {
     setNews((prev) => {
@@ -230,33 +258,104 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
         <span>상품명</span><span className="text-center">횟수</span><span className="text-center">기간(일)</span><span>판매가</span><span>정가(회당)</span><span className="text-center">활성</span><span />
       </div>
 
-      {/* existing rows */}
+      {/* existing rows — 담당(대표/강사/공용) 섹션 × 유형·회차 정렬. 그룹 기준은 서버 데이터(저장 전 편집으로 줄이 튀지 않게). */}
       <div className="flex flex-col gap-2 pt-2.5">
-        {rows.map((r) => {
-          const errs = dirty(r) ? rowErrors(r) : new Set<PErr>();
-          const b = (f: PErr) => (errs.has(f) ? ERR_B : OK_B);
-          const unit = effUnit(r);
-          return (
-            <div key={r.key} className={`${COLS} rounded-[10px] px-1 py-0.5 ${dirty(r) ? "bg-[#FBF7F1]" : ""}`} style={{ opacity: r.active ? 1 : 0.55 }}>
-              <input value={r.name} onChange={(e) => patchRow(r.key, { name: e.target.value })} className={`${CELL} ${b("name")}`} />
-              <input value={r.sessions} onChange={(e) => patchRow(r.key, { sessions: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("sessions")}`} />
-              <input value={r.durationDays} onChange={(e) => patchRow(r.key, { durationDays: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("durationDays")}`} />
-              <div>
-                <input value={r.price} onChange={(e) => patchRow(r.key, { price: digits(e.target.value) })} inputMode="numeric" className={`${CELL} ${b("price")}`} />
-                {unit > 0 ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">회당 {won(unit)}</div> : null}
+        {(() => {
+          const rowById = new Map(rows.filter((r) => r.id).map((r) => [r.id!, r]));
+          const cmp = (a: MembershipProduct, b: MembershipProduct) =>
+            typeOrd(a.name) - typeOrd(b.name) || a.sessions - b.sessions || a.price - b.price;
+          const activeP = products.filter((p) => p.active);
+          const groups = (["owner", "staff", "common"] as ProductTier[])
+            .map((t) => ({ t, items: activeP.filter((p) => productTier(p.name) === t).sort(cmp) }))
+            .filter((g) => g.items.length > 0);
+          const showHeaders = groups.length > 1;
+          const renderRow = (r: Row) => {
+            const errs = dirty(r) ? rowErrors(r) : new Set<PErr>();
+            const b = (f: PErr) => (errs.has(f) ? ERR_B : OK_B);
+            const unit = effUnit(r);
+            return (
+              <div key={r.key} className={`${COLS} rounded-[10px] px-1 py-0.5 ${dirty(r) ? "bg-[#FBF7F1]" : ""}`} style={{ opacity: r.active ? 1 : 0.55 }}>
+                <input value={r.name} onChange={(e) => patchRow(r.key, { name: e.target.value })} className={`${CELL} ${b("name")}`} />
+                <input value={r.sessions} onChange={(e) => patchRow(r.key, { sessions: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("sessions")}`} />
+                <input value={r.durationDays} onChange={(e) => patchRow(r.key, { durationDays: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("durationDays")}`} />
+                <div>
+                  <input value={r.price} onChange={(e) => patchRow(r.key, { price: digits(e.target.value) })} inputMode="numeric" className={`${CELL} ${b("price")}`} />
+                  {unit > 0 ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">회당 {won(unit)}</div> : null}
+                </div>
+                <input value={r.unitListPrice} onChange={(e) => patchRow(r.key, { unitListPrice: digits(e.target.value) })} inputMode="numeric" placeholder="자동" className={`${CELL} ${OK_B}`} />
+                <div className="flex justify-center pt-1.5"><Switch on={r.active} onChange={() => toggleActive(r)} /></div>
+                <span />
               </div>
-              <input value={r.unitListPrice} onChange={(e) => patchRow(r.key, { unitListPrice: digits(e.target.value) })} inputMode="numeric" placeholder="자동" className={`${CELL} ${OK_B}`} />
-              <div className="flex justify-center pt-1.5"><Switch on={r.active} onChange={() => toggleActive(r)} /></div>
-              <span />
-            </div>
+            );
+          };
+          const archivedP = products.filter((p) => !p.active);
+          return (
+            <>
+              {groups.map((g) => (
+                <div key={g.t} className="flex flex-col gap-2">
+                  {showHeaders ? (
+                    <div className="pt-1.5 text-[11.5px] font-bold tracking-[0.02em] text-[#8A6F3E]">{TIER_LABEL[g.t]}</div>
+                  ) : null}
+                  {g.items.map((p) => rowById.get(p.id)).filter((r): r is Row => !!r).map(renderRow)}
+                </div>
+              ))}
+              {activeP.length === 0 ? (
+                <div className="py-2 text-center text-[12.5px] font-medium text-[#A89F92]">판매 중인 상품이 없어요 — 아래에 첫 상품을 추가하세요</div>
+              ) : null}
+              {/* 보관함(비활성) — 접힘 기본. 은퇴 상품이 작업 목록을 밀어내지 않게. */}
+              {archivedP.length > 0 ? (
+                <div className="mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setArchiveOpen((v) => !v)}
+                    className="flex w-full items-center gap-1.5 rounded-[10px] bg-[#F8F4EC] px-3 py-2.5 text-left transition hover:bg-[#F4EFE6]"
+                  >
+                    <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={13} className="flex-none text-[#A89F92]" />
+                    <span className="text-[12px] font-semibold text-[#766D60]">보관된 상품 {archivedP.length}개 · 발급 화면에 표시되지 않아요</span>
+                  </button>
+                  {archiveOpen ? (
+                    <div className="flex flex-col gap-2 pt-2">
+                      {archivedP.sort(cmp).map((p) => rowById.get(p.id)).filter((r): r is Row => !!r).map(renderRow)}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           );
-        })}
-        {rows.length === 0 ? <div className="py-2 text-center text-[12.5px] font-medium text-[#A89F92]">등록된 상품이 없어요 — 아래에 첫 상품을 추가하세요</div> : null}
+        })()}
       </div>
 
-      {/* new rows */}
+      {/* new rows — 담당·유형 조합을 정하면 회차 입력만으로 규칙에 맞는 상품명이 생성된다 */}
       <div className="mt-4">
-        <MicroLabel className="mb-2">새 상품 추가</MicroLabel>
+        <div className="mb-2 flex items-center gap-3">
+          <MicroLabel>새 상품 추가</MicroLabel>
+          <div className="flex items-center gap-1">
+            {(["common", "owner", "staff"] as ProductTier[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setComposer(t, newType)}
+                className={`rounded-[8px] px-2.5 py-[5px] text-[11.5px] font-semibold transition ${newTier === t ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}
+              >
+                {TIER_LABEL[t]}
+              </button>
+            ))}
+          </div>
+          <div className="h-4 w-px bg-[rgba(75,59,46,0.14)]" />
+          <div className="flex items-center gap-1">
+            {(["1on1", "2on1"] as const).map((tp) => (
+              <button
+                key={tp}
+                type="button"
+                onClick={() => setComposer(newTier, tp)}
+                className={`rounded-[8px] px-2.5 py-[5px] text-[11.5px] font-semibold transition ${newType === tp ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}
+              >
+                {tp === "1on1" ? "1:1" : "2:1"}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] font-medium text-[#9A917F]">횟수를 입력하면 상품명이 자동으로 만들어져요</span>
+        </div>
         <div className="flex flex-col gap-2">
           {news.map((r) => {
             const errs = isBlank(r) ? new Set<PErr>() : rowErrors(r);
@@ -264,7 +363,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             const unit = effUnit(r);
             return (
               <div key={r.key} className={COLS}>
-                <input value={r.name} onChange={(e) => patchNew(r.key, { name: e.target.value })} placeholder="1:1 PT 20회권" className={`${CELL} ${b("name")}`} />
+                <input value={r.name} onChange={(e) => patchNew(r.key, { name: e.target.value })} placeholder={composeProductName(newTier, newType, 20)} className={`${CELL} ${b("name")}`} />
                 <input value={r.sessions} onChange={(e) => patchNew(r.key, { sessions: digits(e.target.value) })} inputMode="numeric" placeholder="20" className={`${CELL} text-center ${b("sessions")}`} />
                 <input value={r.durationDays} onChange={(e) => patchNew(r.key, { durationDays: digits(e.target.value) })} inputMode="numeric" placeholder="60" className={`${CELL} text-center ${b("durationDays")}`} />
                 <div>
