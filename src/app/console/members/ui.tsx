@@ -7,10 +7,13 @@ import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, DPill, ConsoleModal, MicroLabel, won, pill } from "@/components/console/ui";
 import { loadMemberDetail, consoleIssueMembership } from "@/lib/data/groups/console-actions";
 import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
+import { listMemberMeals } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
+import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
+import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
@@ -34,6 +37,8 @@ export function MembersClient({
   trainers,
   initialId,
   initialDetail,
+  initialFiles,
+  initialMeals,
 }: {
   items: MemberListItem[];
   statusById: Record<string, Status>;
@@ -41,6 +46,8 @@ export function MembersClient({
   trainers: TrainerOpt[];
   initialId: string | null;
   initialDetail: MemberDetailView | null;
+  initialFiles: MemberFileView[];
+  initialMeals: MealLog[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -48,7 +55,8 @@ export function MembersClient({
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [selectedId, setSelectedId] = useState(initialId);
   const [detail, setDetail] = useState(initialDetail);
-  const [files, setFiles] = useState<MemberFileView[]>([]);
+  const [files, setFiles] = useState<MemberFileView[]>(initialFiles);
+  const [meals, setMeals] = useState<MealLog[]>(initialMeals);
   const [, startLoad] = useTransition();
   const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund">(null);
   const [busy, setBusy] = useState(false);
@@ -67,17 +75,25 @@ export function MembersClient({
     (m) => (filter === "all" || statusById[m.id] === filter) && (query === "" || m.name.includes(query) || m.sub.includes(query)),
   );
 
+  async function loadAttachments(id: string) {
+    const [fs, ms] = await Promise.all([listMemberFiles(id), listMemberMeals(id)]);
+    setFiles(fs);
+    setMeals(ms.meals);
+  }
   function select(id: string) {
     setSelectedId(id);
     setFiles([]);
+    setMeals([]);
     startLoad(async () => {
-      const [d, fs] = await Promise.all([loadMemberDetail(id), listMemberFiles(id)]);
+      const [d] = await Promise.all([loadMemberDetail(id), loadAttachments(id)]);
       setDetail(d);
-      setFiles(fs);
     });
   }
   async function reload() {
     if (selectedId) setDetail(await loadMemberDetail(selectedId));
+  }
+  async function reloadAttachments() {
+    if (selectedId) await loadAttachments(selectedId);
   }
 
   async function doExtend() {
@@ -260,21 +276,6 @@ export function MembersClient({
                 <PBtn className="whitespace-nowrap !px-2" onClick={openIssue}>회원권 발급</PBtn>
               </div>
 
-              {/* body composition */}
-              {d.body.weight > 0 ? (
-                <>
-                  <MicroLabel className="mb-2.5">체성분</MicroLabel>
-                  <div className="mb-[18px] grid grid-cols-3 gap-2.5">
-                    {[{ l: "체중", v: d.body.weight, u: "kg" }, { l: "골격근", v: d.body.skeletalMuscle, u: "kg" }, { l: "체지방", v: d.body.bodyFat, u: "%" }].map((b) => (
-                      <div key={b.l} className="rounded-[14px] bg-[#FBF7F1] p-3.5">
-                        <div className="mb-1 text-[11px] font-medium text-[#9A917F]">{b.l}</div>
-                        <div><span className="serif text-[21px] font-semibold text-ink">{b.v}</span><span className="ml-0.5 text-[11px] font-medium text-[#9A917F]">{b.u}</span></div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-
               {d.injury ? (
                 <div className="mb-[18px] flex items-start gap-2.5 rounded-[13px] bg-[#FBF3E9] px-4 py-3">
                   <Icon name="triangle-exclamation" size={16} className="mt-px flex-none text-terracotta" />
@@ -282,30 +283,19 @@ export function MembersClient({
                 </div>
               ) : null}
 
-              {files.length > 0 ? (
-                <>
-                  <MicroLabel className="mb-2.5">사진 · 인바디</MicroLabel>
-                  <div className="mb-[18px] grid grid-cols-4 gap-2">
-                    {files.map((f) =>
-                      f.kind === "photo" ? (
-                        f.url ? (
-                          <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="aspect-square overflow-hidden rounded-[12px] bg-[#F1EDE6]">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={f.url} alt={f.takenAt} className="h-full w-full object-cover" />
-                          </a>
-                        ) : (
-                          <div key={f.id} className="aspect-square rounded-[12px] bg-[#F1EDE6]" />
-                        )
-                      ) : (
-                        <a key={f.id} href={f.url ?? undefined} target="_blank" rel="noreferrer" className="flex aspect-square flex-col items-center justify-center gap-1 rounded-[12px] bg-[#FBF7F1] text-center">
-                          <Icon name="document-text" size={18} className="text-sage-deep" />
-                          <span className="text-[10px] font-semibold text-[#766D60]">인바디</span>
-                        </a>
-                      ),
-                    )}
-                  </div>
-                </>
-              ) : null}
+              {/* 체형 기록 — 체성분 + 진행 사진 + 인바디 (업로드·삭제) */}
+              <BodyRecordSection
+                memberId={d.id}
+                photos={files.filter((f) => f.kind === "photo")}
+                inbodies={files.filter((f) => f.kind === "inbody")}
+                body={d.body}
+                onChanged={reloadAttachments}
+              />
+
+              {/* 식단 — 조회 + 피드백 */}
+              <MealsSection meals={meals} onChanged={reloadAttachments} />
+
+              <div className="mb-[18px]" />
 
               {/* membership history */}
               <MicroLabel className="mb-2.5">회원권 이력</MicroLabel>

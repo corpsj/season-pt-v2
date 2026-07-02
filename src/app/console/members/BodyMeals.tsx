@@ -1,4 +1,3 @@
-"use client";
 import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";

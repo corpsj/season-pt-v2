@@ -1,6 +1,8 @@
 import { Topbar } from "@/components/console/Topbar";
 import { getMembersAll, getMemberDetail } from "@/lib/data/groups/trainer-home";
 import { getMembershipProducts, getAssignableTrainers } from "@/lib/data/groups/owner-ops";
+import { getMemberFiles } from "@/lib/data/groups/member-files";
+import { getMemberMeals } from "@/lib/data/groups/meals";
 import { MembersClient } from "./ui";
 
 export default async function ConsoleMembersPage({
@@ -15,7 +17,9 @@ export default async function ConsoleMembersPage({
     getAssignableTrainers(),
   ]);
   const initialId = sp.sel ?? view.items[0]?.id ?? null;
-  const initialDetail = initialId ? await getMemberDetail(initialId) : null;
+  const [initialDetail, initialFiles, initialMeals] = initialId
+    ? await Promise.all([getMemberDetail(initialId), getMemberFiles(initialId), getMemberMeals(initialId)])
+    : [null, [], { meals: [], hasMore: false }];
 
   return (
     <>
@@ -29,6 +33,8 @@ export default async function ConsoleMembersPage({
           trainers={trainers}
           initialId={initialId}
           initialDetail={initialDetail}
+          initialFiles={initialFiles}
+          initialMeals={initialMeals.meals}
         />
         </div>
       </div>
