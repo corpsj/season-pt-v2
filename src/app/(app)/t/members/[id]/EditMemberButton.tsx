@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/Toast";
 import { updateMember } from "@/lib/data/groups/owner-ops-actions";
 import type { Gender } from "@/lib/types";
 
-/** 대표 전용: 회원 이름·연락처·성별·부상메모 수정(오타 연락처 등 잦은 데스크 업무). */
+/** 대표 전용: 회원 이름·연락처·성별·부상메모·생년월일 수정(오타 연락처 등 잦은 데스크 업무). 생년월일 변경은 비번 초기화+잠금 해제 겸용. */
 export function EditMemberButton({
   id,
   name,
@@ -27,11 +27,11 @@ export function EditMemberButton({
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [f, setF] = useState({ name, phone, gender: (gender ?? "female") as Gender, injury: injury ?? "" });
+  const [f, setF] = useState({ name, phone, gender: (gender ?? "female") as Gender, injury: injury ?? "", birth: "" });
 
   function save() {
     startTransition(async () => {
-      const r = await updateMember(id, { name: f.name, phone: f.phone, gender: f.gender, injuryNote: f.injury });
+      const r = await updateMember(id, { name: f.name, phone: f.phone, gender: f.gender, injuryNote: f.injury, birth: f.birth });
       if (r.ok) {
         toast("회원 정보를 수정했어요");
         setOpen(false);
@@ -85,6 +85,16 @@ export function EditMemberButton({
                   ]}
                 />
               </div>
+              <Field icon="person" label="생년월일 변경 (선택)">
+                <TextInput
+                  value={f.birth}
+                  onChange={(e) => setF({ ...f, birth: e.target.value })}
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="변경할 때만 입력 (예: 900325)"
+                />
+              </Field>
+              <p className="text-[11.5px] text-muted">생년월일을 바꾸면 로그인 비밀번호도 새 생년월일 6자리로 초기화돼요.</p>
               <Field icon="triangle-exclamation" label="부상 메모 (선택)">
                 <TextInput
                   value={f.injury}

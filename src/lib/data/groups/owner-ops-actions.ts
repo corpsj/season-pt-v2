@@ -146,10 +146,11 @@ export async function createMembersCsv(
   return { ok: created > 0, created, failed };
 }
 
-/** 회원 정보 수정(이름·연락처·성별·부상메모). 대표 전용. 연락처는 정규화 후 중복 시 거부. */
+/** 회원 정보 수정(이름·연락처·성별·부상메모·생년월일). 대표 전용. 연락처는 정규화 후 중복 시 거부.
+ *  생년월일을 바꾸면 비밀번호(=생년월일 6자리)도 재설정하고 로그인 잠금을 해제한다 — 비번 분실 복구 수단 겸용. */
 export async function updateMember(
   id: string,
-  input: { name: string; phone: string; gender: Gender; injuryNote?: string },
+  input: { name: string; phone: string; gender: Gender; injuryNote?: string; birth?: string },
 ): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -160,11 +161,18 @@ export async function updateMember(
   if (!name) return { ok: false, error: "이름을 입력해주세요" };
   if (!phone) return { ok: false, error: "연락처를 입력해주세요" };
 
-  const { error } = await sb
-    .from("members")
-    .update({ name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null })
-    .eq("id", id);
+  const patch: Record<string, unknown> = { name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null };
+  const birth6 = input.birth?.replace(/\D/g, "") ?? "";
+  if (birth6) {
+    const birthdate = parseBirth6(birth6);
+    if (!birthdate) return { ok: false, error: "생년월일을 올바른 6자리(YYMMDD) 날짜로 입력해주세요" };
+    patch.birthdate = birthdate;
+    patch.password_hash = hashPassword(birth6); // 비번=생년월일 고정 정책
+  }
+
+  const { error } = await sb.from("members").update(patch).eq("id", id);
   if (error) return { ok: false, error: "이미 사용 중인 연락처이거나 수정에 실패했어요" };
+  if (birth6) await sb.from("member_login_attempts").delete().eq("phone", phone); // 잠금 해제(best-effort)
 
   revalidatePath(`/t/members/${id}`);
   revalidatePath("/t/members");
