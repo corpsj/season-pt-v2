@@ -3,6 +3,7 @@ import { sb, getTrainerContext } from "@/lib/data/db";
 import { ensureOwner } from "@/lib/auth/guard";
 import { markNotificationRead } from "@/lib/data/groups/notifications";
 import { getProposeSlots } from "@/lib/data/groups/scheduling";
+import { getStudioCalendarWeek, type StudioCalendarWeek } from "@/lib/data/groups/console";
 import { getMemberDetail } from "@/lib/data/groups/trainer-home";
 import { getChatRoom } from "@/lib/data/groups/chat";
 import { issueMembership, recordPayment } from "@/lib/data/groups/owner-ops-actions";
@@ -68,4 +69,10 @@ export async function loadSessionSignature(sessionId: string): Promise<string | 
 export async function loadMemberSchedule(memberId: string): Promise<MemberScheduleView | null> {
   if (!(await ensureOwner())) return null;
   return getMemberSchedule(memberId);
+}
+
+/** 콘솔 캘린더 주간 뷰 네비게이션 — 대표만. */
+export async function loadStudioWeek(offset: number): Promise<StudioCalendarWeek | null> {
+  if (!(await ensureOwner())) return null;
+  return getStudioCalendarWeek(offset);
 }

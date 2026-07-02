@@ -5,8 +5,9 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
 import { confirmAttendance, revertAttendance, sendPropose, moveSessionDirect } from "@/lib/data/groups/scheduling-actions";
-import { loadSessionSignature, loadProposeSlots } from "@/lib/data/groups/console-actions";
-import type { StudioCalendarMonth, StudioClass } from "@/lib/data/groups/console";
+import { loadSessionSignature, loadProposeSlots, loadStudioWeek } from "@/lib/data/groups/console-actions";
+import type { StudioCalendarMonth, StudioCalendarWeek, StudioClass } from "@/lib/data/groups/console";
+import { WeekGrid } from "./WeekGrid";
 
 type ProposeView = NonNullable<Awaited<ReturnType<typeof loadProposeSlots>>>;
 
@@ -27,13 +28,31 @@ function statusPill(c: StudioClass) {
   return <span style={pill("#847A66", "#F4EFE6")}>예정</span>;
 }
 
-export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
+export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMonth; initialWeek: StudioCalendarWeek }) {
   const router = useRouter();
   const toast = useToast();
+  const [view, setView] = useState<"month" | "week">("week");
+  const [week, setWeek] = useState(initialWeek);
+  const [weekBusy, setWeekBusy] = useState(false);
   const [active, setActive] = useState<string>("all");
   const [day, setDay] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [sig, setSig] = useState<{ member: string; url: string } | null>(null);
+
+  async function goWeek(off: number) {
+    setWeekBusy(true);
+    const w = await loadStudioWeek(off);
+    setWeekBusy(false);
+    if (w) setWeek(w);
+  }
+  // 주간 뷰에서 변이(출석·이동) 후 서버 새로고침 + 주간 데이터 재로드(prop 갱신이 state에 안 붙으므로).
+  async function refreshActive() {
+    router.refresh();
+    if (view === "week") {
+      const w = await loadStudioWeek(week.offset);
+      if (w) setWeek(w);
+    }
+  }
 
   // 일정 조율 모달 상태 — 캘린더 날짜 모달에서 예정 수업을 클릭하면 열린다.
   const [prop, setProp] = useState<{ c: StudioClass; view: ProposeView } | null>(null);
@@ -82,7 +101,7 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     toast("일정을 변경했어요");
     setProp(null);
     setDay(null);
-    router.refresh();
+    await refreshActive();
   }
 
   function toggleSlot(id: string) {
@@ -123,7 +142,8 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
   }
   const match = (c: StudioClass) => active === "all" || c.trainerId === active;
   function classesOn(iso: string): StudioClass[] {
-    return (month.byDate[iso] ?? []).filter(match);
+    const src = view === "week" ? week.byDate : month.byDate;
+    return (src[iso] ?? []).filter(match);
   }
 
   async function mark(id: string, action: "attend" | "noshow") {
@@ -132,7 +152,7 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     setBusy(null);
     if (!r.ok) return toast(r.error ?? "처리에 실패했어요");
     toast(action === "attend" ? "출석 처리했어요" : "노쇼 처리했어요");
-    router.refresh();
+    await refreshActive();
   }
 
   // 오처리 정정(감사 H1): 예정 상태로 되돌리고 차감된 회차를 복구한다.
@@ -143,7 +163,7 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     setBusy(null);
     if (!r.ok) return toast(r.error ?? "되돌리지 못했어요");
     toast("처리를 되돌렸어요");
-    router.refresh();
+    await refreshActive();
   }
 
   const modalClasses = day ? classesOn(day) : [];
@@ -152,14 +172,26 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     <>
       {/* toolbar */}
       <div className="mb-4 flex items-center gap-3.5">
+        {/* 월간/주간 토글 */}
+        <div className="flex gap-1 rounded-[11px] bg-[#F1ECE2] p-1">
+          {([["week", "주간"], ["month", "월간"]] as const).map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-[8px] px-3.5 py-[7px] text-[13px] font-semibold transition ${view === v ? "bg-white text-ink shadow-sm" : "text-[#847A66]"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => go(month.offset - 1)} className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white text-[#5B5345] transition hover:bg-[#F4F0E8]"><Icon name="chevron-left" size={18} /></button>
-          <button onClick={() => go(0)} className="h-9 rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white px-3.5 text-[13px] font-semibold text-[#5B5345] transition hover:bg-[#F4F0E8]">오늘</button>
-          <button onClick={() => go(month.offset + 1)} className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white text-[#5B5345] transition hover:bg-[#F4F0E8]"><Icon name="chevron-right" size={18} /></button>
+          <button onClick={() => (view === "week" ? goWeek(week.offset - 1) : go(month.offset - 1))} disabled={weekBusy} className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white text-[#5B5345] transition hover:bg-[#F4F0E8] disabled:opacity-50"><Icon name="chevron-left" size={18} /></button>
+          <button onClick={() => (view === "week" ? goWeek(0) : go(0))} disabled={weekBusy} className="h-9 rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white px-3.5 text-[13px] font-semibold text-[#5B5345] transition hover:bg-[#F4F0E8] disabled:opacity-50">오늘</button>
+          <button onClick={() => (view === "week" ? goWeek(week.offset + 1) : go(month.offset + 1))} disabled={weekBusy} className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[rgba(75,59,46,0.1)] bg-white text-[#5B5345] transition hover:bg-[#F4F0E8] disabled:opacity-50"><Icon name="chevron-right" size={18} /></button>
         </div>
         <div>
-          <div className="text-[18px] font-bold text-ink">{month.monthLabel}</div>
-          <div className="text-[12px] font-medium text-[#9A917F]">이번 달 수업 {month.monthTotal}건</div>
+          <div className="text-[18px] font-bold text-ink">{view === "week" ? week.weekLabel : month.monthLabel}</div>
+          <div className="text-[12px] font-medium text-[#9A917F]">{view === "week" ? `이번 주 수업 ${week.classes.filter((c) => c.status !== "cancelled").length}건` : `이번 달 수업 ${month.monthTotal}건`}</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <span className="mr-0.5 text-[12px] font-semibold text-[#9A917F]">트레이너</span>
@@ -175,16 +207,19 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
         </div>
       </div>
 
-      {/* month board */}
+      {view === "week" ? (
+        <WeekGrid week={week} match={match} onOpenDay={setDay} />
+      ) : (
+      /* month board */
       <Card className="overflow-hidden">
         <div className="grid grid-cols-7 border-b border-[rgba(75,59,46,0.08)]">
           {WD.map((w, i) => (
             <div key={w} className={`py-[11px] text-center text-[11.5px] font-semibold ${i === 0 ? "text-[#C0796A]" : i === 6 ? "text-[#B89A5E]" : "text-[#9A917F]"}`}>{w}</div>
           ))}
         </div>
-        {month.weeks.map((week, wi) => (
+        {month.weeks.map((wk, wi) => (
           <div key={wi} className="grid grid-cols-7 border-b border-[rgba(75,59,46,0.06)] last:border-b-0">
-            {week.map((cell, ci) => {
+            {wk.map((cell, ci) => {
               if (cell.date == null) return <div key={ci} className="min-h-[120px] border-l border-[rgba(75,59,46,0.05)] first:border-l-0" />;
               const cls = classesOn(cell.dateISO);
               const live = cls.filter((c) => c.status !== "cancelled");
@@ -219,6 +254,7 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
           </div>
         ))}
       </Card>
+      )}
 
       {/* day modal */}
       {day ? (
