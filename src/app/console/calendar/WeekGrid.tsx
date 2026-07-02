@@ -46,7 +46,8 @@ export function WeekGrid({
   onOpenDay: (dateISO: string) => void;
 }) {
   const { days, hourStart, hourEnd } = week;
-  const hours = Array.from({ length: hourEnd - hourStart }, (_, i) => hourStart + i);
+  // 눈금/라벨은 마지막 시각(hourEnd)까지 포함 → 하단에 "오후 9시" 선이 보이게.
+  const hours = Array.from({ length: hourEnd - hourStart + 1 }, (_, i) => hourStart + i);
   const bodyH = (hourEnd - hourStart) * HOUR_PX;
   const byDay = new Map<string, WeekClass[]>();
   for (const c of week.classes) {

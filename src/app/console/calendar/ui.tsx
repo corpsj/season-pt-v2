@@ -227,7 +227,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
                 <button
                   key={ci}
                   onClick={() => setDay(cell.dateISO)}
-                  className="min-h-[120px] border-l border-[rgba(75,59,46,0.05)] p-[7px] pb-[9px] text-left transition first:border-l-0 hover:brightness-[0.985]"
+                  className="flex min-h-[120px] flex-col border-l border-[rgba(75,59,46,0.05)] p-[7px] pb-[9px] text-left align-top transition first:border-l-0 hover:brightness-[0.985]"
                   style={{ background: cell.isToday ? "#F3F7EC" : "transparent" }}
                 >
                   <div className="mb-1.5 flex items-start justify-between">

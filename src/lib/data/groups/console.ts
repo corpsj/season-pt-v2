@@ -340,10 +340,11 @@ export async function getStudioCalendarWeek(offset = 0): Promise<StudioCalendarW
     days.push({ dateISO, dayNum: dt.getUTCDate(), weekdayIdx: i, isToday: dateISO === today, isSunday: i === 0, isSaturday: i === 6 });
   }
 
+  // 기본 표시 창 = 오전 9시 ~ 오후 9시(21시). 그 밖의 세션이 있으면 그만큼만 확장(클리핑 방지).
   const startHours = classes.map((c) => Math.floor(c.startMin / 60));
   const endHours = classes.map((c) => Math.ceil(c.endMin / 60));
   const hourStart = Math.max(6, Math.min(9, ...startHours));
-  const hourEnd = Math.min(23, Math.max(20, ...endHours));
+  const hourEnd = Math.min(23, Math.max(21, ...endHours));
 
   const s = days[0], e = days[6];
   const sM = Number(s.dateISO.slice(5, 7)), eM = Number(e.dateISO.slice(5, 7));
