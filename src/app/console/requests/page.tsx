@@ -7,7 +7,7 @@ export default async function ConsoleRequestsPage() {
   const { pending, done } = await getStudioInbox();
   return (
     <>
-      <Topbar title="요청함" sub={`처리 대기 ${pending.length}건`} />
+      <Topbar title="일정 조율" sub={`처리 대기 ${pending.length}건`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
         <div className="mx-auto max-w-[760px]">
           <div className="mb-[18px] flex items-center gap-2 rounded-[13px] border border-[rgba(184,154,94,0.22)] bg-[#F4EEE3] px-4 py-3">

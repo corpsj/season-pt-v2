@@ -77,13 +77,13 @@ export async function notifyTrainersOfRequest(memberId: string, kind: "change" |
   const title = kind === "cancel" ? "수업 취소 요청" : "수업 변경 요청";
   const rows = trainers.map((tid) => ({
     recipient_type: "trainer", recipient_id: tid, type: "request",
-    title, body: "회원이 일정 조율을 요청했어요. 요청함에서 확인해주세요.", channel: "in_app", status: "unread",
+    title, body: "회원이 일정 조율을 요청했어요. 일정 조율 메뉴에서 확인해주세요.", channel: "in_app", status: "unread",
   }));
   await sb.from("notifications").insert(rows);
 }
 
 /**
- * 일정 요청의 처리 결과를 요청자에게 알림(수락/거절). 요청함·인박스만으로는 회원이 결과를 알 수 없어
+ * 일정 요청의 처리 결과를 요청자에게 알림(수락/거절). 일정 조율·인박스만으로는 회원이 결과를 알 수 없어
  * 부당 노쇼/헛걸음을 부른다(감사 H8). 'request' 타입 재사용(스키마 변경 불필요). best-effort.
  */
 export async function notifyRequestResult(input: {

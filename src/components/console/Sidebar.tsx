@@ -10,7 +10,7 @@ const NAV: NavItem[] = [
   { key: "dashboard", label: "운영 현황", href: "/console", icon: "home", activeIcon: "home-fill" },
   { key: "members", label: "회원", href: "/console/members", icon: "person", activeIcon: "person-fill", badgeKey: "members" },
   { key: "calendar", label: "수업 캘린더", href: "/console/calendar", icon: "calendar", activeIcon: "calendar-fill" },
-  { key: "requests", label: "요청함", href: "/console/requests", icon: "document-text", activeIcon: "document-text", badgeKey: "requests" },
+  { key: "requests", label: "일정 조율", href: "/console/requests", icon: "document-text", activeIcon: "document-text", badgeKey: "requests" },
   { key: "messages", label: "메시지", href: "/console/messages", icon: "message", activeIcon: "message-fill", badgeKey: "messages" },
   { key: "trainers", label: "강사", href: "/console/trainers", icon: "persons", activeIcon: "persons-fill" },
   { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
