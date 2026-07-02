@@ -1,10 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
-import { Card, PBtn, MicroLabel, won } from "@/components/console/ui";
+import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
 import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
 import { productTier, productType, composeProductName, type ProductTier } from "@/lib/data/product-class";
@@ -28,12 +28,9 @@ export function SettingsClient({ products, settings }: { products: MembershipPro
     if (!r.ok) toast(r.error ?? "저장에 실패했어요");
   }
 
-  // 서버 데이터가 바뀔 때만(우리 저장 후 router.refresh 포함) 편집기를 리마운트해 로컬 편집 상태를 초기화.
-  const sig = products.map((p) => `${p.id}:${p.name}:${p.sessions}:${p.price}:${p.durationDays}:${p.unitListPrice}:${p.active}:${p.sortOrder}`).join("|");
-
   return (
     <>
-      <ProductsEditor key={sig} products={products} />
+      <ProductsEditor products={products} />
 
       <div className="grid grid-cols-2 gap-[18px]">
         {/* policy */}
@@ -88,300 +85,341 @@ export function SettingsClient({ products, settings }: { products: MembershipPro
 }
 
 /* ============================================================
-   회원권 상품 인라인 편집기 — 셀에서 바로 수정하고 변경분을 한 번에 저장.
-   새 상품은 맨 아래 빈 줄에 입력하면 자동으로 줄이 늘어난다(콘솔 '한꺼번에 입력'과 동일 감각).
-   active 토글만 즉시 반영(낙관적) — 나머지 필드는 배치 저장.
+   회원권 상품 편집기(콘솔) — 모바일 설정 화면과 동일한 감각.
+   담당(대표/강사/공용) 필터 → 유형(1:1/2:1/기타) 섹션 × 회차 칩 그리드,
+   비활성은 접힌 보관함, 편집은 칩 탭 → 모달(상품명 자동 조합).
    ============================================================ */
 
-type Row = { key: number; id?: string; name: string; sessions: string; durationDays: string; price: string; unitListPrice: string; active: boolean; auto?: boolean };
+const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
+const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: "기타" };
 
-const digits = (s: string) => s.replace(/[^\d]/g, "");
-const toInt = (s: string) => parseInt(digits(s) || "0", 10);
-const effUnit = (r: Row) => {
-  const u = toInt(r.unitListPrice);
-  if (u > 0) return u;
-  const se = toInt(r.sessions);
-  return se > 0 ? Math.round(toInt(r.price) / se) : 0;
+type FormState = {
+  tier: ProductTier;
+  ptype: "1on1" | "2on1";
+  name: string;
+  nameTouched: boolean; // 사용자가 이름을 직접 수정하면 자동 조합 중단
+  sessions: string;
+  price: string;
+  unitListPrice: string;
+  durationDays: string;
 };
 
-type PErr = "name" | "sessions" | "durationDays" | "price";
-function rowErrors(r: Row): Set<PErr> {
-  const e = new Set<PErr>();
-  if (!r.name.trim()) e.add("name");
-  if (toInt(r.sessions) < 1) e.add("sessions");
-  if (toInt(r.durationDays) < 1) e.add("durationDays");
-  if (toInt(r.price) < 1) e.add("price");
-  return e;
+const EMPTY_FORM: FormState = {
+  tier: "common", ptype: "1on1", name: "",
+  nameTouched: false, sessions: "", price: "", unitListPrice: "", durationDays: "90",
+};
+
+const digits = (s: string) => s.replace(/[^\d]/g, "");
+
+function productToForm(p: MembershipProduct): FormState {
+  const tier = productTier(p.name);
+  const ptype = productType(p.name) ?? "1on1";
+  // 이름이 규칙 조합과 정확히 일치하면 자동 동기화 유지, 커스텀 이름이면 보존.
+  const nameTouched = p.name !== composeProductName(tier, ptype, p.sessions);
+  return {
+    tier, ptype, name: p.name, nameTouched,
+    sessions: String(p.sessions),
+    price: String(p.price),
+    unitListPrice: p.unitListPrice ? String(p.unitListPrice) : "",
+    durationDays: String(p.durationDays),
+  };
 }
-const isBlank = (r: Row) => !r.name.trim() && !digits(r.sessions) && !digits(r.price);
 
-const CELL = "w-full rounded-[10px] border bg-[#FBF9F5] px-2.5 py-[9px] text-[13.5px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]";
-const OK_B = "border-[rgba(75,59,46,0.14)]";
-const ERR_B = "border-terracotta/60 bg-[#FDF4EE]";
-const COLS = "grid grid-cols-[minmax(150px,1.5fr)_62px_78px_minmax(120px,1fr)_minmax(94px,0.9fr)_54px_24px] items-start gap-x-2";
+function bySessionsAsc(a: MembershipProduct, b: MembershipProduct) {
+  return a.sessions - b.sessions || a.price - b.price;
+}
 
-let keySeq = 0;
-const blank = (): Row => ({ key: keySeq++, name: "", sessions: "", durationDays: "60", price: "", unitListPrice: "", active: true, auto: true });
-
-const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
-/** 목록 정렬: 유형(1:1→2:1→기타) 다음 회차 오름차순 — 가격표처럼 위치를 예측할 수 있게. */
-const typeOrd = (name: string) => (productType(name) === "1on1" ? 0 : productType(name) === "2on1" ? 1 : 2);
+// 콘솔 필(필터·담당·유형 공용) — members ui의 상품 필터 버튼과 동일한 축.
+const pillCls = (on: boolean) =>
+  `rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`;
+// 콘솔 입력칸 — members 모달 인풋과 동일.
+const INPUT =
+  "w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]";
+const FLABEL = "mb-1.5 text-[12px] font-semibold text-[#9A917F]";
 
 function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [rows, setRows] = useState<Row[]>(() =>
-    products.map((p) => ({
-      key: keySeq++, id: p.id, name: p.name, sessions: String(p.sessions),
-      durationDays: String(p.durationDays), price: String(p.price),
-      unitListPrice: p.unitListPrice ? String(p.unitListPrice) : "", active: p.active,
-    })),
-  );
-  const [news, setNews] = useState<Row[]>(() => [blank()]);
-  const [busy, setBusy] = useState(false);
+  const [tierFilter, setTierFilter] = useState<"all" | ProductTier>("all");
   const [archiveOpen, setArchiveOpen] = useState(false);
-  // 새 상품 이름 자동 조합 기본값 — 담당·유형을 정해두면 회차만 입력해도 규칙에 맞는 이름이 생성된다.
-  const [newTier, setNewTier] = useState<ProductTier>("common");
-  const [newType, setNewType] = useState<"1on1" | "2on1">("1on1");
+  const [editId, setEditId] = useState<string | "new" | null>(null);
+  const [editActive, setEditActive] = useState(true); // 모달 안 판매 상태 표시용
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [busy, setBusy] = useState(false);
 
-  const byId = new Map(products.map((p) => [p.id, p]));
-  function dirty(r: Row): boolean {
-    const p = r.id ? byId.get(r.id) : undefined;
-    if (!p) return false;
-    return (
-      r.name.trim() !== p.name ||
-      toInt(r.sessions) !== p.sessions ||
-      toInt(r.durationDays) !== p.durationDays ||
-      toInt(r.price) !== p.price ||
-      effUnit(r) !== p.unitListPrice
-    );
+  const active = useMemo(() => products.filter((p) => p.active), [products]);
+  const archived = useMemo(() => products.filter((p) => !p.active), [products]);
+
+  // 존재하는 담당 티어만 필터로 노출(전부 공용이면 필터 행 자체가 안 보임).
+  const presentTiers = useMemo(() => {
+    const s = new Set(active.map((p) => productTier(p.name)));
+    return (["owner", "staff", "common"] as ProductTier[]).filter((t) => s.has(t));
+  }, [active]);
+  const showTierFilter = presentTiers.length > 1;
+  // 필터 중인 티어의 마지막 상품이 보관되면 그 티어가 presentTiers에서 사라진다 — 무효 필터는 "전체"로 간주.
+  const effTier = tierFilter === "all" || presentTiers.includes(tierFilter) ? tierFilter : "all";
+
+  const visible = useMemo(
+    () => (effTier === "all" ? active : active.filter((p) => productTier(p.name) === effTier)),
+    [active, effTier],
+  );
+
+  // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
+  const sections = useMemo(() => {
+    const g: Record<string, MembershipProduct[]> = { "1on1": [], "2on1": [], etc: [] };
+    for (const p of visible) g[productType(p.name) ?? "etc"].push(p);
+    return (["1on1", "2on1", "etc"] as const)
+      .map((k) => ({ key: k, label: TYPE_LABEL[k], items: g[k].sort(bySessionsAsc) }))
+      .filter((s) => s.items.length > 0);
+  }, [visible]);
+
+  function openNew() {
+    setForm(EMPTY_FORM);
+    setEditActive(true);
+    setEditId("new");
+  }
+  function openEdit(p: MembershipProduct) {
+    setForm(productToForm(p));
+    setEditActive(p.active);
+    setEditId(p.id);
+  }
+  function closeForm() {
+    setEditId(null);
+    setForm(EMPTY_FORM);
   }
 
-  function patchRow(key: number, part: Partial<Row>) {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...part } : r)));
-  }
-  function patchNew(key: number, part: Partial<Row>) {
-    setNews((prev) => {
-      const next = prev.map((r) => {
-        if (r.key !== key) return r;
-        // 이름을 직접 수정하면 자동 조합 중단, 아니면 회차 입력에 맞춰 이름 자동 생성.
-        const merged = { ...r, ...part, ...("name" in part ? { auto: false } : {}) };
-        if (merged.auto !== false && !("name" in part)) {
-          const n = toInt(merged.sessions);
-          if (n > 0) merged.name = composeProductName(newTier, newType, n);
-        }
-        return merged;
-      });
-      if (!isBlank(next[next.length - 1])) next.push(blank()); // 스프레드시트: 마지막 줄 채워지면 빈 줄 추가
+  /** tier/ptype/sessions 변경 시 이름 자동 조합(사용자가 이름을 직접 만지기 전까지). */
+  function patchForm(patch: Partial<FormState>) {
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      if (!next.nameTouched) {
+        const n = Number(next.sessions);
+        next.name = n > 0 ? composeProductName(next.tier, next.ptype, n) : next.name;
+      }
       return next;
     });
   }
-  /** 담당/유형 조합 변경 — 자동 이름 상태인 신규 줄들의 이름을 새 조합으로 재생성. */
-  function setComposer(tier: ProductTier, type: "1on1" | "2on1") {
-    setNewTier(tier);
-    setNewType(type);
-    setNews((prev) =>
-      prev.map((r) =>
-        r.auto !== false && toInt(r.sessions) > 0 ? { ...r, name: composeProductName(tier, type, toInt(r.sessions)) } : r,
-      ),
-    );
-  }
-  function removeNew(key: number) {
-    setNews((prev) => {
-      const next = prev.filter((r) => r.key !== key);
-      return next.length ? next : [blank()];
-    });
-  }
 
-  async function toggleActive(r: Row) {
-    if (!r.id) return;
-    const next = !r.active;
-    patchRow(r.key, { active: next }); // 낙관적 — active는 즉시 저장(배치 대상 아님)
-    const res = await setProductActive(r.id, next);
-    if (!res.ok) {
-      patchRow(r.key, { active: !next });
-      toast(res.error ?? "상태 변경에 실패했어요");
-    }
-  }
+  /** 저장(cont=true면 추가 모드에서 모달을 닫지 않고 연속 입력을 이어간다). */
+  async function save(cont: boolean) {
+    if (busy) return;
+    const sessions = Number(form.sessions);
+    const price = Number(digits(form.price));
+    const unitListPrice = Number(digits(form.unitListPrice) || "0");
+    const durationDays = Number(form.durationDays);
+    if (!form.name.trim()) return toast("상품명을 입력해주세요");
+    if (!sessions || sessions <= 0) return toast("회차를 입력해주세요");
+    if (!price || price <= 0) return toast("가격을 입력해주세요");
+    if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요");
 
-  const dirtyRows = rows.filter(dirty);
-  const validNew = news.filter((r) => !isBlank(r) && rowErrors(r).size === 0);
-  const errCount =
-    dirtyRows.filter((r) => rowErrors(r).size > 0).length +
-    news.filter((r) => !isBlank(r) && rowErrors(r).size > 0).length;
-  const pending = dirtyRows.length + validNew.length;
-  const canSave = pending > 0 && errCount === 0 && !busy;
-
-  async function saveAll() {
-    if (!canSave) return;
     setBusy(true);
-    const jobs: Promise<{ ok: boolean; error?: string }>[] = [
-      ...dirtyRows
-        .filter((r) => rowErrors(r).size === 0)
-        .map((r) =>
-          updateProduct(r.id!, {
-            name: r.name.trim(), sessions: toInt(r.sessions), price: toInt(r.price),
-            unitListPrice: effUnit(r), durationDays: toInt(r.durationDays),
-          }),
-        ),
-      ...validNew.map((r) =>
-        createProduct({
-          name: r.name.trim(), sessions: toInt(r.sessions), price: toInt(r.price),
-          unitListPrice: effUnit(r), durationDays: toInt(r.durationDays),
-        }),
-      ),
-    ];
-    const results = await Promise.all(jobs);
+    const input = { name: form.name.trim(), sessions, price, unitListPrice, durationDays };
+    const res = editId === "new" ? await createProduct(input) : await updateProduct(editId!, input);
     setBusy(false);
-    const failed = results.filter((r) => !r.ok).length;
-    if (failed) toast(`${results.length - failed}건 저장 · ${failed}건 실패`);
-    else toast(`${results.length}건 저장했어요`);
-    router.refresh(); // 성공 시 sig 변경 → 편집기 리마운트로 상태 초기화(신규 행에 실제 id 반영)
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    toast(editId === "new" ? "상품을 추가했어요" : "상품을 수정했어요");
+    router.refresh();
+    if (cont && editId === "new") {
+      // 연속 입력: 담당·유형·기간은 유지하고 회차·가격·정상가만 비운다.
+      setForm((f) => ({ ...f, name: "", nameTouched: false, sessions: "", price: "", unitListPrice: "" }));
+      return;
+    }
+    closeForm();
   }
+
+  async function onToggleActive() {
+    if (!editId || editId === "new" || busy) return;
+    setBusy(true);
+    const res = await setProductActive(editId, !editActive);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    setEditActive(!editActive);
+    toast(!editActive ? "판매를 재개했어요" : "보관함으로 옮겼어요");
+    router.refresh();
+  }
+
+  const setNum = (field: "sessions" | "price" | "unitListPrice" | "durationDays") =>
+    (e: React.ChangeEvent<HTMLInputElement>) => patchForm({ [field]: digits(e.target.value) } as Partial<FormState>);
+
+  // 모달 안 회당 단가 힌트 — 정상가 우선, 없으면 판매가/회차.
+  const fSessions = Number(form.sessions);
+  const fPrice = Number(digits(form.price));
+  const fUnit = Number(digits(form.unitListPrice)) || (fSessions > 0 ? Math.round(fPrice / fSessions) : 0);
 
   return (
     <Card className="mb-[18px] px-6 py-[22px]">
+      {/* header */}
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <div className="text-[16px] font-bold text-ink">회원권 상품</div>
-          <div className="mt-0.5 text-[12px] font-medium text-[#9A917F]">칸을 눌러 바로 수정하고, 아래 빈 줄에 새 상품을 입력하세요</div>
+          <div className="mt-0.5 text-[12px] font-medium text-[#9A917F]">발급 화면에 노출되는 회원권이에요</div>
         </div>
-        <div className="flex items-center gap-2.5">
-          {errCount > 0 ? <span className="text-[12px] font-semibold text-terracotta">입력 오류 {errCount}건</span> : null}
-          {pending > 0 && errCount === 0 ? <span className="text-[12px] font-semibold text-[#9A917F]">변경 {pending}건</span> : null}
-          <PBtn icon="check-bold" disabled={!canSave} onClick={saveAll}>{busy ? "저장 중…" : "변경사항 저장"}</PBtn>
-        </div>
+        <PBtn icon="plus-bold" onClick={openNew}>상품 추가</PBtn>
       </div>
 
-      {/* header */}
-      <div className={`${COLS} border-b border-[rgba(75,59,46,0.08)] px-1 pb-2 text-[11px] font-semibold tracking-[0.02em] text-[#9A917F]`}>
-        <span>상품명</span><span className="text-center">횟수</span><span className="text-center">기간(일)</span><span>판매가</span><span>정가(회당)</span><span className="text-center">활성</span><span />
-      </div>
+      {/* 담당 필터 — 대표/강사 상품이 함께 있을 때만 */}
+      {showTierFilter ? (
+        <div className="mb-4 flex items-center gap-[6px]">
+          <button type="button" onClick={() => setTierFilter("all")} className={pillCls(effTier === "all")}>전체</button>
+          {presentTiers.map((t) => (
+            <button key={t} type="button" onClick={() => setTierFilter(t)} className={pillCls(effTier === t)}>{TIER_LABEL[t]}</button>
+          ))}
+        </div>
+      ) : null}
 
-      {/* existing rows — 담당(대표/강사/공용) 섹션 × 유형·회차 정렬. 그룹 기준은 서버 데이터(저장 전 편집으로 줄이 튀지 않게). */}
-      <div className="flex flex-col gap-2 pt-2.5">
-        {(() => {
-          const rowById = new Map(rows.filter((r) => r.id).map((r) => [r.id!, r]));
-          const cmp = (a: MembershipProduct, b: MembershipProduct) =>
-            typeOrd(a.name) - typeOrd(b.name) || a.sessions - b.sessions || a.price - b.price;
-          const activeP = products.filter((p) => p.active);
-          const groups = (["owner", "staff", "common"] as ProductTier[])
-            .map((t) => ({ t, items: activeP.filter((p) => productTier(p.name) === t).sort(cmp) }))
-            .filter((g) => g.items.length > 0);
-          const showHeaders = groups.length > 1;
-          const renderRow = (r: Row) => {
-            const errs = dirty(r) ? rowErrors(r) : new Set<PErr>();
-            const b = (f: PErr) => (errs.has(f) ? ERR_B : OK_B);
-            const unit = effUnit(r);
-            return (
-              <div key={r.key} className={`${COLS} rounded-[10px] px-1 py-0.5 ${dirty(r) ? "bg-[#FBF7F1]" : ""}`} style={{ opacity: r.active ? 1 : 0.55 }}>
-                <input value={r.name} onChange={(e) => patchRow(r.key, { name: e.target.value })} className={`${CELL} ${b("name")}`} />
-                <input value={r.sessions} onChange={(e) => patchRow(r.key, { sessions: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("sessions")}`} />
-                <input value={r.durationDays} onChange={(e) => patchRow(r.key, { durationDays: digits(e.target.value) })} inputMode="numeric" className={`${CELL} text-center ${b("durationDays")}`} />
-                <div>
-                  <input value={r.price} onChange={(e) => patchRow(r.key, { price: digits(e.target.value) })} inputMode="numeric" className={`${CELL} ${b("price")}`} />
-                  {unit > 0 ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">회당 {won(unit)}</div> : null}
-                </div>
-                <input value={r.unitListPrice} onChange={(e) => patchRow(r.key, { unitListPrice: digits(e.target.value) })} inputMode="numeric" placeholder="자동" className={`${CELL} ${OK_B}`} />
-                <div className="flex justify-center pt-1.5"><Switch on={r.active} onChange={() => toggleActive(r)} /></div>
-                <span />
-              </div>
-            );
-          };
-          const archivedP = products.filter((p) => !p.active);
-          return (
-            <>
-              {groups.map((g) => (
-                <div key={g.t} className="flex flex-col gap-2">
-                  {showHeaders ? (
-                    <div className="pt-1.5 text-[11.5px] font-bold tracking-[0.02em] text-[#8A6F3E]">{TIER_LABEL[g.t]}</div>
-                  ) : null}
-                  {g.items.map((p) => rowById.get(p.id)).filter((r): r is Row => !!r).map(renderRow)}
-                </div>
-              ))}
-              {activeP.length === 0 ? (
-                <div className="py-2 text-center text-[12.5px] font-medium text-[#A89F92]">판매 중인 상품이 없어요 — 아래에 첫 상품을 추가하세요</div>
-              ) : null}
-              {/* 보관함(비활성) — 접힘 기본. 은퇴 상품이 작업 목록을 밀어내지 않게. */}
-              {archivedP.length > 0 ? (
-                <div className="mt-1">
+      {/* 판매 중 — 유형 섹션 × 회차 칩 그리드 */}
+      {sections.length === 0 ? (
+        <div className="rounded-[13px] bg-[#FBF7F1] py-8 text-center text-[13px] font-medium text-[#A89F92]">
+          등록된 상품이 없어요 — &lsquo;상품 추가&rsquo;로 시작하세요
+        </div>
+      ) : (
+        sections.map((sec) => (
+          <div key={sec.key} className="mb-4 last:mb-0">
+            <div className="mb-2 text-[11.5px] font-bold tracking-[0.02em] text-[#8A6F3E]">{sec.label}</div>
+            <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+              {sec.items.map((p) => {
+                const tier = productTier(p.name);
+                const typed = productType(p.name) !== null;
+                return (
                   <button
+                    key={p.id}
                     type="button"
-                    onClick={() => setArchiveOpen((v) => !v)}
-                    className="flex w-full items-center gap-1.5 rounded-[10px] bg-[#F8F4EC] px-3 py-2.5 text-left transition hover:bg-[#F4EFE6]"
+                    onClick={() => openEdit(p)}
+                    className="rounded-[13px] border border-ink/[0.08] bg-[#FBF9F5] px-3.5 py-3 text-left transition hover:bg-[#F7F3EB]"
                   >
-                    <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={13} className="flex-none text-[#A89F92]" />
-                    <span className="text-[12px] font-semibold text-[#766D60]">보관된 상품 {archivedP.length}개 · 발급 화면에 표시되지 않아요</span>
-                  </button>
-                  {archiveOpen ? (
-                    <div className="flex flex-col gap-2 pt-2">
-                      {archivedP.sort(cmp).map((p) => rowById.get(p.id)).filter((r): r is Row => !!r).map(renderRow)}
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="min-w-0 truncate text-[15px] font-bold text-ink">
+                        {typed ? `${p.sessions}회` : p.name}
+                      </span>
+                      {effTier === "all" && tier !== "common" ? (
+                        <span className="flex-none rounded-[6px] bg-[#EDF4E3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#5B6452]">
+                          {TIER_LABEL[tier]}
+                        </span>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          );
-        })()}
-      </div>
-
-      {/* new rows — 담당·유형 조합을 정하면 회차 입력만으로 규칙에 맞는 상품명이 생성된다 */}
-      <div className="mt-4">
-        <div className="mb-2 flex items-center gap-3">
-          <MicroLabel>새 상품 추가</MicroLabel>
-          <div className="flex items-center gap-1">
-            {(["common", "owner", "staff"] as ProductTier[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setComposer(t, newType)}
-                className={`rounded-[8px] px-2.5 py-[5px] text-[11.5px] font-semibold transition ${newTier === t ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}
-              >
-                {TIER_LABEL[t]}
-              </button>
-            ))}
-          </div>
-          <div className="h-4 w-px bg-[rgba(75,59,46,0.14)]" />
-          <div className="flex items-center gap-1">
-            {(["1on1", "2on1"] as const).map((tp) => (
-              <button
-                key={tp}
-                type="button"
-                onClick={() => setComposer(newTier, tp)}
-                className={`rounded-[8px] px-2.5 py-[5px] text-[11.5px] font-semibold transition ${newType === tp ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}
-              >
-                {tp === "1on1" ? "1:1" : "2:1"}
-              </button>
-            ))}
-          </div>
-          <span className="text-[11px] font-medium text-[#9A917F]">횟수를 입력하면 상품명이 자동으로 만들어져요</span>
-        </div>
-        <div className="flex flex-col gap-2">
-          {news.map((r) => {
-            const errs = isBlank(r) ? new Set<PErr>() : rowErrors(r);
-            const b = (f: PErr) => (errs.has(f) ? ERR_B : OK_B);
-            const unit = effUnit(r);
-            return (
-              <div key={r.key} className={COLS}>
-                <input value={r.name} onChange={(e) => patchNew(r.key, { name: e.target.value })} placeholder={composeProductName(newTier, newType, 20)} className={`${CELL} ${b("name")}`} />
-                <input value={r.sessions} onChange={(e) => patchNew(r.key, { sessions: digits(e.target.value) })} inputMode="numeric" placeholder="20" className={`${CELL} text-center ${b("sessions")}`} />
-                <input value={r.durationDays} onChange={(e) => patchNew(r.key, { durationDays: digits(e.target.value) })} inputMode="numeric" placeholder="60" className={`${CELL} text-center ${b("durationDays")}`} />
-                <div>
-                  <input value={r.price} onChange={(e) => patchNew(r.key, { price: digits(e.target.value) })} inputMode="numeric" placeholder="1400000" className={`${CELL} ${b("price")}`} />
-                  {unit > 0 ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">회당 {won(unit)}</div> : null}
-                </div>
-                <input value={r.unitListPrice} onChange={(e) => patchNew(r.key, { unitListPrice: digits(e.target.value) })} inputMode="numeric" placeholder="자동" className={`${CELL} ${OK_B}`} />
-                <span className="pt-2 text-center text-[10.5px] font-semibold text-sage-deep">신규</span>
-                {isBlank(r) ? <span /> : (
-                  <button type="button" onClick={() => removeNew(r.key)} aria-label="줄 삭제" className="mt-[9px] flex h-5 w-5 items-center justify-center justify-self-center rounded-full text-[#C2BAAD] transition hover:bg-[#F4EFE6] hover:text-terracotta">
-                    <Icon name="close" size={12} />
+                    <div className="mt-1 text-[13px] font-semibold text-ink">{won(p.price)}</div>
+                    <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">
+                      {typed ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
+                    </div>
                   </button>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
+
+      {/* 보관함(비활성) — 접힘 기본. 은퇴 상품이 작업 목록을 밀어내지 않게. */}
+      {archived.length > 0 ? (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setArchiveOpen((v) => !v)}
+            className="flex w-full items-center gap-1.5 rounded-[10px] bg-[#F8F4EC] px-3 py-2.5 text-left transition hover:bg-[#F4EFE6]"
+          >
+            <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={13} className="flex-none text-[#A89F92]" />
+            <span className="text-[12px] font-semibold text-[#766D60]">보관된 상품 {archived.length}개 · 발급 화면에 표시되지 않아요</span>
+          </button>
+          {archiveOpen ? (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {[...archived].sort(bySessionsAsc).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => openEdit(p)}
+                  className="flex items-center gap-3 rounded-[11px] px-3 py-2.5 text-left opacity-60 transition hover:bg-[#F7F3EB] hover:opacity-100"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-bold text-ink">{p.name}</div>
+                    <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · {won(p.price)} · {p.durationDays}일</div>
+                  </div>
+                  <Icon name="pencil" size={14} className="flex-none text-[#A89F92]" />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-      </div>
+      ) : null}
+
+      {/* 추가/수정 모달 — 담당·유형·회차로 상품명 자동 조합(직접 수정 가능) */}
+      {editId ? (
+        <ConsoleModal
+          title={editId === "new" ? "상품 추가" : "상품 수정"}
+          onClose={closeForm}
+          footer={
+            editId === "new" ? (
+              <>
+                <OBtn className="flex-1" onClick={closeForm}>취소</OBtn>
+                <OBtn className="flex-1" disabled={busy} onClick={() => save(true)}>저장 후 계속</OBtn>
+                <PBtn icon="check-bold" className="flex-1" disabled={busy} onClick={() => save(false)}>저장</PBtn>
+              </>
+            ) : (
+              <>
+                <OBtn className="flex-1" onClick={closeForm}>취소</OBtn>
+                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={() => save(false)}>저장</PBtn>
+              </>
+            )
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <div>
+              <div className={FLABEL}>담당</div>
+              <div className="flex items-center gap-[6px]">
+                {(["owner", "staff", "common"] as ProductTier[]).map((t) => (
+                  <button key={t} type="button" onClick={() => patchForm({ tier: t })} className={pillCls(form.tier === t)}>{TIER_LABEL[t]}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className={FLABEL}>유형</div>
+              <div className="flex items-center gap-[6px]">
+                {(["1on1", "2on1"] as const).map((tp) => (
+                  <button key={tp} type="button" onClick={() => patchForm({ ptype: tp })} className={pillCls(form.ptype === tp)}>{TYPE_LABEL[tp]}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className={FLABEL}>회차</div>
+                <input value={form.sessions} onChange={setNum("sessions")} inputMode="numeric" placeholder="10" className={INPUT} />
+              </div>
+              <div>
+                <div className={FLABEL}>유효기간 (일)</div>
+                <input value={form.durationDays} onChange={setNum("durationDays")} inputMode="numeric" placeholder="90" className={INPUT} />
+              </div>
+            </div>
+
+            <div>
+              <div className={FLABEL}>가격 (원)</div>
+              <input value={form.price} onChange={setNum("price")} inputMode="numeric" placeholder="750000" className={INPUT} />
+              {fUnit > 0 ? <div className="mt-1 pl-1 text-[11px] font-semibold text-sage-deep">회당 {won(fUnit)}</div> : null}
+            </div>
+
+            <div>
+              <div className={FLABEL}>1회 정상가 (환불 기준, 원)</div>
+              <input value={form.unitListPrice} onChange={setNum("unitListPrice")} inputMode="numeric" placeholder="자동 (판매가 ÷ 회차)" className={INPUT} />
+            </div>
+
+            <div>
+              <div className={FLABEL}>상품명 (자동 생성)</div>
+              <input
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
+                placeholder="1:1 PT 10회권"
+                className={INPUT}
+              />
+            </div>
+
+            {editId !== "new" ? (
+              <div className="flex items-center justify-between rounded-[13px] bg-[#FBF7F1] px-4 py-3">
+                <span className="text-[13px] font-semibold text-[#766D60]">판매 중 (끄면 보관함으로)</span>
+                <Switch on={editActive} onChange={onToggleActive} disabled={busy} label={editActive ? "판매" : "보관"} />
+              </div>
+            ) : null}
+          </div>
+        </ConsoleModal>
+      ) : null}
     </Card>
   );
 }

@@ -88,10 +88,12 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     return (["owner", "staff", "common"] as ProductTier[]).filter((t) => s.has(t));
   }, [active]);
   const showTierToggle = presentTiers.length > 1;
+  // 필터 중인 티어의 마지막 상품이 보관되면 그 티어가 presentTiers에서 사라진다 — 무효 필터는 "전체"로 간주.
+  const effTier = tierFilter === "all" || presentTiers.includes(tierFilter) ? tierFilter : "all";
 
   const visible = useMemo(
-    () => (tierFilter === "all" ? active : active.filter((p) => productTier(p.name) === tierFilter)),
-    [active, tierFilter],
+    () => (effTier === "all" ? active : active.filter((p) => productTier(p.name) === effTier)),
+    [active, effTier],
   );
 
   // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
@@ -182,7 +184,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           <SegmentedToggle
             className="mb-4"
             options={[{ value: "all", label: "전체" }, ...presentTiers.map((t) => ({ value: t, label: TIER_LABEL[t] }))]}
-            value={tierFilter}
+            value={effTier}
             onChange={(v) => setTierFilter(v as "all" | ProductTier)}
           />
         ) : null}
@@ -213,7 +215,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                         <span className="truncate text-[15px] font-bold text-ink">
                           {typed ? `${p.sessions}회` : p.name}
                         </span>
-                        {tierFilter === "all" && tier !== "common" ? (
+                        {effTier === "all" && tier !== "common" ? (
                           <span className="flex-none rounded-md bg-sage-banner px-1.5 py-0.5 text-[10.5px] font-bold text-sage-deep">
                             {TIER_LABEL[tier]}
                           </span>
