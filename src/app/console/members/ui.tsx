@@ -61,8 +61,10 @@ export function MembersClient({
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod });
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
-  const [refund, setRefund] = useState<{ refund: number; used: number } | null>(null);
+  const [refund, setRefund] = useState<{ refund: number; used: number; noBaseline: boolean } | null>(null);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
+  const [refundAmt, setRefundAmt] = useState("");
+  const [refundErr, setRefundErr] = useState<string | null>(null);
 
   const query = q.trim();
   const list = items.filter(
@@ -95,16 +97,19 @@ export function MembersClient({
   }
   async function openRefund() {
     if (!detail?.activeMembershipId) return;
-    setRefund(null);
-    setRefundMethod("card");
+    setRefund(null); setRefundErr(null); setRefundAmt(""); setRefundMethod("card");
     setModal("refund");
-    const p = (await previewRefund(detail.activeMembershipId)) as { ok: boolean; refund?: number; used?: number; error?: string };
-    if (p.ok) setRefund({ refund: p.refund ?? 0, used: p.used ?? 0 });
+    const p = (await previewRefund(detail.activeMembershipId)) as { ok: boolean; refund?: number; used?: number; noBaseline?: boolean; error?: string };
+    if (!p.ok) { setRefundErr(p.error ?? "환불 금액을 계산하지 못했어요. 금액을 직접 입력해주세요."); return; }
+    setRefund({ refund: p.refund ?? 0, used: p.used ?? 0, noBaseline: !!p.noBaseline });
+    setRefundAmt(String(p.refund ?? 0));
   }
   async function doRefund() {
     if (!detail?.activeMembershipId) return;
+    const n = Number(refundAmt);
+    if (refundAmt === "" || !Number.isInteger(n) || n < 0) return toast("환불 금액을 확인해주세요");
     setBusy(true);
-    const r = await refundMembership({ membershipId: detail.activeMembershipId, method: refundMethod });
+    const r = await refundMembership({ membershipId: detail.activeMembershipId, method: refundMethod, amountOverride: n });
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "환불에 실패했어요");
     toast("환불을 처리했어요");
@@ -595,12 +600,21 @@ export function MembersClient({
         <ConsoleModal
           title="환불"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !refund} onClick={doRefund}>환불 처리</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || refundAmt === ""} onClick={doRefund}>환불 처리</PBtn></>}
         >
           <MemberStripe d={d} />
           <div className="mb-[18px] rounded-[14px] bg-[#FBF3E9] px-[18px] py-4">
-            <div className="mb-1.5 text-[12px] font-medium text-[#9A8772]">환불 예정 금액 · 사용 {refund ? refund.used : "…"}회</div>
-            <div className="text-[26px] font-bold text-terracotta">{refund ? won(refund.refund) : "계산 중…"}</div>
+            {refundErr ? <div className="mb-1.5 text-[13px] font-medium text-terracotta">{refundErr}</div> : null}
+            <div className="mb-1.5 text-[12px] font-medium text-[#9A8772]">
+              {refund ? `산식 기준 ${won(refund.refund)} · 사용 ${refund.used}회${refund.noBaseline ? " · 결제 기록 없음(이관)" : ""}` : refundErr ? "" : "계산 중…"}
+            </div>
+            <input
+              value={refundAmt}
+              onChange={(e) => setRefundAmt(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              placeholder="실제 환불 금액(원)"
+              className="w-full rounded-[10px] border border-ink/10 bg-white px-3.5 py-2.5 text-[20px] font-bold text-terracotta"
+            />
           </div>
           <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">환불 수단</div>
           <MethodPicker value={refundMethod} onChange={setRefundMethod} />
