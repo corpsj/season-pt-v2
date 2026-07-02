@@ -245,9 +245,11 @@ export async function getInbox(): Promise<InboxView> {
     .order("created_at", { ascending: false });
   const requests = (reqRows ?? []) as RequestRow[];
 
-  // First member of each involved session → name/avatar. One batched query (was N+1).
+  // Members of each involved session → name/avatar. One batched query (was N+1).
+  // 발신함은 세션의 전 멤버 이름을 "·"로 잇는다(2:1 제안이 한 명 이름으로만 보이던 문제, 감사 후속).
   const involved = Array.from(new Set(requests.map((r) => r.session_id)));
   const firstMemberBySession = new Map<string, MemberRow>();
+  const namesBySession = new Map<string, string[]>();
   if (involved.length) {
     const { data: smRows } = await sb
       .from("session_members")
@@ -255,9 +257,9 @@ export async function getInbox(): Promise<InboxView> {
       .in("session_id", involved);
     for (const row of smRows ?? []) {
       const r = row as unknown as { session_id: string; members: MemberRow | null };
-      if (r.members && !firstMemberBySession.has(r.session_id)) {
-        firstMemberBySession.set(r.session_id, r.members);
-      }
+      if (!r.members) continue;
+      if (!firstMemberBySession.has(r.session_id)) firstMemberBySession.set(r.session_id, r.members);
+      namesBySession.set(r.session_id, [...(namesBySession.get(r.session_id) ?? []), r.members.name]);
     }
   }
 
@@ -296,13 +298,12 @@ export async function getInbox(): Promise<InboxView> {
   const sent = requests
     .filter((r) => r.requester_type === "trainer")
     .map<SentItem>((r) => {
-      const m = firstMemberBySession.get(r.session_id);
       const before = r.original_at ? slotLabel(r.original_at) : "";
       const after =
         r.proposed_slots && r.proposed_slots.length ? slotLabel(r.proposed_slots[0]) : "";
       const summary =
         r.type === "change" && before && after ? `${before} → ${after}` : "수업 취소 요청";
-      return { id: r.id, name: m?.name ?? "", summary, status: "awaiting" };
+      return { id: r.id, name: (namesBySession.get(r.session_id) ?? []).join("·"), summary, status: "awaiting" };
     });
 
   return {

@@ -720,11 +720,27 @@ export async function createTeamSchedule(input: {
   const built = await buildTeamSchedule(trainerId, input.memberIds, input.slots);
   if (!built.ok) return built;
 
+  // 기존 1:1 회원을 팀으로 전환하는 경우 솔로 정기 스케줄이 살아남아 유령 1:1 세션이 계속
+  // 생성된다(감사 후속). 전환 주간의 남은 1:1 수업이 실제 진행될 수 있어 자동 삭제 대신 경고로 표면화.
+  let warn = built.warn;
+  if (!warn) {
+    const { data: solo } = await sb
+      .from("schedule_members")
+      .select("member_id, schedules!inner(id)")
+      .in("member_id", input.memberIds)
+      .eq("schedules.type", "1on1")
+      .eq("schedules.active", true)
+      .limit(1);
+    if (solo && solo.length) {
+      warn = "팀을 만들었어요. 기존 1:1 정기 일정이 남아 있어요 — 각 회원의 [일정 편집]에서 정리해주세요.";
+    }
+  }
+
   await generateUpcomingSessions().catch(() => {});
   revalidatePath("/t");
   revalidatePath("/t/members");
   revalidatePath("/console");
-  return { ok: true, warn: built.warn };
+  return { ok: true, warn };
 }
 
 /**

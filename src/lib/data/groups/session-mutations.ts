@@ -133,6 +133,19 @@ export async function buildTeamSchedule(
     return { ok: false, error: "두 회원의 담당 강사가 같아야 팀으로 묶을 수 있어요. 담당 강사를 먼저 맞춰주세요." };
   }
 
+  // 이중 팀 가드: 이미 활성 2:1 팀인 회원은 거부 — UI 후보 필터를 우회하는 두 탭/더블 제출을 서버가 막는다.
+  // (setTeamSchedule의 '첫 스케줄 = 팀' 가정도 이 불변식에 기댄다.)
+  const { data: teamed } = await sb
+    .from("schedule_members")
+    .select("member_id, schedules!inner(id)")
+    .in("member_id", memberIds)
+    .eq("schedules.type", "2on1")
+    .eq("schedules.active", true)
+    .limit(1);
+  if (teamed && teamed.length) {
+    return { ok: false, error: "이미 2:1 팀인 회원이 있어요. 기존 팀을 해제한 뒤 다시 묶어주세요." };
+  }
+
   const WD = ["일", "월", "화", "수", "목", "금", "토"];
   // 사전 더블부킹 가드: 강사가 같은 요일·시각에 이미 활성 스케줄을 가지면 거부(부분 생성 방지).
   for (const s of norm.slots) {
