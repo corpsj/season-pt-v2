@@ -494,24 +494,53 @@ function MethodPicker({ value, onChange }: { value: PaymentMethod; onChange: (m:
     </div>
   );
 }
+type ProductFilter = "all" | "1on1" | "2on1";
+const PRODUCT_FILTERS: { key: ProductFilter; label: string }[] = [
+  { key: "all", label: "전체" },
+  { key: "1on1", label: "1:1" },
+  { key: "2on1", label: "2:1" },
+];
+/** 상품명에 박힌 "1:1"/"2:1" 표기로 분류 — 별도 type 컬럼 없이 기존 명명 규칙을 재사용. */
+function productType(name: string): "1on1" | "2on1" | null {
+  if (name.includes("2:1")) return "2on1";
+  if (name.includes("1:1")) return "1on1";
+  return null;
+}
 function ProductPicker({ products, selected, onPick, showPrice }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; showPrice?: boolean }) {
+  const [filter, setFilter] = useState<ProductFilter>("all");
+  const shown = filter === "all" ? products : products.filter((p) => productType(p.name) === filter);
   return (
-    <div className="flex flex-col gap-2.5">
-      {products.map((p) => {
-        const on = selected === p.id;
-        return (
-          <button key={p.id} onClick={() => onPick(p.id)} className={`rounded-[13px] border px-4 py-3 text-left transition ${on ? "border-sage bg-[#EDF4E3]" : "border-[rgba(75,59,46,0.12)] bg-white hover:bg-[#FBF9F5]"}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[14px] font-bold text-ink">{p.name}</div>
-                <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · 유효 {p.durationDays}일</div>
+    <div>
+      {products.length > 0 ? (
+        <div className="mb-2.5 flex gap-[6px]">
+          {PRODUCT_FILTERS.map((f) => {
+            const on = filter === f.key;
+            return (
+              <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-2.5">
+        {shown.map((p) => {
+          const on = selected === p.id;
+          return (
+            <button key={p.id} onClick={() => onPick(p.id)} className={`rounded-[13px] border px-4 py-3 text-left transition ${on ? "border-sage bg-[#EDF4E3]" : "border-[rgba(75,59,46,0.12)] bg-white hover:bg-[#FBF9F5]"}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[14px] font-bold text-ink">{p.name}</div>
+                  <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · 유효 {p.durationDays}일</div>
+                </div>
+                {showPrice ? <span className="text-[15px] font-bold text-ink">{won(p.price)}</span> : null}
               </div>
-              {showPrice ? <span className="text-[15px] font-bold text-ink">{won(p.price)}</span> : null}
-            </div>
-          </button>
-        );
-      })}
-      {products.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">등록된 상품이 없어요</div> : null}
+            </button>
+          );
+        })}
+        {products.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">등록된 상품이 없어요</div> : null}
+        {products.length > 0 && shown.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">해당하는 상품이 없어요</div> : null}
+      </div>
     </div>
   );
 }

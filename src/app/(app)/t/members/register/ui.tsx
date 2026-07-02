@@ -25,6 +25,13 @@ function hourLabel(h: number) {
 const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => ({ value: String(i + 6), label: hourLabel(i + 6) }));
 const MINUTE_OPTIONS = [{ value: "0", label: "정각" }, { value: "30", label: "30분" }];
 
+/** 상품명에 박힌 "1:1"/"2:1" 표기로 분류 — 별도 type 컬럼 없이 기존 명명 규칙을 재사용. */
+function productType(name: string): "1on1" | "2on1" | null {
+  if (name.includes("2:1")) return "2on1";
+  if (name.includes("1:1")) return "1on1";
+  return null;
+}
+
 const todayStr = () => {
   const d = new Date(Date.now() + 9 * 3600000); // KST
   return d.toISOString().slice(0, 10);
@@ -51,6 +58,7 @@ export function MemberRegisterClient({
   });
   const [trainerId, setTrainerId] = useState(ownerId);
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
+  const [productFilter, setProductFilter] = useState<"all" | "1on1" | "2on1">("all");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
@@ -239,8 +247,23 @@ export function MemberRegisterClient({
         <div className="mb-2.5 mt-6">
           <Kicker>회원권 상품</Kicker>
         </div>
+        {products.length > 0 ? (
+          <div className="mb-2.5">
+            <SegmentedToggle
+              options={[
+                { value: "all", label: "전체" },
+                { value: "1on1", label: "1:1" },
+                { value: "2on1", label: "2:1" },
+              ]}
+              value={productFilter}
+              onChange={setProductFilter}
+            />
+          </div>
+        ) : null}
         <div className="mb-4 flex flex-col gap-2.5">
-          {products.map((p) => (
+          {products
+            .filter((p) => productFilter === "all" || productType(p.name) === productFilter)
+            .map((p) => (
             <RadioOption
               key={p.id}
               selected={selectedProduct === p.id}
