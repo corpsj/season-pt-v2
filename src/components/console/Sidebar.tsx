@@ -6,17 +6,35 @@ import { trainerLogout } from "@/lib/auth/trainer-actions";
 
 type NavItem = { key: string; label: string; href: string; icon: IconName; activeIcon: IconName; badgeKey?: "members" | "requests" | "messages" };
 
-const NAV: NavItem[] = [
-  { key: "dashboard", label: "운영 현황", href: "/console", icon: "home", activeIcon: "home-fill" },
-  { key: "members", label: "회원", href: "/console/members", icon: "person", activeIcon: "person-fill", badgeKey: "members" },
-  { key: "calendar", label: "수업 캘린더", href: "/console/calendar", icon: "calendar", activeIcon: "calendar-fill" },
-  { key: "requests", label: "일정 조율", href: "/console/requests", icon: "document-text", activeIcon: "document-text", badgeKey: "requests" },
-  { key: "messages", label: "메시지", href: "/console/messages", icon: "message", activeIcon: "message-fill", badgeKey: "messages" },
-  { key: "trainers", label: "강사", href: "/console/trainers", icon: "persons", activeIcon: "persons-fill" },
-  { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
-  { key: "settlement", label: "강사 정산", href: "/console/settlement", icon: "tag", activeIcon: "tag-fill" },
-  { key: "finance", label: "손익", href: "/console/finance", icon: "chart", activeIcon: "chart" },
-  { key: "settings", label: "설정", href: "/console/settings", icon: "setting", activeIcon: "setting" },
+// 일상 운영(매일 확인) → 사람 관리 → 재무(수입→지급→손익) → 설정 순.
+const NAV_GROUPS: { label?: string; items: NavItem[] }[] = [
+  {
+    label: "운영",
+    items: [
+      { key: "dashboard", label: "운영 현황", href: "/console", icon: "home", activeIcon: "home-fill" },
+      { key: "calendar", label: "수업 캘린더", href: "/console/calendar", icon: "calendar", activeIcon: "calendar-fill" },
+      { key: "requests", label: "일정 조율", href: "/console/requests", icon: "document-text", activeIcon: "document-text", badgeKey: "requests" },
+      { key: "messages", label: "메시지", href: "/console/messages", icon: "message", activeIcon: "message-fill", badgeKey: "messages" },
+    ],
+  },
+  {
+    label: "관리",
+    items: [
+      { key: "members", label: "회원", href: "/console/members", icon: "person", activeIcon: "person-fill", badgeKey: "members" },
+      { key: "trainers", label: "강사", href: "/console/trainers", icon: "persons", activeIcon: "persons-fill" },
+    ],
+  },
+  {
+    label: "재무",
+    items: [
+      { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
+      { key: "settlement", label: "강사 정산", href: "/console/settlement", icon: "tag", activeIcon: "tag-fill" },
+      { key: "finance", label: "손익", href: "/console/finance", icon: "chart", activeIcon: "chart" },
+    ],
+  },
+  {
+    items: [{ key: "settings", label: "설정", href: "/console/settings", icon: "setting", activeIcon: "setting" }],
+  },
 ];
 
 export function Sidebar({
@@ -39,35 +57,43 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-[10px] pb-[9px] text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6F6655]">운영</div>
-      <nav className="flex flex-col gap-[3px]">
-        {NAV.map((it) => {
-          const on = it.href === "/console" ? pathname === "/console" : pathname.startsWith(it.href);
-          const badge = it.badgeKey ? badges[it.badgeKey] : 0;
-          return (
-            <Link
-              key={it.key}
-              href={it.href}
-              className={`flex items-center gap-3 rounded-[12px] px-[13px] py-[11px] text-[14px] font-semibold tracking-[-0.01em] transition-colors ${
-                on ? "bg-sage text-surface" : "text-[#AEA08D] hover:bg-[rgba(250,248,244,0.07)]"
-              }`}
-            >
-              <Icon name={on ? it.activeIcon : it.icon} size={19} />
-              <span className="flex-1">{it.label}</span>
-              {badge > 0 ? (
-                <span
-                  className="min-w-[18px] rounded-full px-[7px] text-center text-[10.5px] font-bold"
-                  style={{
-                    color: on ? "#FAF8F4" : "#C67352",
-                    background: on ? "rgba(250,248,244,.18)" : "#3A332B",
-                  }}
-                >
-                  {badge}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
+      <nav className="flex flex-col">
+        {NAV_GROUPS.map((g, gi) => (
+          <div key={g.label ?? gi} className={gi > 0 ? "mt-[14px]" : ""}>
+            {g.label ? (
+              <div className="px-[10px] pb-[7px] text-[11px] font-semibold uppercase tracking-[0.1em] text-[#6F6655]">{g.label}</div>
+            ) : null}
+            <div className="flex flex-col gap-[3px]">
+              {g.items.map((it) => {
+                const on = it.href === "/console" ? pathname === "/console" : pathname.startsWith(it.href);
+                const badge = it.badgeKey ? badges[it.badgeKey] : 0;
+                return (
+                  <Link
+                    key={it.key}
+                    href={it.href}
+                    className={`flex items-center gap-3 rounded-[12px] px-[13px] py-[11px] text-[14px] font-semibold tracking-[-0.01em] transition-colors ${
+                      on ? "bg-sage text-surface" : "text-[#AEA08D] hover:bg-[rgba(250,248,244,0.07)]"
+                    }`}
+                  >
+                    <Icon name={on ? it.activeIcon : it.icon} size={19} />
+                    <span className="flex-1">{it.label}</span>
+                    {badge > 0 ? (
+                      <span
+                        className="min-w-[18px] rounded-full px-[7px] text-center text-[10.5px] font-bold"
+                        style={{
+                          color: on ? "#FAF8F4" : "#C67352",
+                          background: on ? "rgba(250,248,244,.18)" : "#3A332B",
+                        }}
+                      >
+                        {badge}
+                      </span>
+                    ) : null}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* owner footer */}
