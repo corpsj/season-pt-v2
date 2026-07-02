@@ -10,6 +10,8 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
+import { getDiscounts } from "@/lib/data/groups/owner-ops";
+import { composeDiscountLabel } from "@/lib/data/product-class";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
 import { getMemberMeals } from "@/lib/data/groups/meals";
 import { MemberFilesSection } from "./MemberFilesSection";
@@ -23,13 +25,14 @@ const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", t
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me, photos, inbodies, mealsPage] = await Promise.all([
+  const [m, recordHref, me, photos, inbodies, mealsPage, discounts] = await Promise.all([
     getMemberDetail(id),
     getMemberRecordHref(id),
     getMe(),
     getMemberFiles(id, "photo"),
     getMemberFiles(id, "inbody"),
     getMemberMeals(id),
+    getDiscounts(),
   ]);
   const meals = mealsPage.meals;
 
@@ -42,7 +45,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <span className="text-[19px] font-bold text-ink">회원 상세</span>
           {me.isOwner && (
             <div className="ml-auto">
-              <EditMemberButton id={id} name={m.name} phone={m.phone} gender={m.gender} injury={m.injury} />
+              <EditMemberButton id={id} name={m.name} phone={m.phone} gender={m.gender} injury={m.injury} discounts={discounts} current={m.discount ?? null} />
             </div>
           )}
         </div>
@@ -64,6 +67,14 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             </div>
           </div>
         </div>
+
+        {/* 할인 대상 표시 — 대표에게만(가격 정보). 발급/결제 시 자동 기본 적용됨. */}
+        {me.isOwner && m.discount ? (
+          <div className="mb-3.5 flex items-center gap-2 rounded-[11px] bg-sage-banner px-3.5 py-2.5 text-[12.5px] font-semibold text-sage-deep">
+            <Icon name="coins" size={15} className="flex-none" />
+            할인 대상 · {composeDiscountLabel(m.discount.name, m.discount.amount)}
+          </div>
+        ) : null}
 
         {m.isTeam ? (
           <Banner tone="team" className="mb-3.5">

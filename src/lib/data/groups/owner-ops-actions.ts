@@ -6,11 +6,19 @@ import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import { normalizeTeamSlots } from "@/lib/data/team-slots";
+import { composeDiscountLabel } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
 
 const normPhone = (p: string) => p.replace(/\D/g, "");
+
+/** 할인 프리셋 id → 발급 시점 라벨 스냅샷("가족 −50,000원"). 없으면 undefined. */
+async function discountLabelOf(discountId: string): Promise<string | undefined> {
+  const { data } = await sb.from("discounts").select("name, amount").eq("id", discountId).maybeSingle();
+  if (!data) return undefined;
+  return composeDiscountLabel(data.name as string, data.amount as number);
+}
 
 /** 상품 입력 서버측 검증 — 음수 회차/기간/가격이 그대로 저장되던 문제(감사 #43). */
 function productError(input: { name: string; sessions: number; price: number; durationDays: number }): string | null {
@@ -29,6 +37,7 @@ export async function createMember(input: {
   gender: Gender;
   slots: { weekday: number; hour: number; minute: number }[];
   trainerId?: string;
+  discountId?: string; // 할인 자격(members.discount_id) — 발급 결제에 할인 라벨 스냅샷으로 전달
   product?: { productId: string };
   payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
 }): Promise<Result & { memberId?: string; warn?: string }> {
@@ -74,6 +83,7 @@ export async function createMember(input: {
       gender: input.gender,
       status: "active",
       avatar_tone: "sage",
+      discount_id: input.discountId ?? null,
     })
     .select("id")
     .single();
@@ -107,9 +117,12 @@ export async function createMember(input: {
     if (smErr) warn = "회원은 등록됐지만 일부 정기 수업 등록에 실패했어요. 회원 상세에서 다시 등록해주세요.";
   }
 
+  // 할인 라벨 스냅샷 — discountId로 프리셋 조회 후 발급/결제 라벨로 전달(발급 시점 고정, 이후 프리셋 변경 무관).
+  const discountLabel = input.discountId ? await discountLabelOf(input.discountId) : undefined;
+
   // 회원권 발급 (옵션) — 하위 단계 실패는 회원 등록을 되돌리진 않되, 대표에게 경고로 노출(매출 누락 방지)
   if (input.product?.productId) {
-    const issued = await issueMembership(member.id, input.product.productId);
+    const issued = await issueMembership(member.id, input.product.productId, discountLabel);
     if (!issued.ok) {
       warn = "회원은 등록됐지만 회원권 발급에 실패했어요. 회원 상세에서 다시 발급해주세요.";
     } else if (issued.membershipId && input.payment) {
@@ -118,6 +131,7 @@ export async function createMember(input: {
         method: input.payment.method,
         amount: input.payment.amount,
         paidAt: input.payment.paidAt,
+        discountLabel,
       });
       if (!paid.ok) warn = "회원·회원권은 등록됐지만 결제 기록에 실패했어요. 결제 화면에서 다시 기록해주세요.";
     }
@@ -132,7 +146,7 @@ export async function createMember(input: {
  *  생년월일을 바꾸면 비밀번호(=생년월일 6자리)도 재설정하고 로그인 잠금을 해제한다 — 비번 분실 복구 수단 겸용. */
 export async function updateMember(
   id: string,
-  input: { name: string; phone: string; gender: Gender; injuryNote?: string; birth?: string },
+  input: { name: string; phone: string; gender: Gender; injuryNote?: string; birth?: string; discountId?: string | null },
 ): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -144,6 +158,8 @@ export async function updateMember(
   if (!phone) return { ok: false, error: "연락처를 입력해주세요" };
 
   const patch: Record<string, unknown> = { name, phone, gender: input.gender, injury_note: input.injuryNote?.trim() || null };
+  // discountId: undefined = 변경 안 함, null = 할인 해제, string = 지정.
+  if (input.discountId !== undefined) patch.discount_id = input.discountId;
   const birth6 = input.birth?.replace(/\D/g, "") ?? "";
   if (birth6) {
     const birthdate = parseBirth6(birth6);
@@ -166,6 +182,7 @@ export async function updateMember(
 export async function issueMembership(
   memberId: string,
   productId: string,
+  discountLabel?: string, // 할인 발급 시 라벨 스냅샷("가족 −50,000원") — 이력 이벤트 note로만 사용
 ): Promise<Result & { membershipId?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -204,6 +221,12 @@ export async function issueMembership(
     .single();
   if (error || !ms) return { ok: false, error: "회원권 발급에 실패했어요" };
 
+  // 할인 발급일 때만 이력 이벤트 남김(할인 없는 발급은 기존대로 무이벤트 — EVENT_LABEL에 issue 라벨 존재).
+  const label = discountLabel?.trim();
+  if (label) {
+    await sb.from("membership_events").insert({ membership_id: ms.id, type: "issue", note: label, created_by: t.id });
+  }
+
   revalidatePath(`/t/members/${memberId}`);
   revalidatePath("/t");
   return { ok: true, membershipId: ms.id };
@@ -216,6 +239,7 @@ export async function recordPayment(input: {
   method: PaymentMethod;
   amount?: number;
   paidAt?: string;
+  discountLabel?: string; // 할인 라벨 스냅샷 → payments.discount_label
 }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -273,6 +297,7 @@ export async function recordPayment(input: {
     paid_at: paidAt,
     recorded_by: t.id,
     payer_member_id: payerMemberId,
+    discount_label: input.discountLabel?.trim() || null,
   });
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
 
@@ -285,6 +310,7 @@ export async function recordPayments(input: {
   memberId?: string;
   membershipId?: string;
   paidAt?: string;
+  discountLabel?: string; // 할인 라벨 스냅샷 → 라인 전체에 동일하게 payments.discount_label
   lines: { method: PaymentMethod; amount: number }[];
 }): Promise<Result> {
   const t = await getTrainerContext();
@@ -324,8 +350,9 @@ export async function recordPayments(input: {
     return { ok: true };
   }
   // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록 없음
+  const discountLabel = input.discountLabel?.trim() || null;
   const { error } = await sb.from("payments").insert(
-    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id, payer_member_id: payerMemberId })),
+    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id, payer_member_id: payerMemberId, discount_label: discountLabel })),
   );
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
   revalidatePath("/t");
@@ -528,6 +555,52 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
   const { error } = await sb.from("membership_products").update({ active }).eq("id", id);
   if (error) return { ok: false, error: "상태 변경에 실패했어요" };
   revalidatePath("/t/settings/products");
+  return { ok: true };
+}
+
+/* ----------------------- discount preset actions ----------------------- */
+
+/** 할인 입력 검증 — name trim 필수, amount 정수>0(정액 원, 율 없음). */
+function discountError(input: { name: string; amount: number }): string | null {
+  if (!input.name.trim()) return "할인명을 입력해주세요";
+  if (!Number.isInteger(input.amount) || input.amount <= 0) return "할인 금액은 1원 이상의 정수여야 해요";
+  return null;
+}
+
+export async function createDiscount(input: { name: string; amount: number }): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const invalid = discountError(input);
+  if (invalid) return { ok: false, error: invalid };
+  const { error } = await sb.from("discounts").insert({ name: input.name.trim(), amount: input.amount });
+  if (error) return { ok: false, error: "할인 추가에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  revalidatePath("/console/settings");
+  return { ok: true };
+}
+
+export async function updateDiscount(id: string, input: { name: string; amount: number }): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const invalid = discountError(input);
+  if (invalid) return { ok: false, error: invalid };
+  const { error } = await sb.from("discounts").update({ name: input.name.trim(), amount: input.amount }).eq("id", id);
+  if (error) return { ok: false, error: "할인 수정에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  revalidatePath("/console/settings");
+  return { ok: true };
+}
+
+export async function setDiscountActive(id: string, active: boolean): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("discounts").update({ active }).eq("id", id);
+  if (error) return { ok: false, error: "상태 변경에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  revalidatePath("/console/settings");
   return { ok: true };
 }
 

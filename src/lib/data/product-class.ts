@@ -27,3 +27,8 @@ export function composeProductName(tier: ProductTier, type: "1on1" | "2on1", ses
   const prefix = tier === "owner" ? "대표 " : tier === "staff" ? "강사 " : "";
   return `${prefix}${type === "2on1" ? "2:1" : "1:1"} PT ${sessions}회권`;
 }
+
+/** 발급 시점 할인 라벨 스냅샷: "가족 −50,000원". 발급 UI(픽커)·createMember가 같은 형식을 쓰도록 단일 소스. */
+export function composeDiscountLabel(name: string, amount: number): string {
+  return `${name.trim()} −${amount.toLocaleString()}원`;
+}

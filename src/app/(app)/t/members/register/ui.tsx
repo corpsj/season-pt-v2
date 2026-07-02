@@ -13,8 +13,8 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches } from "@/lib/data/product-class";
-import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
+import { productType, tierMatches, composeDiscountLabel } from "@/lib/data/product-class";
+import type { Gender, PaymentMethod, MembershipProduct, DiscountItem } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -35,10 +35,12 @@ export function MemberRegisterClient({
   ownerId,
   products,
   trainers,
+  discounts,
 }: {
   ownerId: string;
   products: MembershipProduct[];
   trainers: { id: string; name: string }[];
+  discounts: DiscountItem[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -58,21 +60,35 @@ export function MemberRegisterClient({
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
+  const [discountId, setDiscountId] = useState(""); // "" = 할인 없음. 회원 속성으로 저장 + 결제 금액 자동 차감.
   const [pending, setPending] = useState(false);
 
-  // When product changes, pre-fill amount from product price
+  // 결제 금액 = max(0, 상품가 − 할인액). 단가 나중입력·수정 유지를 위해 자동 입력만.
+  const discountAmountOf = (id: string) => discounts.find((d) => d.id === id)?.amount ?? 0;
+  const netPrice = (price: number, discId: string) => Math.max(0, price - discountAmountOf(discId));
+
+  // When product changes, pre-fill amount from product price (할인 반영)
   function onProductChange(id: string | "later") {
     setSelectedProduct(id);
     if (id !== "later") {
       const p = products.find((p) => p.id === id);
       if (p) {
-        setPayAmount(String(p.price));
+        setPayAmount(String(netPrice(p.price, discountId)));
         // 상품명으로 수업 형태 자동 동기화 — "나중에 발급"은 토글로 직접 지정.
         const pt = productType(p.name);
         if (pt) setClassType(pt);
       }
     } else {
       setPayAmount("");
+    }
+  }
+
+  // 할인 변경 시 선택된 상품 기준으로 결제 금액 재계산(수정 가능 유지).
+  function onDiscountChange(id: string) {
+    setDiscountId(id);
+    if (selectedProduct !== "later") {
+      const p = products.find((pp) => pp.id === selectedProduct);
+      if (p) setPayAmount(String(netPrice(p.price, id)));
     }
   }
 
@@ -102,6 +118,7 @@ export function MemberRegisterClient({
       gender,
       slots,
       trainerId,
+      discountId: discountId || undefined, // 회원 속성 저장 + 발급 시 결제 라벨 스냅샷(서버가 라벨 합성)
       product: productArg,
       payment: paymentArg,
     });
@@ -343,6 +360,21 @@ export function MemberRegisterClient({
             <span className="text-[14px] font-semibold text-muted">나중에 발급</span>
           </RadioOption>
         </div>
+
+        {/* 특별 할인 — 회원 속성으로 저장(가족/군경소방 등). 상품 선택 시 결제 금액 자동 차감. */}
+        {discounts.length > 0 ? (
+          <div className="mb-4">
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인</div>
+            <Select
+              value={discountId}
+              options={[
+                { value: "", label: "할인 없음" },
+                ...discounts.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
+              ]}
+              onChange={onDiscountChange}
+            />
+          </div>
+        ) : null}
 
         {/* 결제 정보 (상품 선택 시) */}
         {selectedProduct !== "later" && selectedProductData && (

@@ -604,15 +604,16 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
       startDate: "", endDate: "", barPct: 0,
       body: { weight: 0, skeletalMuscle: 0, bodyFat: 0 },
       schedule: "정기 일정 미설정", injury: undefined,
-      activeMembershipId: null, membershipPaused: false, memberStatus: "active", events: [],
+      activeMembershipId: null, membershipPaused: false, memberStatus: "active", discount: null, events: [],
     };
   }
 
   const { data: member } = await sb
     .from("members")
-    .select("id, name, phone, gender, status, avatar_tone, injury_note")
+    .select("id, name, phone, gender, status, avatar_tone, injury_note, discount_id, discounts(id, name, amount)")
     .eq("id", id)
     .maybeSingle();
+  const discount = (member as unknown as { discounts?: { id: string; name: string; amount: number } | null } | null)?.discounts ?? null;
 
   const m = (member ?? {
     id,
@@ -711,6 +712,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     membershipPaused,
     memberStatus: m.status,
     trainerIsOwner,
+    discount,
     events,
   };
 }

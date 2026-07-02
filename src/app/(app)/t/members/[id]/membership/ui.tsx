@@ -12,7 +12,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { issueMembership } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches } from "@/lib/data/product-class";
+import { productType, tierMatches, composeDiscountLabel } from "@/lib/data/product-class";
 import type { MemberDetailView, MembershipProduct } from "@/lib/types";
 
 // ponytail: date labels computed client-side from durationDays; no timezone edge cases matter here (display only)
@@ -51,10 +51,15 @@ export function MembershipClient({
   const effectiveSelected = visible.some((p) => p.id === selected) ? selected : visible[0]?.id ?? "";
   const selectedProductData = products.find((p) => p.id === effectiveSelected);
 
+  // 회원의 할인 자격이 있으면 발급 이벤트에 라벨 스냅샷을 남긴다(결제 금액 반영은 다음 /t/payment 화면).
+  const discountLabel = member.discount
+    ? composeDiscountLabel(member.discount.name, member.discount.amount)
+    : undefined;
+
   async function onIssue() {
     if (pending || !effectiveSelected) return;
     setPending(true);
-    const res = await issueMembership(id, effectiveSelected);
+    const res = await issueMembership(id, effectiveSelected, discountLabel);
     if (!res.ok) {
       setPending(false);
       toast(res.error ?? "회원권 발급에 실패했어요");

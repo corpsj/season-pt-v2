@@ -7,11 +7,13 @@ import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Field, TextInput } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { recordPayments } from "@/lib/data/groups/owner-ops-actions";
-import type { PaymentMethod } from "@/lib/types";
+import { composeDiscountLabel } from "@/lib/data/product-class";
+import type { PaymentMethod, DiscountItem } from "@/lib/types";
 import type { PaymentSummary } from "@/lib/data/groups/owner-ops";
 
 const todayStr = () => {
@@ -29,17 +31,31 @@ function parseAmt(s: string) {
   return Number(s.replace(/[^\d]/g, "")) || 0;
 }
 
-export function PaymentClient({ summary }: { summary: PaymentSummary }) {
+export function PaymentClient({ summary, discounts }: { summary: PaymentSummary; discounts: DiscountItem[] }) {
   const router = useRouter();
   const toast = useToast();
 
-  // 초기 금액: 미수금 > 전체 금액 > 빈 값 순
-  const defaultAmt =
-    summary.outstanding != null
-      ? String(summary.outstanding)
-      : summary.amount != null
-        ? String(summary.amount)
-        : "";
+  // 회원의 할인 자격을 기본 선택(변경 가능). 비활성화된 프리셋이어도 저장된 자격은 선택 유지.
+  const [discountId, setDiscountId] = useState(summary.discount?.id ?? "");
+  const discountOptions = [
+    { value: "", label: "할인 없음" },
+    ...discounts.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
+    ...(summary.discount && !discounts.some((d) => d.id === summary.discount!.id)
+      ? [{ value: summary.discount.id, label: composeDiscountLabel(summary.discount.name, summary.discount.amount) }]
+      : []),
+  ];
+  const selectedDiscount =
+    discounts.find((d) => d.id === discountId) ??
+    (summary.discount && summary.discount.id === discountId ? summary.discount : null);
+  const discountAmt = selectedDiscount?.amount ?? 0;
+  const discountLabel = selectedDiscount
+    ? composeDiscountLabel(selectedDiscount.name, selectedDiscount.amount)
+    : undefined;
+
+  // 초기 결제 금액: (미수금 > 전체 금액) − 할인액, 하한 0. 수정 가능 유지.
+  const baseOwed =
+    summary.outstanding != null ? summary.outstanding : summary.amount != null ? summary.amount : null;
+  const defaultAmt = baseOwed != null ? String(Math.max(0, baseOwed - (summary.discount?.amount ?? 0))) : "";
 
   const [lines, setLines] = useState<{ method: PaymentMethod; amount: string }[]>([
     { method: "card", amount: defaultAmt },
@@ -48,14 +64,25 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
+  // 할인 변경 시 결제 금액 재계산 — 단일 줄로 리셋(분할+할인 동시 편집은 드묾).
+  function onDiscountChange(id: string) {
+    setDiscountId(id);
+    const amt =
+      discounts.find((d) => d.id === id)?.amount ??
+      (summary.discount?.id === id ? summary.discount.amount : 0);
+    setLines((ls) => [
+      { method: ls[0]?.method ?? "card", amount: baseOwed != null ? String(Math.max(0, baseOwed - amt)) : "" },
+    ]);
+  }
+
   const memberName = summary.memberName || "—";
   const product = summary.productLabel || "—";
 
   const totalEntered = lines.reduce((s, l) => s + parseAmt(l.amount), 0);
-  // 미수 = price − Σ기존결제 − Σ이번입력
+  // 미수 = (price − 할인액) − Σ기존결제 − Σ이번입력
   const remaining =
     summary.price != null
-      ? summary.price - (summary.paid ?? 0) - totalEntered
+      ? summary.price - discountAmt - (summary.paid ?? 0) - totalEntered
       : null;
 
   async function onRecord() {
@@ -67,6 +94,7 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
       memberId: summary.memberId ?? undefined,
       membershipId: summary.membershipId ?? undefined,
       paidAt: payDate || undefined,
+      discountLabel, // 할인 라벨 스냅샷 → payments.discount_label
       lines: lines.map((l) => ({ method: l.method, amount: parseAmt(l.amount) })),
     });
     if (!r.ok) {
@@ -101,6 +129,9 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
             {memberName} · {product}
           </div>
           <div className="serif mt-1.5 text-[34px] leading-none text-ink">{totalDisplay}</div>
+          {selectedDiscount && (
+            <div className="mt-1.5 text-[12.5px] font-semibold text-sage-deep">할인 {discountLabel}</div>
+          )}
           {remaining != null && (
             <div
               className={`mt-2 text-[12.5px] font-semibold ${
@@ -112,6 +143,14 @@ export function PaymentClient({ summary }: { summary: PaymentSummary }) {
             </div>
           )}
         </Card>
+
+        {/* 특별 할인 — 회원 자격 기본 선택, 결제 금액 자동 차감(수정 가능) */}
+        {discounts.length > 0 || summary.discount ? (
+          <div className="mb-5">
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인</div>
+            <Select value={discountId} options={discountOptions} onChange={onDiscountChange} />
+          </div>
+        ) : null}
 
         {/* 결제일 공통 */}
         <Field icon="calendar" label="결제일" className="mb-5">

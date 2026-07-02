@@ -16,6 +16,9 @@ import {
   createProduct,
   updateProduct,
   setProductActive,
+  createDiscount,
+  updateDiscount,
+  setDiscountActive,
 } from "@/lib/data/groups/owner-ops-actions";
 import {
   productTier,
@@ -23,7 +26,7 @@ import {
   composeProductName,
   type ProductTier,
 } from "@/lib/data/product-class";
-import type { MembershipProduct } from "@/lib/types";
+import type { MembershipProduct, DiscountItem } from "@/lib/types";
 
 /*
  * 상품 목록은 담당(대표/강사/공용) × 유형(1:1/2:1) × 회차의 가격표다.
@@ -69,7 +72,7 @@ function bySessionsAsc(a: MembershipProduct, b: MembershipProduct) {
   return a.sessions - b.sessions || a.price - b.price;
 }
 
-export function ProductsClient({ products }: { products: MembershipProduct[] }) {
+export function ProductsClient({ products, discounts }: { products: MembershipProduct[]; discounts: DiscountItem[] }) {
   const router = useRouter();
   const toast = useToast();
   const [tierFilter, setTierFilter] = useState<"all" | ProductTier>("all");
@@ -267,6 +270,9 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           </div>
         ) : null}
 
+        {/* 할인 혜택 — 발급 시점 정액 할인 프리셋 */}
+        <DiscountsSection discounts={discounts} />
+
         <div className="mt-4">
           <Banner tone="neutral">
             상품명의 대표/강사·1:1/2:1 표기로 발급 화면이 자동 분류돼요. 보관(비활성) 상품은 발급 화면에 표시되지 않아요.
@@ -336,6 +342,127 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                 <div className="flex items-center justify-between rounded-[13px] bg-sage-banner px-4 py-3">
                   <span className="text-[13px] font-semibold text-muted2">판매 중 (끄면 보관함으로)</span>
                   <Switch on={editActive} onChange={onToggleActive} label={editActive ? "판매" : "보관"} />
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 flex gap-2.5">
+              <OutlineButton onClick={closeForm} className="flex-1">취소</OutlineButton>
+              <PrimaryButton onClick={onSave} disabled={busy} className="flex-[1.6]">저장</PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/*
+ * 할인 혜택 — 가족·군경소방·노인 등 발급 시점 정액 할인 프리셋.
+ * 4~6개 수준이라 상품처럼 필터/보관함 없이, 활성 리스트 + (중지된 건 흐리게) 한 카드.
+ * 편집은 상품과 같은 바텀시트 패턴(이름·금액 + 기존 항목이면 사용/중지 Switch).
+ */
+function DiscountsSection({ discounts }: { discounts: DiscountItem[] }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editId, setEditId] = useState<string | "new" | null>(null);
+  const [editActive, setEditActive] = useState(true);
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const activeList = useMemo(() => discounts.filter((d) => d.active), [discounts]);
+  const inactiveList = useMemo(() => discounts.filter((d) => !d.active), [discounts]);
+
+  function openNew() { setName(""); setAmount(""); setEditActive(true); setEditId("new"); }
+  function openEdit(d: DiscountItem) { setName(d.name); setAmount(String(d.amount)); setEditActive(d.active); setEditId(d.id); }
+  function closeForm() { setEditId(null); setName(""); setAmount(""); }
+
+  async function onSave() {
+    if (busy) return;
+    const nm = name.trim();
+    const amt = Number(amount.replace(/[^\d]/g, ""));
+    if (!nm) return toast("할인명을 입력해주세요");
+    if (!amt || amt <= 0) return toast("할인 금액을 입력해주세요");
+    setBusy(true);
+    const res = editId === "new" ? await createDiscount({ name: nm, amount: amt }) : await updateDiscount(editId!, { name: nm, amount: amt });
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    toast(editId === "new" ? "할인을 추가했어요" : "할인을 수정했어요");
+    closeForm();
+    router.refresh();
+  }
+
+  async function onToggleActive() {
+    if (!editId || editId === "new" || busy) return;
+    setBusy(true);
+    const res = await setDiscountActive(editId, !editActive);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    setEditActive(!editActive);
+    toast(!editActive ? "다시 사용해요" : "사용을 중지했어요");
+    router.refresh();
+  }
+
+  const row = (d: DiscountItem, i: number, dim: boolean) => (
+    <button
+      key={d.id}
+      type="button"
+      onClick={() => openEdit(d)}
+      className={`tappable flex w-full items-center gap-3 px-4 py-3.5 text-left ${dim ? "opacity-55" : ""} ${i > 0 ? "border-t border-ink/[0.07]" : ""}`}
+    >
+      <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-ink">{d.name}</span>
+      {dim ? <span className="flex-none rounded-md bg-ink/[0.06] px-1.5 py-0.5 text-[10.5px] font-bold text-muted2">중지</span> : null}
+      <span className={`flex-none text-[13.5px] font-semibold ${dim ? "text-muted" : "text-terracotta"}`}>−{d.amount.toLocaleString()}원</span>
+      <Icon name="pencil" size={14} className="flex-none text-muted" />
+    </button>
+  );
+
+  return (
+    <div className="mt-6">
+      <div className="mb-2 flex items-center justify-between">
+        <Kicker>할인 혜택</Kicker>
+        <button type="button" onClick={openNew} className="tappable text-[13px] font-semibold text-sage-deep">+ 할인 추가</button>
+      </div>
+
+      {discounts.length === 0 ? (
+        <Card className="p-5 text-center text-[13px] text-muted">
+          가족·군경소방·노인 등 특별 할인을 등록해두면 발급 화면에서 선택할 수 있어요.
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          {activeList.map((d, i) => row(d, i, false))}
+          {inactiveList.map((d, i) => row(d, activeList.length + i, true))}
+        </Card>
+      )}
+      <div className="mt-2 px-1 text-[12px] leading-relaxed text-muted">
+        할인 금액은 정액(원)이에요. 발급 화면에서 할인으로 선택할 수 있어요.
+      </div>
+
+      {/* 추가/수정 바텀시트 — 상품 시트와 같은 패턴 */}
+      {editId ? (
+        <div
+          onClick={closeForm}
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(38,35,30,0.42)] sm:items-center"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[88dvh] w-full max-w-[420px] overflow-y-auto rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+          >
+            <div className="mb-4 text-[16px] font-bold text-ink">
+              {editId === "new" ? "할인 추가" : "할인 수정"}
+            </div>
+            <div className="flex flex-col gap-3">
+              <Field icon="ticket-fill" label="할인명">
+                <TextInput placeholder="가족" value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field icon="coins" label="할인 금액 (원)">
+                <TextInput inputMode="numeric" placeholder="50000" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </Field>
+
+              {editId !== "new" ? (
+                <div className="flex items-center justify-between rounded-[13px] bg-sage-banner px-4 py-3">
+                  <span className="text-[13px] font-semibold text-muted2">사용 중 (끄면 발급 화면에서 숨김)</span>
+                  <Switch on={editActive} onChange={onToggleActive} label={editActive ? "사용" : "중지"} />
                 </div>
               ) : null}
             </div>

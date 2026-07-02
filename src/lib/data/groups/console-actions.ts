@@ -30,10 +30,11 @@ export async function consoleIssueMembership(
   productId: string,
   method: PaymentMethod,
   amount?: number,
+  discountLabel?: string, // 할인 라벨 스냅샷("가족 −50,000원") → 발급 이벤트 note + payments.discount_label
 ): Promise<{ ok: boolean; error?: string }> {
-  const issued = await issueMembership(memberId, productId);
+  const issued = await issueMembership(memberId, productId, discountLabel);
   if (!issued.ok || !issued.membershipId) return { ok: false, error: issued.error ?? "발급에 실패했어요" };
-  const paid = await recordPayment({ membershipId: issued.membershipId, method, amount });
+  const paid = await recordPayment({ membershipId: issued.membershipId, method, amount, discountLabel });
   if (!paid.ok) {
     // 보상: 결제 없는 회원권이 남으면 재시도 시 중복 발급된다(감사 #18) — 방금 발급분을 회수.
     await sb.from("membership_events").delete().eq("membership_id", issued.membershipId);

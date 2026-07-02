@@ -6,11 +6,11 @@ import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
-import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
+import { createProduct, updateProduct, setProductActive, createDiscount, updateDiscount, setDiscountActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
 import { productTier, productType, composeProductName, type ProductTier } from "@/lib/data/product-class";
-import type { MembershipProduct, StudioSettings } from "@/lib/types";
+import type { MembershipProduct, DiscountItem, StudioSettings } from "@/lib/types";
 
-export function SettingsClient({ products, settings }: { products: MembershipProduct[]; settings: StudioSettings }) {
+export function SettingsClient({ products, discounts, settings }: { products: MembershipProduct[]; discounts: DiscountItem[]; settings: StudioSettings }) {
   const toast = useToast();
 
   const [noshow, setNoshow] = useState(settings.noshowDeducts);
@@ -31,6 +31,7 @@ export function SettingsClient({ products, settings }: { products: MembershipPro
   return (
     <>
       <ProductsEditor products={products} />
+      <DiscountsEditor discounts={discounts} />
 
       <div className="grid grid-cols-2 gap-[18px]">
         {/* policy */}
@@ -420,6 +421,91 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
           </div>
         </ConsoleModal>
       ) : null}
+    </Card>
+  );
+}
+
+/* ============================================================
+   할인 혜택(콘솔) — 가족·군경소방·노인 등 발급 시점 정액 할인 프리셋.
+   프리셋은 4~6개 수준이라 모달 없이 인라인 리스트 + 추가/수정 폼 하나로 끝낸다.
+   ============================================================ */
+
+function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editId, setEditId] = useState<string | null>(null); // null = 추가 모드
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function reset() { setEditId(null); setName(""); setAmount(""); }
+  function startEdit(d: DiscountItem) { setEditId(d.id); setName(d.name); setAmount(String(d.amount)); }
+
+  async function save() {
+    if (busy) return;
+    const nm = name.trim();
+    const amt = Number(digits(amount));
+    if (!nm) return toast("할인명을 입력해주세요");
+    if (!amt || amt <= 0) return toast("할인 금액을 입력해주세요");
+    setBusy(true);
+    const res = editId ? await updateDiscount(editId, { name: nm, amount: amt }) : await createDiscount({ name: nm, amount: amt });
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    toast(editId ? "할인을 수정했어요" : "할인을 추가했어요");
+    reset();
+    router.refresh();
+  }
+
+  async function toggle(d: DiscountItem) {
+    if (busy) return;
+    setBusy(true);
+    const res = await setDiscountActive(d.id, !d.active);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    if (editId === d.id) reset(); // 수정 중이던 항목을 중지하면 폼 초기화
+    toast(!d.active ? "다시 사용해요" : "사용을 중지했어요");
+    router.refresh();
+  }
+
+  return (
+    <Card className="mb-[18px] px-6 py-[22px]">
+      <div className="text-[16px] font-bold text-ink">할인 혜택</div>
+      <div className="mb-4 mt-1 text-[12px] font-medium text-[#9A917F]">가족·군경소방·노인 등 정액 할인 — 발급 화면에서 선택할 수 있어요</div>
+
+      {discounts.length > 0 ? (
+        <div className="mb-4 flex flex-col gap-1.5">
+          {discounts.map((d) => (
+            <div key={d.id} className={`flex items-center gap-3 rounded-[12px] bg-[#FBF9F5] px-4 py-3 ${d.active ? "" : "opacity-55"}`}>
+              <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-ink">{d.name}</span>
+              <span className="flex-none text-[13.5px] font-semibold text-terracotta">−{d.amount.toLocaleString()}원</span>
+              <Switch on={d.active} onChange={() => toggle(d)} disabled={busy} label={d.active ? "사용" : "중지"} />
+              <button
+                type="button"
+                onClick={() => startEdit(d)}
+                aria-label="수정"
+                className={`flex h-8 w-8 items-center justify-center rounded-[9px] border transition ${editId === d.id ? "border-sage bg-[#EDF4E3] text-sage-deep" : "border-ink/[0.1] bg-white text-[#A89F92] hover:bg-[#F7F3EB]"}`}
+              >
+                <Icon name="pencil" size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* 추가 / 수정 폼 — 리스트의 수정 버튼이 이 폼에 값을 채운다 */}
+      <div className="flex items-end gap-2.5">
+        <div className="flex-1">
+          <div className={FLABEL}>할인명</div>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="가족" className={INPUT} />
+        </div>
+        <div className="w-[170px]">
+          <div className={FLABEL}>할인 금액 (원)</div>
+          <input value={amount} onChange={(e) => setAmount(digits(e.target.value))} inputMode="numeric" placeholder="50000" className={INPUT} />
+        </div>
+        {editId ? <OBtn onClick={reset} disabled={busy}>취소</OBtn> : null}
+        <PBtn icon={editId ? "check-bold" : "plus-bold"} onClick={save} disabled={busy}>{editId ? "저장" : "추가"}</PBtn>
+      </div>
+      <div className="mt-2.5 text-[11.5px] font-medium text-[#9A917F]">할인 금액은 정액(원)이에요. 발급 시 상품가에서 이 금액을 빼 결제금액이 자동 계산돼요.</div>
     </Card>
   );
 }

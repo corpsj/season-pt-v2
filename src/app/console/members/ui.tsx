@@ -12,12 +12,12 @@ import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches } from "@/lib/data/product-class";
+import { productType, tierMatches, composeDiscountLabel } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
 import { TeamCreateModal, TeamEditModal } from "./TeamCreate";
-import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
+import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod, DiscountItem } from "@/lib/types";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
 const FILTERS: { key: "all" | "expiring" | "active" | "rest"; label: string }[] = [
@@ -38,6 +38,7 @@ export function MembersClient({
   statusById,
   products,
   trainers,
+  discounts,
   initialId,
   initialDetail,
   initialFiles,
@@ -47,6 +48,7 @@ export function MembersClient({
   statusById: Record<string, Status>;
   products: MembershipProduct[];
   trainers: TrainerOpt[];
+  discounts: DiscountItem[];
   initialId: string | null;
   initialDetail: MemberDetailView | null;
   initialFiles: MemberFileView[];
@@ -64,10 +66,15 @@ export function MembersClient({
   const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team">(null);
   const [busy, setBusy] = useState(false);
 
-  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "" });
+  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "", discountId: "" });
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
   const [issueAmt, setIssueAmt] = useState("");
+  const [issueDiscountId, setIssueDiscountId] = useState("");
+  // 등록 모달: 결제 금액 = max(0, 상품가 − 할인액) (활성 프리셋만).
+  const netPrice = (price: number, discountId: string) => Math.max(0, price - (discounts.find((x) => x.id === discountId)?.amount ?? 0));
+  // 발급 모달: 활성 프리셋 우선, 없으면 회원 저장 할인(비활성 가능) 스냅샷으로 해석.
+  const issueDiscountAmt = (id: string) => discounts.find((x) => x.id === id)?.amount ?? (detail?.discount?.id === id ? detail.discount.amount : 0);
   const [refund, setRefund] = useState<{ refund: number; used: number; noBaseline: boolean } | null>(null);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
   const [refundAmt, setRefundAmt] = useState("");
@@ -136,8 +143,11 @@ export function MembersClient({
   function openIssue() {
     // 담당(대표/강사)에 맞는 첫 상품을 기본 선택 — 숨겨진 상품이 조용히 발급되는 것 방지.
     const first = products.find((p) => tierMatches(p.name, detail?.trainerIsOwner ?? true)) ?? products[0];
+    // 회원의 할인 자격을 기본 선택(변경 가능) — 결제 금액 자동 차감.
+    const discId = detail?.discount?.id ?? "";
     setIssueProduct(first?.id ?? "");
-    setIssueAmt(String(first?.price ?? ""));
+    setIssueDiscountId(discId);
+    setIssueAmt(first ? String(Math.max(0, first.price - issueDiscountAmt(discId))) : "");
     setIssueMethod("card");
     setModal("issue");
   }
@@ -145,8 +155,10 @@ export function MembersClient({
     if (!selectedId || !issueProduct) return;
     const amt = Number(issueAmt);
     if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요");
+    const disc = discounts.find((x) => x.id === issueDiscountId) ?? (detail?.discount?.id === issueDiscountId ? detail.discount : null);
+    const discountLabel = disc ? composeDiscountLabel(disc.name, disc.amount) : undefined;
     setBusy(true);
-    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt);
+    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt, discountLabel);
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "발급에 실패했어요");
     toast("회원권을 발급했어요");
@@ -168,6 +180,7 @@ export function MembersClient({
       birth: f.birth,
       gender: f.gender,
       slots: [],
+      discountId: f.discountId || undefined, // 회원 속성 저장 + 발급 결제 라벨 스냅샷(서버가 합성)
       product: f.productId ? { productId: f.productId } : undefined,
       payment: f.productId ? { method: f.method, amount: Number(f.amount) } : undefined,
     });
@@ -175,7 +188,7 @@ export function MembersClient({
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요");
     toast("회원을 등록했어요");
     setModal(null);
-    setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card", amount: "" });
+    setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card", amount: "", discountId: "" });
     router.refresh();
     if (r.memberId) select(r.memberId);
   }
@@ -377,9 +390,22 @@ export function MembersClient({
             onPick={(id) => {
               const newId = f.productId === id ? "" : id;
               const p = products.find((pp) => pp.id === newId);
-              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
+              setF({ ...f, productId: newId, amount: p ? String(netPrice(p.price, f.discountId)) : f.amount });
             }}
           />
+          {discounts.length > 0 ? (
+            <div className="mt-3">
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">특별 할인</div>
+              <DiscountSelect
+                discounts={discounts}
+                value={f.discountId}
+                onChange={(id) => {
+                  const p = products.find((pp) => pp.id === f.productId);
+                  setF({ ...f, discountId: id, amount: p ? String(netPrice(p.price, id)) : f.amount });
+                }}
+              />
+            </div>
+          ) : null}
           {f.productId ? (
             <div className="mt-3">
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
@@ -448,10 +474,25 @@ export function MembersClient({
             onPick={(id) => {
               setIssueProduct(id);
               const p = products.find((pp) => pp.id === id);
-              if (p) setIssueAmt(String(p.price));
+              if (p) setIssueAmt(String(Math.max(0, p.price - issueDiscountAmt(issueDiscountId))));
             }}
             showPrice
           />
+          {discounts.length > 0 || d.discount ? (
+            <>
+              <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">특별 할인</div>
+              <DiscountSelect
+                discounts={discounts}
+                storedDiscount={d.discount}
+                value={issueDiscountId}
+                onChange={(id) => {
+                  setIssueDiscountId(id);
+                  const p = products.find((pp) => pp.id === issueProduct);
+                  if (p) setIssueAmt(String(Math.max(0, p.price - issueDiscountAmt(id))));
+                }}
+              />
+            </>
+          ) : null}
           <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
           <input
             value={issueAmt}
@@ -532,6 +573,22 @@ function Input({ value, onChange, placeholder }: { value: string; onChange: (v: 
       placeholder={placeholder}
       className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[13px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
     />
+  );
+}
+function DiscountSelect({ discounts, value, onChange, storedDiscount }: { discounts: DiscountItem[]; value: string; onChange: (id: string) => void; storedDiscount?: { id: string; name: string; amount: number } | null }) {
+  // 회원 저장 할인이 비활성 프리셋이면 목록에 없으므로 병합해 선택 유지.
+  const extra = storedDiscount && !discounts.some((d) => d.id === storedDiscount.id) ? [storedDiscount] : [];
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+    >
+      <option value="">할인 없음</option>
+      {[...discounts, ...extra].map((d) => (
+        <option key={d.id} value={d.id}>{composeDiscountLabel(d.name, d.amount)}</option>
+      ))}
+    </select>
   );
 }
 function MethodPicker({ value, onChange }: { value: PaymentMethod; onChange: (m: PaymentMethod) => void }) {
