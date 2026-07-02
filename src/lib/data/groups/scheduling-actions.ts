@@ -57,6 +57,19 @@ async function deductForMembers(args: {
 }): Promise<string | null> {
   for (const memberId of args.memberIds) {
     let ms = await activeMembership(memberId);
+    // activeMembership이 null인 두 경우를 구분: (a) 회원권 자체가 없음 → 감사3 #11 대상으로 명시 거부.
+    // (b) 활성 회원권은 있으나 잔여 0(위 필터의 gt 0) → 기존 "무료 수업으로 남김" UX 유지(attend UI 배너와 양립).
+    // cancel은 회원권 없이도 기록 자체는 의미가 있으므로 기존 동작 유지.
+    if (args.deducted && !ms && args.action !== "cancel") {
+      const { data: anyActive } = await sb
+        .from("memberships")
+        .select("id")
+        .eq("member_id", memberId)
+        .in("status", ["active", "paused"])
+        .limit(1)
+        .maybeSingle();
+      if (!anyActive) return "활성 회원권이 없어요 — 재등록/일시정지 재개를 먼저 확인해주세요.";
+    }
     let before = ms?.remaining_sessions ?? null;
     let after = before;
     if (args.deducted && ms) {
@@ -90,7 +103,7 @@ async function deductForMembers(args: {
       member_id: memberId,
       membership_id: ms?.id ?? null, // 되돌리기 시 정확히 이 회원권에 복원(감사 후속)
       action: args.action,
-      deducted: args.deducted,
+      deducted: args.deducted && !!ms, // 실제 차감 여부 그대로 기록 — 잔여 0(무료 수업) 케이스는 ms=null → false(감사3 #11)
       remaining_before: before,
       remaining_after: after,
       created_by: args.createdBy,
@@ -174,7 +187,14 @@ export async function confirmAttendance(
     .eq("status", "scheduled");
   if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);
   const { data: claimed } = await claimQ.select("scheduled_at, trainer_id, type");
-  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리됐거나 담당 수업이 아니에요." };
+  if (!claimed || claimed.length === 0) {
+    // 원인 구분: 이미 처리된 수업(재시도/이중탭) vs 남의 수업 — 뭉뚱그린 문구가 재시도 사용자를 오해시킴(감사3 #22)
+    const { data: s } = await sb.from("sessions").select("status, trainer_id").eq("id", sessionId).maybeSingle();
+    if (s && s.status !== "scheduled" && (t.role === "owner" || s.trainer_id === t.id)) {
+      return { ok: false, error: "이미 처리된 수업이에요" };
+    }
+    return { ok: false, error: "담당 수업이 아니에요" };
+  }
   const scheduledAt = claimed[0].scheduled_at ?? new Date().toISOString();
 
   // 처리 확정된 세션의 낡은 pending 요청 정리 — 뒤늦은 수락으로 되살아나는 것 방지(감사 high #2).
