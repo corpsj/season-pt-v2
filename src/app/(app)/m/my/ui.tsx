@@ -113,7 +113,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
                 <span className="pb-[5px] text-[16px] font-semibold text-muted2">/ {m.total}회</span>
               </div>
               <span className="rounded-lg bg-sage-banner2 px-2.5 py-[5px] text-[12px] font-bold text-sage-deep">
-                {m.expired ? "만료" : `D-${m.dDay}`}
+                {m.expired ? "만료" : m.paused ? "일시정지" : `D-${m.dDay}`}
               </span>
             </div>
             <ProgressBar pct={m.barPct} track="bg-[#efebe2]" fill="bg-sage" className="mb-[9px]" />

@@ -241,6 +241,8 @@ export async function recordPayment(input: {
 
   let membershipId = input.membershipId;
   let amount: number | null = input.amount ?? null;
+  // 결제 당시의 결제자 스냅샷(양도 후에도 원 결제자에게 결제내역이 남도록, 감사3 #14).
+  let payerMemberId: string | null = input.memberId ?? null;
 
   if (!membershipId && input.memberId) {
     const { data: ms } = await sb
@@ -256,13 +258,18 @@ export async function recordPayment(input: {
   } else if (membershipId && amount === null) {
     const { data: ms } = await sb
       .from("memberships")
-      .select("price")
+      .select("price, member_id")
       .eq("id", membershipId)
       .maybeSingle();
     amount = ms?.price ?? null;
+    payerMemberId = ms?.member_id ?? null;
   }
 
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+  if (!payerMemberId) {
+    const { data: ms } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+    payerMemberId = ms?.member_id ?? null;
+  }
   // 0원·null·음수 결제가 '기록 완료'로 통과해 장부에서 조용히 누락되던 문제(감사 #28).
   if (amount == null || !Number.isFinite(amount) || amount <= 0) {
     return { ok: false, error: "결제 금액을 확인해주세요" };
@@ -286,6 +293,7 @@ export async function recordPayment(input: {
     amount,
     paid_at: paidAt,
     recorded_by: t.id,
+    payer_member_id: payerMemberId,
   });
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
 
@@ -308,6 +316,8 @@ export async function recordPayments(input: {
   if (lines.length === 0) return { ok: false, error: "금액을 입력해주세요" };
 
   let membershipId = input.membershipId;
+  // 결제 당시의 결제자 스냅샷(양도 후에도 원 결제자에게 결제내역이 남도록, 감사3 #14).
+  let payerMemberId: string | null = input.memberId ?? null;
   if (!membershipId && input.memberId) {
     const { data: ms } = await sb
       .from("memberships")
@@ -320,6 +330,10 @@ export async function recordPayments(input: {
     membershipId = ms?.id;
   }
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+  if (!payerMemberId) {
+    const { data: ms } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+    payerMemberId = ms?.member_id ?? null;
+  }
 
   const paidAt = input.paidAt ?? todayISO();
   // 재시도 이중기록 방어: 직전 20초 내 '같은 시그니처(합계·건수)'의 배치가 이미 있으면 멱등 처리.
@@ -334,7 +348,7 @@ export async function recordPayments(input: {
   }
   // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록 없음
   const { error } = await sb.from("payments").insert(
-    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id })),
+    lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id, payer_member_id: payerMemberId })),
   );
   if (error) return { ok: false, error: "결제 기록에 실패했어요" };
   revalidatePath("/t");

@@ -70,29 +70,42 @@ export function clockLabel(iso: string): string {
   return `오후 ${h - 12}:${mm}`;
 }
 
-/** Member's active membership = 만료가 가장 임박한 것(end_date asc) — 차감 대상과 동일 기준. */
+/** Member's active membership = 만료가 가장 임박한 것(end_date asc) — 차감 대상과 동일 기준.
+ *  표시 전용(카드/배지) — 실제 차감 대상 조회는 scheduling-actions.ts의 별도 activeMembership을 쓴다(감사 C2, 건드리지 말 것). */
 async function activeMembership(memberId: string) {
-  // 실제로 쓸 수 있는(잔여>0) 활성 회원권 우선 — 재등록 시 새 회원권이 표시/차감 대상이 되도록(감사 C2).
+  // 실제로 쓸 수 있는(잔여>0) 활성/일시정지 회원권 우선 — 재등록 시 새 회원권이 표시 대상이 되도록(감사 C2).
+  // paused도 포함 — 일시정지 중에도 카드/배지가 사라지지 않아야 함(감사3 #10).
   const usable = await sb
     .from("memberships")
     .select("id, remaining_sessions, total_sessions, end_date, status")
     .eq("member_id", memberId)
-    .eq("status", "active")
+    .in("status", ["active", "paused"])
     .gt("remaining_sessions", 0)
     .order("end_date", { ascending: true })
     .limit(1)
     .maybeSingle();
   if (usable.data) return usable.data;
-  // 없으면(전부 소진) 카드가 비지 않도록 가장 최근 활성 회원권을 보여준다(잔여 0으로 표시).
+  // 없으면(전부 소진) 카드가 비지 않도록 가장 최근 활성/일시정지 회원권을 보여준다(잔여 0으로 표시).
   const { data } = await sb
     .from("memberships")
     .select("id, remaining_sessions, total_sessions, end_date, status")
     .eq("member_id", memberId)
-    .eq("status", "active")
+    .in("status", ["active", "paused"])
     .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data;
+  if (data) return data;
+  // 둘 다 없으면(전부 만료/환불) 만료 직후에도 "몇 회 남기고 만료됐는지" 보여준다(감사3 #10).
+  // refunded는 표시하지 않음.
+  const { data: expired } = await sb
+    .from("memberships")
+    .select("id, remaining_sessions, total_sessions, end_date, status")
+    .eq("member_id", memberId)
+    .eq("status", "expired")
+    .order("end_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return expired;
 }
 
 /** First trainer linked to this member (담당 선생님). */
@@ -180,12 +193,14 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     hasTrainerReq = (count ?? 0) > 0;
   }
 
+  const paused = !!membership && membership.status === "paused";
   return {
     name: me.name,
     remaining,
     dDay,
     hasMembership: !!membership,
-    expired: !!membership && dDay < 0,
+    expired: !!membership && (membership.status === "expired" || (dDay < 0 && !paused)),
+    paused,
     hasTrainerReq,
     monthLabel,
     calDays,
@@ -747,6 +762,7 @@ export async function getMemberMyPage(): Promise<MemberMyView> {
     const total = membership.total_sessions ?? 0;
     const remaining = membership.remaining_sessions ?? 0;
     const dDay = dayDiff(today, membership.end_date);
+    const paused = membership.status === "paused";
     membershipView = {
       productLabel: `1:1 PT ${total}회권`,
       remaining,
@@ -754,7 +770,8 @@ export async function getMemberMyPage(): Promise<MemberMyView> {
       dDay,
       endLabel: String(membership.end_date).replace(/-/g, "."),
       barPct: total > 0 ? Math.round((remaining / total) * 100) : 0,
-      expired: membership.status === "expired" || dDay < 0,
+      expired: membership.status === "expired" || (dDay < 0 && !paused),
+      paused,
     };
   }
 
@@ -784,23 +801,22 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
 export async function getMemberPayments(): Promise<MemberPaymentsView> {
   const me = await requireMember();
 
-  const { data: ms } = await sb
-    .from("memberships")
-    .select("id, total_sessions, status")
-    .eq("member_id", me.memberId);
-  const memberships = ms ?? [];
-  if (!memberships.length) return { totalAmount: 0, totalCount: 0, years: [] };
-
-  const byId = new Map(memberships.map((m) => [m.id, m]));
+  // 결제 당시의 결제자(payer_member_id) 기준 — 회원권 양도 후에도 원 결제자에게 결제내역이 남는다(감사3 #14).
+  // 현재 회원권 소유 여부와 무관 → memberships 목록이 아니라 payments를 먼저 조회.
   const { data: pays } = await sb
     .from("payments")
     .select("id, membership_id, method, amount, paid_at")
-    .in(
-      "membership_id",
-      memberships.map((m) => m.id)
-    )
+    .eq("payer_member_id", me.memberId)
     .order("paid_at", { ascending: false });
   const payments = pays ?? [];
+  if (!payments.length) return { totalAmount: 0, totalCount: 0, years: [] };
+
+  // 라벨용(상품명·상태) memberships는 결제 행들이 가리키는 membership_id 집합으로 역조회.
+  const membershipIds = [...new Set(payments.map((p) => p.membership_id).filter((id): id is string => !!id))];
+  const { data: ms } = membershipIds.length
+    ? await sb.from("memberships").select("id, total_sessions, status").in("id", membershipIds)
+    : { data: [] as { id: string; total_sessions: number; status: string }[] };
+  const byId = new Map((ms ?? []).map((m) => [m.id, m]));
 
   // Status label by membership state (positive rows) — refund rows (amount<0) are tagged separately.
   const MEMBERSHIP_PAYMENT_STATUS: Record<string, string> = {
