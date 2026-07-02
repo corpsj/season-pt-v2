@@ -245,7 +245,7 @@ export interface MemberDetailView {
   membershipPaused: boolean;
   memberStatus?: "active" | "rest" | "inactive"; // 회원 운영 상태(활성/휴면/비활성) — 대표 상태 전환 UI용
   trainerIsOwner?: boolean; // 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용
-  discount?: { id: string; name: string; amount: number } | null; // 회원의 할인 자격(발급 시 자동 기본 선택)
+  discount?: { id: string; name: string } | null; // 회원의 할인 자격(발급 시 특별할인 상품 자동 필터 + 결제 라벨)
   events: { type: string; note: string | null; createdAt: string }[];
 }
 
@@ -551,8 +551,8 @@ export type StudioSettings = {
 
 export type ExerciseItem = { id: string; name: string; active: boolean; sortOrder: number; category?: string | null };
 
-/** 회원권 특별 할인 프리셋(정액 원). 발급 시점 가격 조정 — 상품 아님. */
-export type DiscountItem = { id: string; name: string; amount: number; active: boolean; sortOrder: number };
+/** 할인 자격 종류(가족·군경소방·노인 등). 가격이 아니라 '왜 할인 대상인지' — 가격은 특별할인 상품이 담당. */
+export type DiscountItem = { id: string; name: string; active: boolean; sortOrder: number };
 
 /* Re-export for convenience in screen code. */
 export type { IconName };

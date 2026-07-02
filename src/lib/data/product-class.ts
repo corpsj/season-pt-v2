@@ -22,13 +22,14 @@ export function tierMatches(name: string, trainerIsOwner: boolean): boolean {
   return tier === "common" || tier === (trainerIsOwner ? "owner" : "staff");
 }
 
-/** 폼 조합용 상품명: "대표 1:1 PT 10회권" (공용은 무접두). */
-export function composeProductName(tier: ProductTier, type: "1on1" | "2on1", sessions: number): string {
-  const prefix = tier === "owner" ? "대표 " : tier === "staff" ? "강사 " : "";
-  return `${prefix}${type === "2on1" ? "2:1" : "1:1"} PT ${sessions}회권`;
+/** 특별할인 상품 여부: 이름에 "특별할인" 포함 — 자체 할인 가격표를 가진 별도 상품(금액 차감 아님).
+ *  발급 픽커에서 자격 있는 회원에게만 노출하고, 무자격 회원에겐 숨긴다. */
+export function isDiscountProduct(name: string): boolean {
+  return name.includes("특별할인");
 }
 
-/** 발급 시점 할인 라벨 스냅샷: "가족 −50,000원". 발급 UI(픽커)·createMember가 같은 형식을 쓰도록 단일 소스. */
-export function composeDiscountLabel(name: string, amount: number): string {
-  return `${name.trim()} −${amount.toLocaleString()}원`;
+/** 폼 조합용 상품명: "대표 1:1 PT 10회권" (공용은 무접두). 할인이면 "특별할인 "을 최전방에 접두("특별할인 강사 1:1 PT 10회권"). */
+export function composeProductName(tier: ProductTier, type: "1on1" | "2on1", sessions: number, discount?: boolean): string {
+  const prefix = tier === "owner" ? "대표 " : tier === "staff" ? "강사 " : "";
+  return `${discount ? "특별할인 " : ""}${prefix}${type === "2on1" ? "2:1" : "1:1"} PT ${sessions}회권`;
 }

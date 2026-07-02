@@ -610,10 +610,10 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
 
   const { data: member } = await sb
     .from("members")
-    .select("id, name, phone, gender, status, avatar_tone, injury_note, discount_id, discounts(id, name, amount)")
+    .select("id, name, phone, gender, status, avatar_tone, injury_note, discount_id, discounts(id, name)")
     .eq("id", id)
     .maybeSingle();
-  const discount = (member as unknown as { discounts?: { id: string; name: string; amount: number } | null } | null)?.discounts ?? null;
+  const discount = (member as unknown as { discounts?: { id: string; name: string } | null } | null)?.discounts ?? null;
 
   const m = (member ?? {
     id,

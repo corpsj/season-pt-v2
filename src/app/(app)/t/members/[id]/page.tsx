@@ -11,7 +11,6 @@ import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
 import { getDiscounts } from "@/lib/data/groups/owner-ops";
-import { composeDiscountLabel } from "@/lib/data/product-class";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
 import { getMemberMeals } from "@/lib/data/groups/meals";
 import { MemberFilesSection } from "./MemberFilesSection";
@@ -68,11 +67,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           </div>
         </div>
 
-        {/* 할인 대상 표시 — 대표에게만(가격 정보). 발급/결제 시 자동 기본 적용됨. */}
+        {/* 할인 대상 표시 — 대표에게만. 발급 시 특별할인 상품 자동 필터 + 결제 라벨로 적용됨. */}
         {me.isOwner && m.discount ? (
           <div className="mb-3.5 flex items-center gap-2 rounded-[11px] bg-sage-banner px-3.5 py-2.5 text-[12.5px] font-semibold text-sage-deep">
             <Icon name="coins" size={15} className="flex-none" />
-            할인 대상 · {composeDiscountLabel(m.discount.name, m.discount.amount)}
+            할인 대상 · {m.discount.name}
           </div>
         ) : null}
 

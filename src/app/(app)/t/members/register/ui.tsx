@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches, composeDiscountLabel } from "@/lib/data/product-class";
+import { productType, tierMatches, isDiscountProduct } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod, MembershipProduct, DiscountItem } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -60,20 +60,16 @@ export function MemberRegisterClient({
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
-  const [discountId, setDiscountId] = useState(""); // "" = 할인 없음. 회원 속성으로 저장 + 결제 금액 자동 차감.
+  const [discountId, setDiscountId] = useState(""); // "" = 할인 없음(무자격). 회원 속성으로 저장 + 발급 시 특별할인 상품 자동 필터.
   const [pending, setPending] = useState(false);
 
-  // 결제 금액 = max(0, 상품가 − 할인액). 단가 나중입력·수정 유지를 위해 자동 입력만.
-  const discountAmountOf = (id: string) => discounts.find((d) => d.id === id)?.amount ?? 0;
-  const netPrice = (price: number, discId: string) => Math.max(0, price - discountAmountOf(discId));
-
-  // When product changes, pre-fill amount from product price (할인 반영)
+  // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
   function onProductChange(id: string | "later") {
     setSelectedProduct(id);
     if (id !== "later") {
       const p = products.find((p) => p.id === id);
       if (p) {
-        setPayAmount(String(netPrice(p.price, discountId)));
+        setPayAmount(String(p.price));
         // 상품명으로 수업 형태 자동 동기화 — "나중에 발급"은 토글로 직접 지정.
         const pt = productType(p.name);
         if (pt) setClassType(pt);
@@ -83,13 +79,10 @@ export function MemberRegisterClient({
     }
   }
 
-  // 할인 변경 시 선택된 상품 기준으로 결제 금액 재계산(수정 가능 유지).
+  // 자격 변경 시 상품 필터가 바뀐다(자격 있으면 특별할인 상품만) — 선택 상품이 숨겨지면 해제.
   function onDiscountChange(id: string) {
     setDiscountId(id);
-    if (selectedProduct !== "later") {
-      const p = products.find((pp) => pp.id === selectedProduct);
-      if (p) setPayAmount(String(netPrice(p.price, id)));
-    }
+    resetIfHidden(trainerId, allTiers, id);
   }
 
   async function onSubmit() {
@@ -149,27 +142,34 @@ export function MemberRegisterClient({
   // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
   const is2on1 = classType === "2on1";
 
-  // 담당 기반 자동 필터: 대표 담당이면 대표+공용, 강사 담당이면 강사+공용 상품만.
+  // 담당 + 할인 자격 자동 필터: 담당(대표/강사)에 맞는 상품 중, 자격 있으면 특별할인 상품만·없으면 특별할인 상품 숨김.
   const trainerIsOwner = trainerId === ownerId;
-  const tierVisible = products.filter((p) => allTiers || tierMatches(p.name, trainerIsOwner));
+  const qualified = discountId !== "";
+  const tierVisible = products.filter(
+    (p) => allTiers || (tierMatches(p.name, trainerIsOwner) && isDiscountProduct(p.name) === qualified),
+  );
 
-  /** 담당/필터 변경으로 선택 상품이 숨겨지면 선택 해제 — 강사 회원에게 대표 상품이 조용히 발급되는 것 방지. */
-  function resetIfHidden(nextTrainerId: string, nextAllTiers: boolean) {
+  /** 담당/자격/필터 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
+  function resetIfHidden(nextTrainerId: string, nextAllTiers: boolean, nextDiscountId: string) {
     if (selectedProduct === "later") return;
     const p = products.find((pp) => pp.id === selectedProduct);
-    if (p && !nextAllTiers && !tierMatches(p.name, nextTrainerId === ownerId)) {
+    if (!p) return;
+    const shown =
+      nextAllTiers ||
+      (tierMatches(p.name, nextTrainerId === ownerId) && isDiscountProduct(p.name) === (nextDiscountId !== ""));
+    if (!shown) {
       setSelectedProduct("later");
       setPayAmount("");
     }
   }
   function onTrainerChange(v: string) {
     setTrainerId(v);
-    resetIfHidden(v, allTiers);
+    resetIfHidden(v, allTiers, discountId);
   }
   function onToggleAllTiers() {
     const next = !allTiers;
     setAllTiers(next);
-    resetIfHidden(trainerId, next);
+    resetIfHidden(trainerId, next, discountId);
   }
 
   return (
@@ -361,15 +361,15 @@ export function MemberRegisterClient({
           </RadioOption>
         </div>
 
-        {/* 특별 할인 — 회원 속성으로 저장(가족/군경소방 등). 상품 선택 시 결제 금액 자동 차감. */}
+        {/* 특별 할인 자격 — 회원 속성으로 저장(가족/군경소방 등). 자격 선택 시 특별할인 상품만 노출. */}
         {discounts.length > 0 ? (
           <div className="mb-4">
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인</div>
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인 자격</div>
             <Select
               value={discountId}
               options={[
                 { value: "", label: "할인 없음" },
-                ...discounts.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
+                ...discounts.map((d) => ({ value: d.id, label: d.name })),
               ]}
               onChange={onDiscountChange}
             />

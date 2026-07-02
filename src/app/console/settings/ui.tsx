@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
 import { createProduct, updateProduct, setProductActive, createDiscount, updateDiscount, setDiscountActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
-import { productTier, productType, composeProductName, type ProductTier } from "@/lib/data/product-class";
+import { productTier, productType, composeProductName, isDiscountProduct, type ProductTier } from "@/lib/data/product-class";
 import type { MembershipProduct, DiscountItem, StudioSettings } from "@/lib/types";
 
 export function SettingsClient({ products, discounts, settings }: { products: MembershipProduct[]; discounts: DiscountItem[]; settings: StudioSettings }) {
@@ -97,6 +97,7 @@ const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: 
 type FormState = {
   tier: ProductTier;
   ptype: "1on1" | "2on1";
+  discount: boolean; // 특별할인 상품(자체 할인 가격표) — 이름에 "특별할인" 접두
   name: string;
   nameTouched: boolean; // 사용자가 이름을 직접 수정하면 자동 조합 중단
   sessions: string;
@@ -106,7 +107,7 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  tier: "common", ptype: "1on1", name: "",
+  tier: "common", ptype: "1on1", discount: false, name: "",
   nameTouched: false, sessions: "", price: "", unitListPrice: "", durationDays: "90",
 };
 
@@ -115,10 +116,11 @@ const digits = (s: string) => s.replace(/[^\d]/g, "");
 function productToForm(p: MembershipProduct): FormState {
   const tier = productTier(p.name);
   const ptype = productType(p.name) ?? "1on1";
+  const discount = isDiscountProduct(p.name);
   // 이름이 규칙 조합과 정확히 일치하면 자동 동기화 유지, 커스텀 이름이면 보존.
-  const nameTouched = p.name !== composeProductName(tier, ptype, p.sessions);
+  const nameTouched = p.name !== composeProductName(tier, ptype, p.sessions, discount);
   return {
-    tier, ptype, name: p.name, nameTouched,
+    tier, ptype, discount, name: p.name, nameTouched,
     sessions: String(p.sessions),
     price: String(p.price),
     unitListPrice: p.unitListPrice ? String(p.unitListPrice) : "",
@@ -195,7 +197,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
       const next = { ...prev, ...patch };
       if (!next.nameTouched) {
         const n = Number(next.sessions);
-        next.name = n > 0 ? composeProductName(next.tier, next.ptype, n) : next.name;
+        next.name = n > 0 ? composeProductName(next.tier, next.ptype, n, next.discount) : next.name;
       }
       return next;
     });
@@ -288,13 +290,18 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
                     onClick={() => openEdit(p)}
                     className="rounded-[13px] border border-ink/[0.08] bg-[#FBF9F5] px-3.5 py-3 text-left transition hover:bg-[#F7F3EB]"
                   >
-                    <div className="flex items-baseline gap-1.5">
+                    <div className="flex flex-wrap items-baseline gap-1.5">
                       <span className="min-w-0 truncate text-[15px] font-bold text-ink">
                         {typed ? `${p.sessions}회` : p.name}
                       </span>
                       {effTier === "all" && tier !== "common" ? (
                         <span className="flex-none rounded-[6px] bg-[#EDF4E3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#5B6452]">
                           {TIER_LABEL[tier]}
+                        </span>
+                      ) : null}
+                      {isDiscountProduct(p.name) ? (
+                        <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">
+                          특별할인
                         </span>
                       ) : null}
                     </div>
@@ -380,6 +387,14 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
               </div>
             </div>
 
+            <div className="flex items-center justify-between rounded-[13px] bg-[#F4EEE3] px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-ink">특별할인 상품</div>
+                <div className="mt-px text-[11px] font-medium text-[#9A917F]">자격 있는 회원에게만 발급 화면에 표시돼요</div>
+              </div>
+              <Switch on={form.discount} onChange={(v) => patchForm({ discount: v })} label={form.discount ? "특별할인" : "일반"} />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className={FLABEL}>회차</div>
@@ -426,8 +441,9 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
 }
 
 /* ============================================================
-   할인 혜택(콘솔) — 가족·군경소방·노인 등 발급 시점 정액 할인 프리셋.
-   프리셋은 4~6개 수준이라 모달 없이 인라인 리스트 + 추가/수정 폼 하나로 끝낸다.
+   할인 대상 자격(콘솔) — 가족·군경소방·노인 등. 가격이 아니라 '왜 할인 대상인지'만 관리한다.
+   가격은 이름에 "특별할인"이 붙은 별도 상품이 담당(위 상품 폼의 특별할인 토글).
+   자격은 4~6개 수준이라 모달 없이 인라인 리스트 + 추가/수정 폼 하나로 끝낸다.
    ============================================================ */
 
 function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
@@ -435,23 +451,20 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
   const toast = useToast();
   const [editId, setEditId] = useState<string | null>(null); // null = 추가 모드
   const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
 
-  function reset() { setEditId(null); setName(""); setAmount(""); }
-  function startEdit(d: DiscountItem) { setEditId(d.id); setName(d.name); setAmount(String(d.amount)); }
+  function reset() { setEditId(null); setName(""); }
+  function startEdit(d: DiscountItem) { setEditId(d.id); setName(d.name); }
 
   async function save() {
     if (busy) return;
     const nm = name.trim();
-    const amt = Number(digits(amount));
-    if (!nm) return toast("할인명을 입력해주세요");
-    if (!amt || amt <= 0) return toast("할인 금액을 입력해주세요");
+    if (!nm) return toast("자격 이름을 입력해주세요");
     setBusy(true);
-    const res = editId ? await updateDiscount(editId, { name: nm, amount: amt }) : await createDiscount({ name: nm, amount: amt });
+    const res = editId ? await updateDiscount(editId, { name: nm }) : await createDiscount({ name: nm });
     setBusy(false);
     if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
-    toast(editId ? "할인을 수정했어요" : "할인을 추가했어요");
+    toast(editId ? "자격을 수정했어요" : "자격을 추가했어요");
     reset();
     router.refresh();
   }
@@ -469,15 +482,14 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
 
   return (
     <Card className="mb-[18px] px-6 py-[22px]">
-      <div className="text-[16px] font-bold text-ink">할인 혜택</div>
-      <div className="mb-4 mt-1 text-[12px] font-medium text-[#9A917F]">가족·군경소방·노인 등 정액 할인 — 발급 화면에서 선택할 수 있어요</div>
+      <div className="text-[16px] font-bold text-ink">할인 대상 자격</div>
+      <div className="mb-4 mt-1 text-[12px] font-medium text-[#9A917F]">가족·군경소방·노인 등 할인 대상 자격이에요. 자격이 있는 회원에겐 발급 시 특별할인 상품이 표시돼요</div>
 
       {discounts.length > 0 ? (
         <div className="mb-4 flex flex-col gap-1.5">
           {discounts.map((d) => (
             <div key={d.id} className={`flex items-center gap-3 rounded-[12px] bg-[#FBF9F5] px-4 py-3 ${d.active ? "" : "opacity-55"}`}>
               <span className="min-w-0 flex-1 truncate text-[14px] font-bold text-ink">{d.name}</span>
-              <span className="flex-none text-[13.5px] font-semibold text-terracotta">−{d.amount.toLocaleString()}원</span>
               <Switch on={d.active} onChange={() => toggle(d)} disabled={busy} label={d.active ? "사용" : "중지"} />
               <button
                 type="button"
@@ -495,17 +507,13 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
       {/* 추가 / 수정 폼 — 리스트의 수정 버튼이 이 폼에 값을 채운다 */}
       <div className="flex items-end gap-2.5">
         <div className="flex-1">
-          <div className={FLABEL}>할인명</div>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="가족" className={INPUT} />
-        </div>
-        <div className="w-[170px]">
-          <div className={FLABEL}>할인 금액 (원)</div>
-          <input value={amount} onChange={(e) => setAmount(digits(e.target.value))} inputMode="numeric" placeholder="50000" className={INPUT} />
+          <div className={FLABEL}>자격 이름</div>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="가족 할인" className={INPUT} />
         </div>
         {editId ? <OBtn onClick={reset} disabled={busy}>취소</OBtn> : null}
         <PBtn icon={editId ? "check-bold" : "plus-bold"} onClick={save} disabled={busy}>{editId ? "저장" : "추가"}</PBtn>
       </div>
-      <div className="mt-2.5 text-[11.5px] font-medium text-[#9A917F]">할인 금액은 정액(원)이에요. 발급 시 상품가에서 이 금액을 빼 결제금액이 자동 계산돼요.</div>
+      <div className="mt-2.5 text-[11.5px] font-medium text-[#9A917F]">가격은 &lsquo;특별할인&rsquo; 상품이 담당해요. 여기선 자격 종류만 관리해요.</div>
     </Card>
   );
 }

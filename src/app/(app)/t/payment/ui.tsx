@@ -12,7 +12,6 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { recordPayments } from "@/lib/data/groups/owner-ops-actions";
-import { composeDiscountLabel } from "@/lib/data/product-class";
 import type { PaymentMethod, DiscountItem } from "@/lib/types";
 import type { PaymentSummary } from "@/lib/data/groups/owner-ops";
 
@@ -36,26 +35,24 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
   const toast = useToast();
 
   // 회원의 할인 자격을 기본 선택(변경 가능). 비활성화된 프리셋이어도 저장된 자격은 선택 유지.
+  // 가격 차감은 없음 — 자격은 payments.discount_label 스냅샷용 자격 이름일 뿐.
   const [discountId, setDiscountId] = useState(summary.discount?.id ?? "");
   const discountOptions = [
     { value: "", label: "할인 없음" },
-    ...discounts.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
+    ...discounts.map((d) => ({ value: d.id, label: d.name })),
     ...(summary.discount && !discounts.some((d) => d.id === summary.discount!.id)
-      ? [{ value: summary.discount.id, label: composeDiscountLabel(summary.discount.name, summary.discount.amount) }]
+      ? [{ value: summary.discount.id, label: summary.discount.name }]
       : []),
   ];
   const selectedDiscount =
     discounts.find((d) => d.id === discountId) ??
     (summary.discount && summary.discount.id === discountId ? summary.discount : null);
-  const discountAmt = selectedDiscount?.amount ?? 0;
-  const discountLabel = selectedDiscount
-    ? composeDiscountLabel(selectedDiscount.name, selectedDiscount.amount)
-    : undefined;
+  const discountLabel = selectedDiscount ? selectedDiscount.name : undefined;
 
-  // 초기 결제 금액: (미수금 > 전체 금액) − 할인액, 하한 0. 수정 가능 유지.
+  // 초기 결제 금액 = 미수금(없으면 전체 금액) 그대로. 가격은 특별할인 상품가가 담당(차감 없음).
   const baseOwed =
     summary.outstanding != null ? summary.outstanding : summary.amount != null ? summary.amount : null;
-  const defaultAmt = baseOwed != null ? String(Math.max(0, baseOwed - (summary.discount?.amount ?? 0))) : "";
+  const defaultAmt = baseOwed != null ? String(baseOwed) : "";
 
   const [lines, setLines] = useState<{ method: PaymentMethod; amount: string }[]>([
     { method: "card", amount: defaultAmt },
@@ -64,25 +61,14 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
-  // 할인 변경 시 결제 금액 재계산 — 단일 줄로 리셋(분할+할인 동시 편집은 드묾).
-  function onDiscountChange(id: string) {
-    setDiscountId(id);
-    const amt =
-      discounts.find((d) => d.id === id)?.amount ??
-      (summary.discount?.id === id ? summary.discount.amount : 0);
-    setLines((ls) => [
-      { method: ls[0]?.method ?? "card", amount: baseOwed != null ? String(Math.max(0, baseOwed - amt)) : "" },
-    ]);
-  }
-
   const memberName = summary.memberName || "—";
   const product = summary.productLabel || "—";
 
   const totalEntered = lines.reduce((s, l) => s + parseAmt(l.amount), 0);
-  // 미수 = (price − 할인액) − Σ기존결제 − Σ이번입력
+  // 미수 = price − Σ기존결제 − Σ이번입력
   const remaining =
     summary.price != null
-      ? summary.price - discountAmt - (summary.paid ?? 0) - totalEntered
+      ? summary.price - (summary.paid ?? 0) - totalEntered
       : null;
 
   async function onRecord() {
@@ -144,11 +130,11 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
           )}
         </Card>
 
-        {/* 특별 할인 — 회원 자격 기본 선택, 결제 금액 자동 차감(수정 가능) */}
+        {/* 특별 할인 자격 — 회원 자격 기본 선택. 자격 이름만 결제 기록에 스냅샷(금액 차감 없음) */}
         {discounts.length > 0 || summary.discount ? (
           <div className="mb-5">
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인</div>
-            <Select value={discountId} options={discountOptions} onChange={onDiscountChange} />
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인 자격</div>
+            <Select value={discountId} options={discountOptions} onChange={setDiscountId} />
           </div>
         ) : null}
 

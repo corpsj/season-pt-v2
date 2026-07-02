@@ -8,10 +8,9 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { updateMember } from "@/lib/data/groups/owner-ops-actions";
-import { composeDiscountLabel } from "@/lib/data/product-class";
 import type { Gender, DiscountItem } from "@/lib/types";
 
-/** 대표 전용: 회원 이름·연락처·성별·부상메모·생년월일·할인 대상 수정(오타 연락처 등 잦은 데스크 업무). 생년월일 변경은 비번 초기화+잠금 해제 겸용. */
+/** 대표 전용: 회원 이름·연락처·성별·부상메모·생년월일·할인 자격 수정(오타 연락처 등 잦은 데스크 업무). 생년월일 변경은 비번 초기화+잠금 해제 겸용. */
 export function EditMemberButton({
   id,
   name,
@@ -27,7 +26,7 @@ export function EditMemberButton({
   gender: Gender | null;
   injury?: string;
   discounts: DiscountItem[];
-  current: { id: string; name: string; amount: number } | null; // 회원의 현재 할인(비활성 프리셋이어도 선택 유지)
+  current: { id: string; name: string } | null; // 회원의 현재 할인 자격(비활성 프리셋이어도 선택 유지)
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -113,13 +112,13 @@ export function EditMemberButton({
               </Field>
               {discounts.length > 0 || current ? (
                 <div>
-                  <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인 (선택)</div>
+                  <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인 자격 (선택)</div>
                   <Select
                     value={f.discountId}
                     options={[
                       { value: "", label: "할인 없음" },
-                      ...discounts.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
-                      ...discountExtra.map((d) => ({ value: d.id, label: composeDiscountLabel(d.name, d.amount) })),
+                      ...discounts.map((d) => ({ value: d.id, label: d.name })),
+                      ...discountExtra.map((d) => ({ value: d.id, label: d.name })),
                     ]}
                     onChange={(v) => setF({ ...f, discountId: v })}
                   />

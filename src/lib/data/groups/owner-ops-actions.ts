@@ -6,18 +6,16 @@ import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import { normalizeTeamSlots } from "@/lib/data/team-slots";
-import { composeDiscountLabel } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
 
 const normPhone = (p: string) => p.replace(/\D/g, "");
 
-/** 할인 프리셋 id → 발급 시점 라벨 스냅샷("가족 −50,000원"). 없으면 undefined. */
+/** 할인 자격 id → 발급 시점 자격 이름 스냅샷("가족 할인"). 금액 개념 없음 — 가격은 특별할인 상품이 담당. 없으면 undefined. */
 async function discountLabelOf(discountId: string): Promise<string | undefined> {
-  const { data } = await sb.from("discounts").select("name, amount").eq("id", discountId).maybeSingle();
-  if (!data) return undefined;
-  return composeDiscountLabel(data.name as string, data.amount as number);
+  const { data } = await sb.from("discounts").select("name").eq("id", discountId).maybeSingle();
+  return data ? (data.name as string).trim() : undefined;
 }
 
 /** 상품 입력 서버측 검증 — 음수 회차/기간/가격이 그대로 저장되던 문제(감사 #43). */
@@ -182,7 +180,7 @@ export async function updateMember(
 export async function issueMembership(
   memberId: string,
   productId: string,
-  discountLabel?: string, // 할인 발급 시 라벨 스냅샷("가족 −50,000원") — 이력 이벤트 note로만 사용
+  discountLabel?: string, // 할인 발급 시 자격 이름 스냅샷("가족 할인") — 이력 이벤트 note로만 사용
 ): Promise<Result & { membershipId?: string }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -239,7 +237,7 @@ export async function recordPayment(input: {
   method: PaymentMethod;
   amount?: number;
   paidAt?: string;
-  discountLabel?: string; // 할인 라벨 스냅샷 → payments.discount_label
+  discountLabel?: string; // 할인 자격 이름 스냅샷 → payments.discount_label
 }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
@@ -559,34 +557,28 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
 }
 
 /* ----------------------- discount preset actions ----------------------- */
+// 할인 자격 종류(가족·군경소방·노인 등). 금액 없음 — '왜 할인 대상인지'만 관리하고 가격은 특별할인 상품이 담당.
 
-/** 할인 입력 검증 — name trim 필수, amount 정수>0(정액 원, 율 없음). */
-function discountError(input: { name: string; amount: number }): string | null {
-  if (!input.name.trim()) return "할인명을 입력해주세요";
-  if (!Number.isInteger(input.amount) || input.amount <= 0) return "할인 금액은 1원 이상의 정수여야 해요";
-  return null;
-}
-
-export async function createDiscount(input: { name: string; amount: number }): Promise<Result> {
+export async function createDiscount(input: { name: string }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
-  const invalid = discountError(input);
-  if (invalid) return { ok: false, error: invalid };
-  const { error } = await sb.from("discounts").insert({ name: input.name.trim(), amount: input.amount });
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "할인 자격 이름을 입력해주세요" };
+  const { error } = await sb.from("discounts").insert({ name });
   if (error) return { ok: false, error: "할인 추가에 실패했어요" };
   revalidatePath("/t/settings/products");
   revalidatePath("/console/settings");
   return { ok: true };
 }
 
-export async function updateDiscount(id: string, input: { name: string; amount: number }): Promise<Result> {
+export async function updateDiscount(id: string, input: { name: string }): Promise<Result> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
-  const invalid = discountError(input);
-  if (invalid) return { ok: false, error: invalid };
-  const { error } = await sb.from("discounts").update({ name: input.name.trim(), amount: input.amount }).eq("id", id);
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "할인 자격 이름을 입력해주세요" };
+  const { error } = await sb.from("discounts").update({ name }).eq("id", id);
   if (error) return { ok: false, error: "할인 수정에 실패했어요" };
   revalidatePath("/t/settings/products");
   revalidatePath("/console/settings");

@@ -12,7 +12,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { issueMembership } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches, composeDiscountLabel } from "@/lib/data/product-class";
+import { productType, tierMatches, isDiscountProduct } from "@/lib/data/product-class";
 import type { MemberDetailView, MembershipProduct } from "@/lib/types";
 
 // ponytail: date labels computed client-side from durationDays; no timezone edge cases matter here (display only)
@@ -33,16 +33,17 @@ export function MembershipClient({
   const id = member.id;
   const router = useRouter();
   const toast = useToast();
-  // 담당 강사(대표/강사) 기준 자동 필터 — 예외 발급은 "전체 상품 보기"로.
+  // 담당(대표/강사) + 할인 자격 자동 필터 — 자격 있으면 특별할인 상품만·없으면 숨김. 예외 발급은 "전체 상품 보기"로.
   const trainerIsOwner = member.trainerIsOwner ?? true;
+  const qualified = !!member.discount;
   const [allTiers, setAllTiers] = useState(false);
   const [typeFilter, setTypeFilter] = useState<"all" | "1on1" | "2on1">("all");
   const visible = useMemo(
     () =>
       products
-        .filter((p) => allTiers || tierMatches(p.name, trainerIsOwner))
+        .filter((p) => allTiers || (tierMatches(p.name, trainerIsOwner) && isDiscountProduct(p.name) === qualified))
         .filter((p) => typeFilter === "all" || productType(p.name) === typeFilter),
-    [products, allTiers, typeFilter, trainerIsOwner],
+    [products, allTiers, typeFilter, trainerIsOwner, qualified],
   );
   const [selected, setSelected] = useState<string>("");
   const [pending, setPending] = useState(false);
@@ -51,10 +52,8 @@ export function MembershipClient({
   const effectiveSelected = visible.some((p) => p.id === selected) ? selected : visible[0]?.id ?? "";
   const selectedProductData = products.find((p) => p.id === effectiveSelected);
 
-  // 회원의 할인 자격이 있으면 발급 이벤트에 라벨 스냅샷을 남긴다(결제 금액 반영은 다음 /t/payment 화면).
-  const discountLabel = member.discount
-    ? composeDiscountLabel(member.discount.name, member.discount.amount)
-    : undefined;
+  // 회원의 할인 자격이 있으면 발급 이벤트에 자격 이름 스냅샷을 남긴다(가격은 특별할인 상품가 그대로).
+  const discountLabel = member.discount ? member.discount.name : undefined;
 
   async function onIssue() {
     if (pending || !effectiveSelected) return;
