@@ -58,9 +58,10 @@ export function MembersClient({
   const [carryRows, setCarryRows] = useState<CarryRow[] | null>(null);
   const [carryResult, setCarryResult] = useState<{ created: number; failed: { name: string; error: string }[] } | null>(null);
 
-  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod });
+  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "" });
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
+  const [issueAmt, setIssueAmt] = useState("");
   const [refund, setRefund] = useState<{ refund: number; used: number; noBaseline: boolean } | null>(null);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
   const [refundAmt, setRefundAmt] = useState("");
@@ -120,13 +121,16 @@ export function MembersClient({
   }
   function openIssue() {
     setIssueProduct(products[0]?.id ?? "");
+    setIssueAmt(String(products[0]?.price ?? ""));
     setIssueMethod("card");
     setModal("issue");
   }
   async function doIssue() {
     if (!selectedId || !issueProduct) return;
+    const amt = Number(issueAmt);
+    if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요");
     setBusy(true);
-    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod);
+    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt);
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "발급에 실패했어요");
     toast("회원권을 발급했어요");
@@ -137,6 +141,10 @@ export function MembersClient({
   async function doAdd() {
     if (busy) return;
     if (!f.name.trim() || !f.phone.trim() || f.birth.replace(/\D/g, "").length !== 6) return toast("이름·연락처·생년월일(6자리)을 입력해주세요");
+    if (f.productId) {
+      const amt = Number(f.amount);
+      if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요");
+    }
     setBusy(true);
     const r = await createMember({
       name: f.name,
@@ -145,13 +153,13 @@ export function MembersClient({
       gender: f.gender,
       slots: [],
       product: f.productId ? { productId: f.productId } : undefined,
-      payment: f.productId ? { method: f.method } : undefined,
+      payment: f.productId ? { method: f.method, amount: Number(f.amount) } : undefined,
     });
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요");
     toast("회원을 등록했어요");
     setModal(null);
-    setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card" });
+    setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card", amount: "" });
     router.refresh();
     if (r.memberId) select(r.memberId);
   }
@@ -401,9 +409,26 @@ export function MembersClient({
             </ModalField>
           </div>
           <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
-          <ProductPicker products={products} selected={f.productId} onPick={(id) => setF({ ...f, productId: f.productId === id ? "" : id })} />
+          <ProductPicker
+            products={products}
+            selected={f.productId}
+            showPrice
+            onPick={(id) => {
+              const newId = f.productId === id ? "" : id;
+              const p = products.find((pp) => pp.id === newId);
+              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
+            }}
+          />
           {f.productId ? (
             <div className="mt-3">
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
+              <input
+                value={f.amount}
+                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "") })}
+                inputMode="numeric"
+                placeholder="₩ 금액"
+                className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+              />
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
               <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
             </div>
@@ -577,8 +602,25 @@ export function MembersClient({
         >
           <MemberStripe d={d} />
           <div className="mb-2.5 text-[11.5px] font-semibold text-[#9A917F]">회원권 상품</div>
-          <ProductPicker products={products} selected={issueProduct} onPick={setIssueProduct} showPrice />
-          <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
+          <ProductPicker
+            products={products}
+            selected={issueProduct}
+            onPick={(id) => {
+              setIssueProduct(id);
+              const p = products.find((pp) => pp.id === id);
+              if (p) setIssueAmt(String(p.price));
+            }}
+            showPrice
+          />
+          <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
+          <input
+            value={issueAmt}
+            onChange={(e) => setIssueAmt(e.target.value.replace(/\D/g, ""))}
+            inputMode="numeric"
+            placeholder="₩ 금액"
+            className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+          />
+          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
           <MethodPicker value={issueMethod} onChange={setIssueMethod} />
         </ConsoleModal>
       ) : null}

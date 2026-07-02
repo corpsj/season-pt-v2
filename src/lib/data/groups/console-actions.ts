@@ -26,10 +26,11 @@ export async function consoleIssueMembership(
   memberId: string,
   productId: string,
   method: PaymentMethod,
+  amount?: number,
 ): Promise<{ ok: boolean; error?: string }> {
   const issued = await issueMembership(memberId, productId);
   if (!issued.ok || !issued.membershipId) return { ok: false, error: issued.error ?? "발급에 실패했어요" };
-  const paid = await recordPayment({ membershipId: issued.membershipId, method });
+  const paid = await recordPayment({ membershipId: issued.membershipId, method, amount });
   if (!paid.ok) {
     // 보상: 결제 없는 회원권이 남으면 재시도 시 중복 발급된다(감사 #18) — 방금 발급분을 회수.
     await sb.from("membership_events").delete().eq("membership_id", issued.membershipId);
