@@ -585,30 +585,28 @@ export async function loadNewMemberMessages(
 }
 
 /* ----------------------------- tab badge ----------------------------- */
-/** Member's unread = count of trainer messages not yet read by this member, in their threads. */
+/** Member's unread = count of trainer messages not yet read by this member, in their canonical thread. */
 export async function getMemberChatUnread(): Promise<number> {
   const me = await getMemberContext();
   if (!me) return 0;
-  // 참여자별 last_read_at 이후의 선생님 메시지를 스레드별로 카운트(회원 1~2 스레드라 N 작음).
+  // 회원 채팅방은 canonical 스레드 하나만 열린다 — 담당/유형 변경으로 남은 옛 스레드의 메시지를
+  // 세면 끌 수 없는 유령 배지가 된다(감사3 #15).
+  const threadId = await ensureChatThread(me.memberId);
+  if (!threadId) return 0;
   const { data: cp } = await sb
     .from("chat_participants")
-    .select("thread_id, last_read_at")
-    .eq("member_id", me.memberId);
-  const rows = (cp ?? []) as { thread_id: string; last_read_at: string | null }[];
-  if (!rows.length) return 0;
-  let total = 0;
-  for (const row of rows) {
-    // 나 아닌 사람의 메시지 = 미읽음 대상(2:1 팀 채팅의 파트너 회원 메시지도 포함, 감사 low).
-    let q = sb
-      .from("chat_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("thread_id", row.thread_id)
-      .neq("sender_id", me.memberId);
-    if (row.last_read_at) q = q.gt("created_at", row.last_read_at);
-    const { count } = await q;
-    total += count ?? 0;
-  }
-  return total;
+    .select("last_read_at")
+    .eq("thread_id", threadId)
+    .eq("member_id", me.memberId)
+    .maybeSingle();
+  let q = sb
+    .from("chat_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("thread_id", threadId)
+    .neq("sender_id", me.memberId);
+  if (cp?.last_read_at) q = q.gt("created_at", cp.last_read_at as string);
+  const { count } = await q;
+  return count ?? 0;
 }
 
 /* ============================================================
