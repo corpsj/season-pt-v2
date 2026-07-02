@@ -198,6 +198,21 @@ export async function issueMembership(
     .toISOString()
     .slice(0, 10);
 
+  // 더블클릭/재시도 방어: 직전 20초 내 동일 (회원·상품) 활성 발급이 있으면 그것을 반환(멱등).
+  // 발급이 매번 새 membership_id를 만들어 recordPayment의 멱등창을 우회하던 이중발급·이중결제를 막는다.
+  const dupSince = new Date(Date.now() - 20000).toISOString();
+  const { data: recentMs } = await sb
+    .from("memberships")
+    .select("id")
+    .eq("member_id", memberId)
+    .eq("product_id", prod.id)
+    .eq("status", "active")
+    .gte("created_at", dupSince)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recentMs) return { ok: true, membershipId: recentMs.id };
+
   // ponytail: product column stores display label (legacy compat for getRevenue label)
   const { data: ms, error } = await sb
     .from("memberships")

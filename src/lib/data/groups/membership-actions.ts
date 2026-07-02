@@ -88,7 +88,7 @@ export async function previewRefund(membershipId: string) {
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   const bal = await getMembershipBalance(membershipId);
   return {
-    ok: true, status: ms.status, noBaseline: bal.paid <= 0,
+    ok: true, status: ms.status, noBaseline: bal.paid <= 0, paidSum: bal.paid,
     ...computeRefund({ paidSum: bal.paid, totalSessions: ms.total_sessions, remainingSessions: ms.remaining_sessions, listUnitPrice: (ms.list_unit_price as number | null) ?? 0 }),
   };
 }
@@ -100,11 +100,15 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   const pre = await previewRefund(input.membershipId);
   if (!pre.ok) return { ok: false, error: pre.error };
   // ponytail: cast after guard — tsc can't narrow inferred union without explicit discriminant
-  const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty, noBaseline } =
-    pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number; noBaseline: boolean };
+  const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty, noBaseline, paidSum } =
+    pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number; noBaseline: boolean; paidSum: number };
   if (preStatus === "refunded") return { ok: false, error: "이미 환불된 회원권이에요" };
   if (input.amountOverride != null && (!Number.isInteger(input.amountOverride) || input.amountOverride < 0))
     return { ok: false, error: "환불 금액을 0 이상 정수로 입력해주세요" };
+  // 상한 가드: 정상 결제된 회원권은 실결제액을 넘겨 환불할 수 없다(오타 자리수 → 월 매출 붕괴 방지).
+  // 이관(noBaseline·기납부 0)은 장부 밖 협의 금액이라 상한을 적용하지 않는다.
+  if (input.amountOverride != null && !noBaseline && input.amountOverride > paidSum)
+    return { ok: false, error: `환불 금액이 결제액(${paidSum.toLocaleString()}원)을 초과할 수 없어요` };
   // 이관 회원권(기납부 0)은 자동 산식이 0원 확정으로 이어지므로, 협의 금액 직접 입력을 요구.
   if (noBaseline && input.amountOverride == null)
     return { ok: false, error: "결제 기록이 없는 회원권이에요. 환불 금액을 직접 입력해주세요." };
@@ -123,7 +127,7 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   if (refundAmt > 0) {
     const { error: payErr } = await sb.from("payments").insert({
       membership_id: input.membershipId, method: input.method, amount: -refundAmt, paid_at: todayISO(),
-      note: input.note?.trim() || `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`,
+      note: input.note?.trim() || (input.amountOverride != null ? `환불: 협의 금액` : `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`),
       payer_member_id: msPre?.member_id ?? null, recorded_by: t.id,
     });
     if (payErr) {

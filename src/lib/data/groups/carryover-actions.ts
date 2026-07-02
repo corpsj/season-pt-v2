@@ -37,7 +37,7 @@ export async function bulkAddMembers(
 
   // 상품·강사 사전 로드(id → 매핑). 드롭다운 입력이지만 서버에서 재검증(위조/stale 방지).
   const [{ data: products }, { data: trainers }] = await Promise.all([
-    sb.from("membership_products").select("id, sessions, unit_list_price, duration_days"),
+    sb.from("membership_products").select("id, sessions, unit_list_price, price, duration_days"),
     sb.from("trainers").select("id").neq("status", "inactive"),
   ]);
   const prodById = new Map((products ?? []).map((p) => [p.id as string, p]));
@@ -87,7 +87,9 @@ export async function bulkAddMembers(
       const end = new Date(new Date(start + "T00:00:00Z").getTime() + prod.duration_days * 86400000)
         .toISOString()
         .slice(0, 10);
-      membership = { productId: prod.id, sessions: prod.sessions, unitListPrice: prod.unit_list_price, remaining, start, end };
+      // 단가 스냅샷: 0이 박히면 환불식 used×0=0으로 과지급되므로, issueMembership과 동일하게 정가/회차로 폴백.
+      const unitListPrice = prod.unit_list_price || (prod.sessions > 0 ? Math.round((prod.price ?? 0) / prod.sessions) : 0);
+      membership = { productId: prod.id, sessions: prod.sessions, unitListPrice, remaining, start, end };
     }
 
     // 더블부킹 가드(감사 #11·H6): 같은 강사의 같은 요일·시각 활성 정기수업이 있으면 이 행 거부.

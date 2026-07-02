@@ -9,7 +9,8 @@ export default async function ConfirmPage(props: {
   searchParams: Promise<{ to?: string }>;
 }) {
   const { to: toParam } = await props.searchParams;
-  const to = toParam || "/t";
+  // 오픈 리다이렉트 방지: 내부 절대경로("/…")만 허용. "//evil.com"·"https://…"은 거부하고 기본값으로.
+  const to = toParam && toParam.startsWith("/") && !toParam.startsWith("//") ? toParam : "/t";
   const view = await getConfirm();
 
   return (

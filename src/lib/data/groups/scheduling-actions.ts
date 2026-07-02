@@ -529,6 +529,15 @@ export async function rejectRequest(requestId: string): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
+  // 강사는 본인 담당 세션의 요청만 거절(대표는 전체). acceptRequest와 동일 스코프 —
+  // 이 가드가 없으면 다른 강사 담당 회원의 요청을 거절·오알림 발송할 수 있었다(감사).
+  if (t.role !== "owner") {
+    const { data: pre } = await sb.from("schedule_change_requests").select("session_id").eq("id", requestId).maybeSingle();
+    if (!pre) return { ok: false, error: "요청을 찾을 수 없어요." };
+    const { data: s } = await sb.from("sessions").select("trainer_id").eq("id", pre.session_id).maybeSingle();
+    if (s?.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  }
+
   const { data: rejected } = await sb
     .from("schedule_change_requests")
     .update({ status: "rejected", resolved_at: new Date().toISOString() })
