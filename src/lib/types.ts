@@ -140,6 +140,8 @@ export interface CalendarDay {
   inMonth: boolean;
   isSunday: boolean;
   hasDot: boolean;
+  /** 식단·운동·체형 기록이 있는 날(회원 캘린더 전용) — 미지정이면 표시 안 함 */
+  hasRecordDot?: boolean;
   selected: boolean;
 }
 

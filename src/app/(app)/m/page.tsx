@@ -34,6 +34,7 @@ export default async function MemberCalendarPage(props: {
       chatUnread={chatUnread}
       prevM={prevM}
       nextM={nextM}
+      today={todayISO()}
     />
   );
 }

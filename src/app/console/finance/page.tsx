@@ -41,6 +41,7 @@ export default async function ConsoleFinancePage({
     <>
       <Topbar title="손익" sub={`${summary.monthLabel} · 손익 요약`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
+        <div className="mx-auto max-w-[980px]">
         {/* 월 네비 */}
         <div className="mb-5 flex items-center gap-1.5">
           <NavArrow to={off + 1} dir="prev" />
@@ -99,6 +100,7 @@ export default async function ConsoleFinancePage({
         <ExpenseLedger items={exp.items} staff={staffPicks} />
 
         <div className="h-3" />
+        </div>
       </div>
     </>
   );

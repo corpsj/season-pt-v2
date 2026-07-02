@@ -25,12 +25,20 @@ function dayLabel(iso: string): string {
   return kst(iso, { month: "long", day: "numeric", weekday: "short" });
 }
 
-export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLog[]; initialHasMore: boolean }) {
+export function MemberMealsClient({
+  initial,
+  initialHasMore,
+  initialOpen = false,
+}: {
+  initial: MealLog[];
+  initialHasMore: boolean;
+  initialOpen?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [, refresh] = useTransition();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initialOpen);
   const [busy, setBusy] = useState(false);
   const [mealType, setMealType] = useState<string>("");
   const [memo, setMemo] = useState("");

@@ -17,7 +17,9 @@ export default async function ConsoleSettlementPage({
     <>
       <Topbar title="강사 정산" sub={`${settlement.monthLabel} · 회당 정산`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
-        <SettlementClient settlement={settlement} />
+        <div className="mx-auto max-w-[980px]">
+          <SettlementClient settlement={settlement} />
+        </div>
       </div>
     </>
   );

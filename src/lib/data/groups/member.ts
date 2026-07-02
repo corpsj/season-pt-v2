@@ -10,7 +10,9 @@ import {
   todayISO,
   dayDiff,
 } from "@/lib/data/db";
+import { monthBoundsFromKst } from "@/lib/data/kst-bounds";
 import { ensureChatThread } from "@/lib/data/groups/chat";
+import { FILES_BUCKET } from "@/lib/data/groups/member-files";
 import type {
   AvatarTone,
   CalendarDay,
@@ -209,6 +211,27 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
   };
 }
 
+/* -------- 캘린더 날짜별 기록 (운동·식단·체형) — 마이탭 상세 화면의 요약본 -------- */
+export type MemberDayWorkout = {
+  id: string;
+  time: string; // "오후 7:00" (수업 시각)
+  exercises: { name: string; kg: number; sets: number }[];
+  comment: string | null;
+};
+export type MemberDayMeal = {
+  id: string;
+  time: string; // "오후 12:30"
+  mealType: string | null;
+  memo: string | null;
+  photoUrl: string | null;
+  feedback: string | null;
+};
+export type MemberDayFile = {
+  id: string;
+  kind: "photo" | "inbody";
+  url: string | null;
+};
+
 /** Per-day data for the selected month so the client can switch days without a round-trip. */
 export type MemberCalendarDayMap = {
   firstWeekday: number;
@@ -219,9 +242,20 @@ export type MemberCalendarDayMap = {
       // 하루에 수업이 2개(보강 등)여도 전부 노출 — 첫 세션만 보여 두 번째 수업이 회원 화면에서
       // 보이지도, 변경 요청도 불가하던 문제(감사 #38).
       dayClasses: MemberDayClass[];
+      workouts: MemberDayWorkout[];
+      meals: MemberDayMeal[];
+      files: MemberDayFile[];
     }
   >;
 };
+
+/** workout_records.exercises(jsonb) → 안전 파싱. 기록 목록·캘린더 공용. */
+function parseExercises(raw: unknown): { name: string; kg: number; sets: number }[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
+    .filter((e) => typeof e?.name === "string")
+    .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+}
 
 export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalendarDayMap> {
   const me = await requireMember();
@@ -259,6 +293,84 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     byDay.set(d, arr);
   }
 
+  // ---- 이 달의 기록(운동·식단·체형)도 날짜별로 함께 내려준다 — 캘린더에서 그날의 기록을 바로 본다.
+  const sessionIds = rows.map((s) => s.id);
+  // KST 월 경계 → UTC instant (meal_logs.eaten_at 범위 쿼리용)
+  const { startISO: monthStartUtc, endISO: monthEndUtc } = monthBoundsFromKst(
+    new Date(Date.UTC(year, month - 1, 1)),
+  );
+  const [mlRes, mfRes, wrRes] = await Promise.all([
+    sb
+      .from("meal_logs")
+      .select("id, photo_path, memo, meal_type, eaten_at, feedback")
+      .eq("member_id", me.memberId)
+      .gte("eaten_at", monthStartUtc)
+      .lt("eaten_at", monthEndUtc)
+      .order("eaten_at", { ascending: true }),
+    sb
+      .from("member_files")
+      .select("id, kind, storage_path, taken_at")
+      .eq("member_id", me.memberId)
+      .gte("taken_at", monthStart)
+      .lt("taken_at", monthEndExcl)
+      .order("taken_at", { ascending: true }),
+    // 이 달 세션에 달린 운동 기록만 — 세션이 삭제된 고아 기록은 날짜가 없어 캘린더에선 제외(/m/my/records엔 남음).
+    sessionIds.length
+      ? sb.from("workout_records").select("id, session_id, exercises, comment").in("session_id", sessionIds)
+      : Promise.resolve({ data: null }),
+  ]);
+  const mealRows = (mlRes.data ?? []) as unknown as {
+    id: string; photo_path: string | null; memo: string | null; meal_type: string | null; eaten_at: string; feedback: string | null;
+  }[];
+  const fileRows = (mfRes.data ?? []) as unknown as {
+    id: string; kind: "photo" | "inbody"; storage_path: string; taken_at: string;
+  }[];
+  const workoutRows = (wrRes.data ?? []) as unknown as {
+    id: string; session_id: string; exercises: unknown; comment: string | null;
+  }[];
+
+  // 서명 URL은 한 번에(batch) — 건당 왕복이면 한 달치 사진에서 수십 회 왕복이 된다.
+  const paths = [
+    ...mealRows.map((m) => m.photo_path).filter((p): p is string => !!p),
+    ...fileRows.map((f) => f.storage_path),
+  ];
+  const signedByPath = new Map<string, string>();
+  if (paths.length) {
+    const { data: signs } = await sb.storage.from(FILES_BUCKET).createSignedUrls(paths, 60 * 60);
+    for (const s of signs ?? []) if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
+  }
+
+  const scheduledById = new Map(rows.map((s) => [s.id, s.scheduled_at]));
+  const workoutsByDay = new Map<string, MemberDayWorkout[]>();
+  for (const w of workoutRows) {
+    const at = scheduledById.get(w.session_id);
+    if (!at) continue;
+    const d = kstDateISO(at);
+    const arr = workoutsByDay.get(d) ?? [];
+    arr.push({ id: w.id, time: clockLabel(at), exercises: parseExercises(w.exercises), comment: w.comment ?? null });
+    workoutsByDay.set(d, arr);
+  }
+  const mealsByDay = new Map<string, MemberDayMeal[]>();
+  for (const m of mealRows) {
+    const d = kstDateISO(m.eaten_at);
+    const arr = mealsByDay.get(d) ?? [];
+    arr.push({
+      id: m.id,
+      time: clockLabel(m.eaten_at),
+      mealType: m.meal_type ?? null,
+      memo: m.memo ?? null,
+      photoUrl: m.photo_path ? (signedByPath.get(m.photo_path) ?? null) : null,
+      feedback: m.feedback ?? null,
+    });
+    mealsByDay.set(d, arr);
+  }
+  const filesByDay = new Map<string, MemberDayFile[]>();
+  for (const f of fileRows) {
+    const arr = filesByDay.get(f.taken_at) ?? [];
+    arr.push({ id: f.id, kind: f.kind, url: signedByPath.get(f.storage_path) ?? null });
+    filesByDay.set(f.taken_at, arr);
+  }
+
   const days: MemberCalendarDayMap["days"] = {};
   for (let n = 1; n <= daysInMonth; n++) {
     const dISO = `${year}-${String(month).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
@@ -271,6 +383,9 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
         trainerName,
         isPast: sess.scheduled_at < nowIso,
       })),
+      workouts: workoutsByDay.get(dISO) ?? [],
+      meals: mealsByDay.get(dISO) ?? [],
+      files: filesByDay.get(dISO) ?? [],
     };
   }
 
@@ -894,10 +1009,7 @@ export async function getMemberWorkoutRecords(): Promise<MemberWorkoutView> {
     const when = row.sessions?.scheduled_at ?? row.created_at;
     const dISO = kstDateISO(when);
     const dateLabel = `${Number(dISO.slice(5, 7))}월 ${Number(dISO.slice(8, 10))}일 ${weekdayKo(kstWeekday(when))}`;
-    const exercises = (Array.isArray(row.exercises) ? row.exercises : [])
-      .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
-      .filter((e) => typeof e?.name === "string")
-      .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+    const exercises = parseExercises(row.exercises);
     return {
       id: row.id,
       dateLabel,

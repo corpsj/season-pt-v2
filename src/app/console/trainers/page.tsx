@@ -34,6 +34,7 @@ export default async function ConsoleTrainersPage({
     <>
       <Topbar title="강사 관리" sub={`활성 ${activeCount}명 · 초대 대기 ${pendingCount}명`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
+        <div className="mx-auto max-w-[1200px]">
         {/* summary strip */}
         <div className="mb-[18px] flex items-stretch gap-3">
           <Card className="flex flex-1 items-center gap-[18px] px-[22px] py-[15px]">
@@ -129,6 +130,7 @@ export default async function ConsoleTrainersPage({
               <div className="py-16 text-center text-[14px] font-medium text-[#A89F92]">강사를 선택하세요</div>
             )}
           </Card>
+        </div>
         </div>
       </div>
     </>

@@ -48,6 +48,7 @@ export async function logMeal(formData: FormData): Promise<Result> {
   }
 
   revalidatePath("/m/my/meals");
+  revalidatePath("/m"); // 캘린더 날짜별 식단도 갱신
   return { ok: true };
 }
 
@@ -63,6 +64,7 @@ export async function deleteMeal(mealId: string): Promise<Result> {
   if (error) return { ok: false, error: "삭제에 실패했어요" };
 
   revalidatePath("/m/my/meals");
+  revalidatePath("/m"); // 캘린더 날짜별 식단도 갱신
   return { ok: true };
 }
 
@@ -84,5 +86,6 @@ export async function addMealFeedback(mealId: string, text: string): Promise<Res
 
   revalidatePath(`/t/members/${row.member_id as string}`);
   revalidatePath("/m/my/meals");
+  revalidatePath("/m"); // 캘린더 날짜별 식단도 갱신
   return { ok: true };
 }

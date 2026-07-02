@@ -75,8 +75,11 @@ export function CalendarGrid({
             >
               {d.n}
             </span>
-            {d.hasDot && !d.selected ? (
-              <span className="absolute bottom-[5px] h-1 w-1 rounded-full bg-sage-soft" />
+            {(d.hasDot || d.hasRecordDot) && !d.selected ? (
+              <span className="absolute bottom-[5px] flex items-center gap-[3px]">
+                {d.hasDot ? <span className="h-1 w-1 rounded-full bg-sage-soft" /> : null}
+                {d.hasRecordDot ? <span className="h-1 w-1 rounded-full bg-terracotta-text" /> : null}
+              </span>
             ) : null}
           </button>
         ))}

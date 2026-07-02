@@ -55,6 +55,7 @@ export async function uploadMemberFile(formData: FormData): Promise<Result> {
 
   revalidatePath(`/t/members/${memberId}`);
   revalidatePath("/m/my/body");
+  revalidatePath("/m"); // 캘린더 날짜별 체형 기록도 갱신
   return { ok: true };
 }
 
@@ -74,6 +75,7 @@ export async function deleteMemberFile(fileId: string): Promise<Result> {
 
   revalidatePath(`/t/members/${row.member_id as string}`);
   revalidatePath("/m/my/body");
+  revalidatePath("/m"); // 캘린더 날짜별 체형 기록도 갱신
   return { ok: true };
 }
 

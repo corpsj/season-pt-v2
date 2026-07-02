@@ -55,6 +55,7 @@ export default async function ConsoleRevenuePage({
     <>
       <Topbar title="매출 현황" sub={`${sel.label} · 총 ${rev.totalCount}건 누적`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
+        <div className="mx-auto max-w-[980px]">
         {/* toolbar */}
         <div className="mb-[18px] flex items-center gap-2.5">
           <div className="flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.1)] bg-white px-[15px] py-[9px]">
@@ -131,6 +132,7 @@ export default async function ConsoleRevenuePage({
 
         {/* ledger */}
         <RevenueLedger items={sel.items} />
+        </div>
       </div>
     </>
   );

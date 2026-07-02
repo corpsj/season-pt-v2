@@ -21,6 +21,7 @@ export default async function ConsoleMembersPage({
     <>
       <Topbar title="회원 관리" sub={`전체 ${view.totals.total}명 · 만료 임박 ${view.totals.expiring}명 · 휴면 ${view.totals.rest}명`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
+        <div className="mx-auto max-w-[1200px]">
         <MembersClient
           items={view.items}
           statusById={statusById}
@@ -29,6 +30,7 @@ export default async function ConsoleMembersPage({
           initialId={initialId}
           initialDetail={initialDetail}
         />
+        </div>
       </div>
     </>
   );

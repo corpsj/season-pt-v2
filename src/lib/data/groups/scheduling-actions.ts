@@ -253,6 +253,8 @@ export async function saveRecord(
   }
 
   revalidatePath("/t");
+  revalidatePath("/m"); // 회원 캘린더 날짜별 운동 기록
+  revalidatePath("/m/my/records");
   return { ok: true };
 }
 

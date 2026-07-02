@@ -254,10 +254,10 @@ export function MembersClient({
               )}
 
               {/* actions */}
-              <div className="mb-[18px] grid grid-cols-2 gap-[9px]">
-                <OBtn icon="calendar" disabled={!d.activeMembershipId} onClick={() => setModal("extend")}>기간 연장</OBtn>
-                <OBtn icon="coins" disabled={!d.activeMembershipId} onClick={openRefund}>환불</OBtn>
-                <PBtn icon="ticket-fill" className="col-span-2" onClick={openIssue}>회원권 발급</PBtn>
+              <div className="mb-[18px] grid grid-cols-3 gap-[9px]">
+                <OBtn icon="calendar" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={() => setModal("extend")}>기간 연장</OBtn>
+                <OBtn icon="coins" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={openRefund}>환불</OBtn>
+                <PBtn className="whitespace-nowrap !px-2" onClick={openIssue}>회원권 발급</PBtn>
               </div>
 
               {/* body composition */}
