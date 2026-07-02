@@ -72,12 +72,24 @@ export function clockLabel(iso: string): string {
 
 /** Member's active membership = 만료가 가장 임박한 것(end_date asc) — 차감 대상과 동일 기준. */
 async function activeMembership(memberId: string) {
+  // 실제로 쓸 수 있는(잔여>0) 활성 회원권 우선 — 재등록 시 새 회원권이 표시/차감 대상이 되도록(감사 C2).
+  const usable = await sb
+    .from("memberships")
+    .select("id, remaining_sessions, total_sessions, end_date, status")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .gt("remaining_sessions", 0)
+    .order("end_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (usable.data) return usable.data;
+  // 없으면(전부 소진) 카드가 비지 않도록 가장 최근 활성 회원권을 보여준다(잔여 0으로 표시).
   const { data } = await sb
     .from("memberships")
     .select("id, remaining_sessions, total_sessions, end_date, status")
     .eq("member_id", memberId)
     .eq("status", "active")
-    .order("end_date", { ascending: true })
+    .order("end_date", { ascending: false })
     .limit(1)
     .maybeSingle();
   return data;
@@ -291,6 +303,7 @@ export async function getMemberReceive(): Promise<MemberReceiveView> {
     trainerName: "",
     ago: "",
     before: "",
+    type: "change",
     sessionId: "",
     slots: [],
   };
@@ -298,7 +311,7 @@ export async function getMemberReceive(): Promise<MemberReceiveView> {
 
   const { data: req } = await sb
     .from("schedule_change_requests")
-    .select("id, requester_id, reason, original_at, proposed_slots, created_at, session_id")
+    .select("id, requester_id, reason, original_at, proposed_slots, created_at, session_id, type")
     .eq("requester_type", "trainer")
     .eq("status", "pending")
     .in("session_id", sessionIds)
@@ -322,6 +335,7 @@ export async function getMemberReceive(): Promise<MemberReceiveView> {
     ago: agoLabel(req.created_at),
     before: req.original_at ? slotLabel(req.original_at) : "",
     reason: req.reason ?? undefined,
+    type: (req.type as "change" | "cancel") ?? "change",
     sessionId: req.session_id,
     slots,
   };
@@ -576,11 +590,12 @@ export async function getMemberChatUnread(): Promise<number> {
   if (!rows.length) return 0;
   let total = 0;
   for (const row of rows) {
+    // 나 아닌 사람의 메시지 = 미읽음 대상(2:1 팀 채팅의 파트너 회원 메시지도 포함, 감사 low).
     let q = sb
       .from("chat_messages")
       .select("id", { count: "exact", head: true })
       .eq("thread_id", row.thread_id)
-      .eq("sender_type", "trainer");
+      .neq("sender_id", me.memberId);
     if (row.last_read_at) q = q.gt("created_at", row.last_read_at);
     const { count } = await q;
     total += count ?? 0;

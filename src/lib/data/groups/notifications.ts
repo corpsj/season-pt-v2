@@ -72,6 +72,34 @@ export async function notifyTrainersOfRequest(memberId: string, kind: "change" |
   await sb.from("notifications").insert(rows);
 }
 
+/**
+ * 일정 요청의 처리 결과를 요청자에게 알림(수락/거절). 요청함·인박스만으로는 회원이 결과를 알 수 없어
+ * 부당 노쇼/헛걸음을 부른다(감사 H8). 'request' 타입 재사용(스키마 변경 불필요). best-effort.
+ */
+export async function notifyRequestResult(input: {
+  recipientType: "member" | "trainer";
+  recipientId: string;
+  kind: "change" | "cancel";
+  accepted: boolean;
+  detail?: string; // 변경 시 "→ 6/25 수 오후 8:00" 같은 결과 요약
+}): Promise<void> {
+  const what = input.kind === "cancel" ? "수업 취소" : "일정 변경";
+  const verb = input.accepted ? "수락됐어요" : "거절됐어요";
+  const body =
+    input.accepted && input.detail
+      ? `${what} 요청이 수락됐어요. ${input.detail}`
+      : `${what} 요청이 ${verb}.`;
+  await sb.from("notifications").insert({
+    recipient_type: input.recipientType,
+    recipient_id: input.recipientId,
+    type: "request",
+    title: `${what} 요청 ${input.accepted ? "수락" : "거절"}`,
+    body,
+    channel: "in_app",
+    status: "unread",
+  });
+}
+
 export interface NotificationView { id: string; type: string; title: string; body: string | null; createdAt: string; status: string; }
 
 export async function getNotifications(recipientType: "member" | "trainer", recipientId: string): Promise<NotificationView[]> {

@@ -41,6 +41,29 @@ test("mergeMessages appends genuinely new incoming messages", () => {
   expect(mergeMessages(existing, incoming).map((m) => m.id)).toEqual(["a", "b"]);
 });
 
+test("mergeMessages returns the SAME reference when nothing changed (감사 H14)", () => {
+  // 폴링 커서가 `>=`라 마지막 메시지가 매 폴마다 다시 들어온다. 전부 중복이면 원본 참조를
+  // 그대로 돌려줘야 setState가 재렌더를 건너뛰고 3초마다 강제 스크롤되던 문제가 사라진다.
+  const existing: ChatMessageView[] = [
+    { id: "a", mine: false, text: "hi", createdAt: "2026-06-23T00:00:00Z" },
+    { id: "b", mine: false, text: "yo", createdAt: "2026-06-23T00:01:00Z" },
+  ];
+  const incoming: ChatMessageView[] = [
+    { id: "b", mine: false, text: "yo", createdAt: "2026-06-23T00:01:00Z" }, // 커서 메시지 재유입
+  ];
+  expect(mergeMessages(existing, incoming)).toBe(existing); // 동일 참조
+});
+
+test("mergeMessages returns a NEW reference when something changed", () => {
+  const existing: ChatMessageView[] = [
+    { id: "a", mine: false, text: "hi", createdAt: "2026-06-23T00:00:00Z" },
+  ];
+  const incoming: ChatMessageView[] = [
+    { id: "b", mine: false, text: "new", createdAt: "2026-06-23T00:02:00Z" },
+  ];
+  expect(mergeMessages(existing, incoming)).not.toBe(existing);
+});
+
 test("latestCursor returns the newest createdAt, ignoring temps", () => {
   const msgs: ChatMessageView[] = [
     { id: "a", mine: false, text: "x", createdAt: "2026-06-23T00:00:00Z" },

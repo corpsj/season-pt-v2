@@ -16,6 +16,7 @@ import { MemberMealsSection } from "./MemberMealsSection";
 import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
 import { EditMemberButton } from "./EditMemberButton";
+import { MemberStatusControl } from "./MemberStatusControl";
 
 const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급", pause: "일시정지", resume: "재개" };
 
@@ -120,6 +121,11 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             </MiniButton>
           </div>
         </Card>
+
+        {/* member status (대표 전용) */}
+        {me.isOwner && m.memberStatus ? (
+          <MemberStatusControl memberId={id} status={m.memberStatus} />
+        ) : null}
 
         {/* body composition */}
         <Card className="mb-3.5 flex px-[15px] py-3.5">

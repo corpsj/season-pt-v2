@@ -184,8 +184,10 @@ export async function getChatThreads(): Promise<ChatThreadView[]> {
 export async function getChatUnread(): Promise<number> {
   const t = await getTrainerContext();
   if (!t) return 0;
-  let uq = sb.from("chat_threads").select("id");
-  if (t.role !== "owner") uq = uq.eq("trainer_id", t.id);
+  // 대표도 '자기 담당' 스레드 기준으로만 미읽음 배지를 센다. read_by_trainer가 담당강사 읽음을 뜻하도록
+  // 바뀌었으므로(H11), 대표 배지를 gym 전체로 세면 남의 스레드는 절대 못 지워 배지가 영구히 켜진다(회귀 방지).
+  // 매장 전체 모니터링은 채팅 목록(getChatThreads)이 담당한다.
+  const uq = sb.from("chat_threads").select("id").eq("trainer_id", t.id);
   const { data: threadRows } = await uq;
   const ids = (threadRows ?? []).map((r) => r.id as string);
   if (ids.length === 0) return 0;
@@ -219,13 +221,17 @@ export async function getChatRoom(threadId: string): Promise<ChatRoomView> {
   const memberIds = participants.map((m) => m.id);
   const sub = await scheduleSub(thread.trainer_id as string, memberIds, isTeam);
 
-  // Mark thread as read on open.
-  await sb
-    .from("chat_messages")
-    .update({ read_by_trainer: true })
-    .eq("thread_id", threadId)
-    .eq("read_by_trainer", false)
-    .eq("sender_type", "member");
+  // Mark thread as read on open — ONLY when the opener is the thread's own trainer.
+  // read_by_trainer is a shared boolean; if the owner (who can open any thread) marked it read,
+  // the assigned trainer's unread badge vanished and they'd never see the message(감사 H11).
+  if (t.id === (thread.trainer_id as string)) {
+    await sb
+      .from("chat_messages")
+      .update({ read_by_trainer: true })
+      .eq("thread_id", threadId)
+      .eq("read_by_trainer", false)
+      .eq("sender_type", "member");
+  }
 
   const { data: msgRows } = await sb
     .from("chat_messages")
@@ -289,12 +295,13 @@ export async function loadNewTrainerMessages(
   const t = await getTrainerContext();
   if (!t) return [];
 
-  const { data: thread } = await sb
+  // Owner may poll any thread; other trainers only their own(감사 H12 — 대표가 남의 스레드에서 빈 배열).
+  let trq = sb
     .from("chat_threads")
-    .select("id, type")
-    .eq("id", threadId)
-    .eq("trainer_id", t.id)
-    .maybeSingle();
+    .select("id, type, trainer_id")
+    .eq("id", threadId);
+  if (t.role !== "owner") trq = trq.eq("trainer_id", t.id);
+  const { data: thread } = await trq.maybeSingle();
   if (!thread) return [];
 
   const isTeam = thread.type === "2on1";
@@ -311,13 +318,15 @@ export async function loadNewTrainerMessages(
   const { data: msgRows, error: qErr } = await q;
   if (qErr) return [];
 
-  // Mark incoming (member) messages as read now that they're delivered.
-  await sb
-    .from("chat_messages")
-    .update({ read_by_trainer: true })
-    .eq("thread_id", threadId)
-    .eq("read_by_trainer", false)
-    .eq("sender_type", "member");
+  // Mark incoming (member) messages as read — ONLY for the thread's own trainer(감사 H11).
+  if (t.id === (thread.trainer_id as string)) {
+    await sb
+      .from("chat_messages")
+      .update({ read_by_trainer: true })
+      .eq("thread_id", threadId)
+      .eq("read_by_trainer", false)
+      .eq("sender_type", "member");
+  }
 
   return (msgRows ?? []).map((row) => {
     const mine = row.sender_type === "trainer";

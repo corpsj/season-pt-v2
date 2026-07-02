@@ -2,7 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { sb, getMemberContext } from "@/lib/data/db";
-import { notifyTrainersOfRequest } from "@/lib/data/groups/notifications";
+import { notifyTrainersOfRequest, notifyRequestResult } from "@/lib/data/groups/notifications";
+import { hasSlotConflict, moveSessionWithTombstone, claimCancelSession } from "@/lib/data/groups/session-mutations";
 import {
   NOTICE_READ_COOKIE,
   NOTIF_READY_KEYS,
@@ -35,7 +36,7 @@ async function requireMember() {
 async function loadOwnTrainerRequest(requestId: string, memberId: string) {
   const { data: req } = await sb
     .from("schedule_change_requests")
-    .select("id, session_id, proposed_slots, requester_type, status")
+    .select("id, session_id, proposed_slots, requester_type, requester_id, type, status")
     .eq("id", requestId)
     .maybeSingle();
   if (!req || req.requester_type !== "trainer" || req.status !== "pending") return null;
@@ -50,31 +51,64 @@ async function loadOwnTrainerRequest(requestId: string, memberId: string) {
 }
 
 /**
- * Member accepts a trainer change request: pick a proposed slot, move the session,
- * resolve the request as accepted.
+ * Member accepts a trainer request. For 'change' → move the session to a proposed slot (+tombstone,
+ * conflict guard). For 'cancel' → actually cancel the session (강사 발의 취소는 무차감, 감사 H7).
+ * Notifies the requesting trainer of the outcome (감사 H8).
  */
 export async function acceptMemberChange(requestId: string, slotIso?: string): Promise<Result> {
   const me = await requireMember();
   const req = await loadOwnTrainerRequest(requestId, me.memberId);
   if (!req) return { ok: false, error: "요청을 찾을 수 없어요" };
 
-  const slots = Array.isArray(req.proposed_slots) ? (req.proposed_slots as string[]) : [];
-  const chosen = slotIso && slots.includes(slotIso) ? slotIso : slots[0];
-
-  if (chosen) {
-    await sb.from("sessions").update({ scheduled_at: chosen }).eq("id", req.session_id);
+  // 대상 세션이 아직 예정 상태인지 확인(이미 진행/취소됐으면 요청 정리, 감사 C1).
+  const { data: session } = await sb
+    .from("sessions")
+    .select("trainer_id, status")
+    .eq("id", req.session_id)
+    .maybeSingle();
+  if (!session || session.status !== "scheduled") {
+    await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
+    return { ok: false, error: "이미 진행됐거나 처리된 수업이에요" };
   }
+
+  if (req.type === "cancel") {
+    // 강사가 요청한 취소 — 회원 승인 시 실제로 세션을 취소한다(무차감: 스튜디오 발의).
+    const cancelled = await claimCancelSession(req.session_id);
+    if (!cancelled) {
+      await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
+      return { ok: false, error: "이미 처리된 수업이에요" };
+    }
+  } else {
+    const slots = Array.isArray(req.proposed_slots) ? (req.proposed_slots as string[]) : [];
+    const chosen = slotIso && slots.includes(slotIso) ? slotIso : slots[0];
+    if (!chosen) return { ok: false, error: "선택한 시간이 올바르지 않아요" };
+    if (await hasSlotConflict(session.trainer_id as string, chosen, req.session_id)) {
+      return { ok: false, error: "그 시간에 이미 다른 수업이 있어요" };
+    }
+    const moved = await moveSessionWithTombstone(req.session_id, chosen);
+    if (!moved) {
+      await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
+      return { ok: false, error: "이미 처리된 수업이에요" };
+    }
+  }
+
   await sb
     .from("schedule_change_requests")
     .update({ status: "accepted", resolved_at: new Date().toISOString() })
     .eq("id", req.id);
+  await notifyRequestResult({
+    recipientType: "trainer",
+    recipientId: req.requester_id as string,
+    kind: (req.type as "change" | "cancel") ?? "change",
+    accepted: true,
+  }).catch(() => {});
 
   revalidatePath("/m");
   revalidatePath("/m/receive");
   return { ok: true };
 }
 
-/** Member rejects a trainer change request. */
+/** Member rejects a trainer change/cancel request. Notifies the requesting trainer (감사 H8). */
 export async function rejectMemberChange(requestId: string): Promise<Result> {
   const me = await requireMember();
   const req = await loadOwnTrainerRequest(requestId, me.memberId);
@@ -84,6 +118,12 @@ export async function rejectMemberChange(requestId: string): Promise<Result> {
     .from("schedule_change_requests")
     .update({ status: "rejected", resolved_at: new Date().toISOString() })
     .eq("id", req.id);
+  await notifyRequestResult({
+    recipientType: "trainer",
+    recipientId: req.requester_id as string,
+    kind: (req.type as "change" | "cancel") ?? "change",
+    accepted: false,
+  }).catch(() => {});
 
   revalidatePath("/m");
   revalidatePath("/m/receive");

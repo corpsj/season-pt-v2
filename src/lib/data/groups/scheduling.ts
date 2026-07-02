@@ -47,13 +47,14 @@ async function sessionMembers(sessionId: string): Promise<MemberRow[]> {
     .filter((m): m is MemberRow => !!m);
 }
 
-/** Active membership remaining for a member (0 when none). */
+/** Active membership remaining for a member (0 when none). 차감 대상(scheduling-actions.activeMembership)과 동일 기준. */
 async function remainingFor(memberId: string): Promise<number> {
   const { data } = await sb
     .from("memberships")
     .select("remaining_sessions")
     .eq("member_id", memberId)
     .eq("status", "active")
+    .gt("remaining_sessions", 0) // 잔여 0 회원권을 건너뛰어야 출석화면 표시 = 실제 차감 대상(감사 C2)
     .order("end_date", { ascending: true }) // 만료 임박 우선 — 차감/표시와 동일 기준
     .limit(1)
     .maybeSingle();

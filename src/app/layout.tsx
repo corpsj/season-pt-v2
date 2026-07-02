@@ -57,8 +57,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // 확대(핀치 줌)를 막지 않는다 — 중장년 회원이 작은 글씨를 키울 수 있어야 한다(감사 low, 접근성).
+  maximumScale: 5,
+  userScalable: true,
   colorScheme: "light",
   themeColor: "#faf8f4",
   // "cover" → true edge-to-edge so the installed PWA fills the screen like a native

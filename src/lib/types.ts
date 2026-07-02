@@ -222,6 +222,7 @@ export interface MemberDetailView {
   injury?: string;
   activeMembershipId: string | null;
   membershipPaused: boolean;
+  memberStatus?: "active" | "rest" | "inactive"; // 회원 운영 상태(활성/휴면/비활성) — 대표 상태 전환 UI용
   events: { type: string; note: string | null; createdAt: string }[];
 }
 
@@ -397,6 +398,7 @@ export interface MemberReceiveView {
   ago: string;
   before: string;
   reason?: string;
+  type: "change" | "cancel"; // 강사가 보낸 요청 종류 — cancel이면 취소 전용 화면으로(감사 H7)
   sessionId: string; // the session this request targets ("다른 시간 제안" deep-links to it)
   slots: { id: string; label: string }[];
 }

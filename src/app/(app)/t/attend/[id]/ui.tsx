@@ -25,6 +25,9 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const deducted = shouldDeduct(method, t.scheduledAt, settings);
+  // 라디오 옵션별 실제 차감 여부 — '취소 (미차감)' 고정 라벨이 컷오프 이내 취소의 실제 차감과 모순되던 문제(감사 medium).
+  const noshowDeducts = shouldDeduct("noshow", t.scheduledAt, settings);
+  const cancelDeducts = shouldDeduct("cancel", t.scheduledAt, settings);
   const after = deducted ? Math.max(0, t.remaining - 1) : t.remaining;
   const cta = method === "cancel" ? "수업 취소 기록" : "출석 처리하기";
   const confirmTitle =
@@ -71,11 +74,11 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
           </RadioOption>
           <RadioOption selected={method === "noshow"} onClick={() => setMethod("noshow")}>
             <span className="text-[14px] font-bold text-ink">{t.isTeam ? "팀 노쇼" : "노쇼"}</span>
-            <span className="text-[14px] font-medium text-muted2"> (차감)</span>
+            <span className="text-[14px] font-medium text-muted2">{noshowDeducts ? " (차감)" : " (미차감)"}</span>
           </RadioOption>
           <RadioOption selected={method === "cancel"} onClick={() => setMethod("cancel")}>
             <span className="text-[14px] font-bold text-ink">수업 취소</span>
-            <span className="text-[14px] font-medium text-muted2"> (미차감)</span>
+            <span className="text-[14px] font-medium text-muted2">{cancelDeducts ? " (차감)" : " (미차감)"}</span>
           </RadioOption>
         </div>
 

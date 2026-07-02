@@ -19,6 +19,7 @@ export type Settlement = {
   rows: SettlementRow[];
   total: number;
   confirmed: boolean;
+  stale: boolean; // 확정 후 출석이 바뀌어 스냅샷(인건비)과 현재 정산액이 어긋난 상태(감사 H15)
 };
 
 /** 지정 월(현재-offset)의 강사별 회당 정산. attended 세션을 유형별로 세어 단가와 곱한다. 대표 전용. */
@@ -29,7 +30,7 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const monthLabel = monthLabelFromKst(target);
 
   const t = await getTrainerContext();
-  if (!t || t.role !== "owner") return { monthOffset: off, monthLabel, rows: [], total: 0, confirmed: false };
+  if (!t || t.role !== "owner") return { monthOffset: off, monthLabel, rows: [], total: 0, confirmed: false, stale: false };
 
   const { startISO, endISO } = monthBoundsFromKst(target);
   const monthKey = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -37,7 +38,7 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const [{ data: trainers }, { data: sessions }, { data: settleRows }] = await Promise.all([
     sb.from("trainers").select("id, display_name, role, status, rate_1on1, rate_2on1").order("role", { ascending: false }),
     sb.from("sessions").select("trainer_id, type, pay_rate").eq("status", "attended").gte("scheduled_at", startISO).lt("scheduled_at", endISO),
-    sb.from("expenses").select("id").eq("source", "settlement").eq("settle_month", monthKey).limit(1),
+    sb.from("expenses").select("amount").eq("source", "settlement").eq("settle_month", monthKey),
   ]);
 
   const meta = new Map((trainers ?? []).map((tr) => [tr.id as string, tr]));
@@ -79,5 +80,13 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
     .sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : b.payout - a.payout));
 
   const total = rows.reduce((s, r) => s + r.payout, 0);
-  return { monthOffset: off, monthLabel, rows, total, confirmed: (settleRows?.length ?? 0) > 0 };
+
+  // 확정 여부 + 확정 이후 출석 변경으로 스냅샷이 어긋났는지(재확정 필요) 판정.
+  // 스냅샷 인건비(대표 제외 payout>0 강사)와 현재 라이브 인건비를 비교(감사 H15).
+  const confirmed = (settleRows?.length ?? 0) > 0;
+  const storedLabor = (settleRows ?? []).reduce((s, r) => s + ((r.amount as number | null) ?? 0), 0);
+  const liveLabor = rows.filter((r) => r.role !== "owner" && r.payout > 0).reduce((s, r) => s + r.payout, 0);
+  const stale = confirmed && storedLabor !== liveLabor;
+
+  return { monthOffset: off, monthLabel, rows, total, confirmed, stale };
 }

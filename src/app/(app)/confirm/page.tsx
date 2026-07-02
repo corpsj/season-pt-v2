@@ -24,7 +24,7 @@ export default async function ConfirmPage(props: {
             일정이 변경되었어요
           </h1>
           <p className="mt-2.5 max-w-[260px] text-[14px] leading-[1.6] text-muted2">
-            두 분 모두에게 알림을 보냈어요. 캘린더에 자동으로 반영됐어요.
+            상대방에게 알림을 보냈어요. 캘린더에 자동으로 반영됐어요.
           </p>
 
           <Card className="mt-7 w-full p-4">

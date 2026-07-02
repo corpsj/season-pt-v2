@@ -719,12 +719,13 @@ export async function getStudioNotices(): Promise<OwnerNotice[]> {
   }));
 }
 
-/** 미수금(받을 돈) 집계: active 회원권 중 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나). */
+/** 미수금(받을 돈) 집계: active/expired 회원권 중 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나).
+ *  만료로 flip되는 순간 밀린 잔금이 목록에서 사라지던 문제(감사 H16) — expired도 포함(refunded만 제외). */
 export async function getOutstanding(): Promise<OutstandingView> {
   const { data: msRows } = await sb
     .from("memberships")
     .select("id, member_id, product, price, members(name)")
-    .eq("status", "active");
+    .in("status", ["active", "expired"]);
   const ms = (msRows ?? []) as unknown as { id: string; member_id: string; product: string; price: number | null; members: { name: string } | null }[];
   if (!ms.length) return { total: 0, count: 0, items: [] };
 

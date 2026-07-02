@@ -23,18 +23,24 @@ export function MemberReceiveClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const isCancel = view.type === "cancel";
   const [selected, setSelected] = useState(view.slots[0]?.id ?? "");
   const [pending, setPending] = useState(false);
 
   async function accept() {
     if (!requestId || pending) return;
     setPending(true);
-    const res = await acceptMemberChange(requestId, slotIsoById[selected]);
+    const res = await acceptMemberChange(requestId, isCancel ? undefined : slotIsoById[selected]);
     if (res.ok) {
-      router.push("/confirm?to=/m");
+      if (isCancel) {
+        toast("수업 취소를 확인했어요");
+        router.push("/m");
+      } else {
+        router.push("/confirm?to=/m");
+      }
     } else {
       setPending(false);
-      toast(res.error ?? "변경하지 못했어요");
+      toast(res.error ?? (isCancel ? "처리하지 못했어요" : "변경하지 못했어요"));
     }
   }
 
@@ -52,7 +58,7 @@ export function MemberReceiveClient({
         {/* header */}
         <div className="mb-5 flex items-center gap-3">
           <BackButton fallback="/m" />
-          <span className="text-[19px] font-bold text-ink">일정 변경 요청</span>
+          <span className="text-[19px] font-bold text-ink">{isCancel ? "수업 취소 요청" : "일정 변경 요청"}</span>
         </div>
 
         {/* trainer row */}
@@ -62,33 +68,46 @@ export function MemberReceiveClient({
           <span className="text-[12px] font-medium text-muted">{view.ago}</span>
         </div>
 
-        {/* before card */}
+        {/* target session card */}
         <Card className="mb-5 px-[15px] py-[14px]">
-          <div className="mb-1 text-[12px] font-semibold text-muted5">변경 전</div>
-          <div className="text-[14px] font-medium text-muted6 line-through">{view.before}</div>
+          <div className="mb-1 text-[12px] font-semibold text-muted5">{isCancel ? "취소할 수업" : "변경 전"}</div>
+          <div className={`text-[14px] font-medium ${isCancel ? "text-ink" : "text-muted6 line-through"}`}>{view.before}</div>
           {view.reason ? (
             <div className="mt-2 text-[12.5px] font-medium leading-[1.5] text-muted2">{view.reason}</div>
           ) : null}
         </Card>
 
-        <div className="mb-2.5">
-          <Kicker>제안된 시간 · 하나를 선택</Kicker>
-        </div>
-
-        <div className="flex flex-col gap-2.5">
-          {view.slots.map((s) => (
-            <RadioOption key={s.id} selected={selected === s.id} onClick={() => setSelected(s.id)}>
-              <span className="text-[14px] font-bold text-ink">{s.label}</span>
-            </RadioOption>
-          ))}
-        </div>
+        {isCancel ? (
+          <p className="text-[13px] leading-[1.6] text-muted2">
+            선생님이 이 수업의 취소를 요청했어요. 수락하면 수업이 취소되고 회차는 차감되지 않아요.
+          </p>
+        ) : (
+          <>
+            <div className="mb-2.5">
+              <Kicker>제안된 시간 · 하나를 선택</Kicker>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {view.slots.map((s) => (
+                <RadioOption key={s.id} selected={selected === s.id} onClick={() => setSelected(s.id)}>
+                  <span className="text-[14px] font-bold text-ink">{s.label}</span>
+                </RadioOption>
+              ))}
+            </div>
+          </>
+        )}
         <div className="h-3.5" />
       </Body>
 
       <Footer>
         <div className="flex flex-col gap-2.5">
-          <PrimaryButton onClick={accept}>이 시간으로 변경</PrimaryButton>
-          <OutlineButton href={view.sessionId ? `/m/request?s=${view.sessionId}` : "/m/request"}>다른 시간 제안</OutlineButton>
+          {isCancel ? (
+            <PrimaryButton onClick={accept}>수업 취소 수락</PrimaryButton>
+          ) : (
+            <>
+              <PrimaryButton onClick={accept}>이 시간으로 변경</PrimaryButton>
+              <OutlineButton href={view.sessionId ? `/m/request?s=${view.sessionId}` : "/m/request"}>다른 시간 제안</OutlineButton>
+            </>
+          )}
           <button
             type="button"
             onClick={reject}

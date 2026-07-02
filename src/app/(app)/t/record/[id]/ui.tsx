@@ -36,14 +36,28 @@ export default function RecordClient({
   const toast = useToast();
   const [exercises, setExercises] = useState<Exercise[]>(t.exercises);
   const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const update = (i: number, patch: Partial<Exercise>) =>
     setExercises((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
 
+  // 저장 결과를 확인하고 연타를 막는다 — 실패해도 성공 토스트+이탈해 기록이 유실되고, 연타 시 중복 저장되던 버그(감사 H10).
   const save = async () => {
-    await saveRecord(t.sessionId, exercises, comment || undefined);
-    toast("기록이 저장되었어요");
-    router.push("/t");
+    if (saving) return;
+    setSaving(true);
+    try {
+      const r = await saveRecord(t.sessionId, exercises, comment || undefined);
+      if (!r.ok) {
+        toast(r.error ?? "저장에 실패했어요. 다시 시도해주세요.");
+        setSaving(false);
+        return;
+      }
+      toast("기록이 저장되었어요");
+      router.push("/t");
+    } catch {
+      toast("저장에 실패했어요. 다시 시도해주세요.");
+      setSaving(false);
+    }
   };
 
   return (
@@ -56,7 +70,8 @@ export default function RecordClient({
           <button
             type="button"
             onClick={save}
-            className="tappable text-[14px] font-bold text-sage"
+            disabled={saving}
+            className="tappable text-[14px] font-bold text-sage disabled:opacity-50"
           >
             저장
           </button>
@@ -137,8 +152,8 @@ export default function RecordClient({
       </Body>
 
       <Footer>
-        <PrimaryButton icon="check-bold" onClick={save}>
-          기록 저장
+        <PrimaryButton icon="check-bold" onClick={save} disabled={saving}>
+          {saving ? "저장 중…" : "기록 저장"}
         </PrimaryButton>
       </Footer>
     </div>

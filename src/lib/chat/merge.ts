@@ -20,6 +20,7 @@ export function mergeMessages(
 ): ChatMessageView[] {
   const knownIds = new Set(existing.filter((m) => !isTempId(m.id)).map((m) => m.id));
   const result = [...existing];
+  let changed = false;
   for (const msg of incoming) {
     if (knownIds.has(msg.id)) continue;
     if (msg.mine) {
@@ -29,13 +30,18 @@ export function mergeMessages(
       if (tempIdx !== -1) {
         result[tempIdx] = msg;
         knownIds.add(msg.id);
+        changed = true;
         continue;
       }
     }
     result.push(msg);
     knownIds.add(msg.id);
+    changed = true;
   }
-  return result;
+  // 실제 변화가 없으면 원본 참조를 그대로 반환한다. 폴링 커서가 `>=`라 마지막 메시지가 매 폴마다
+  // 다시 들어오는데, 새 배열을 반환하면 setState→재렌더→scrollToBottom이 3초마다 반복돼
+  // 지난 메시지를 읽을 수 없었다(감사 H14). 동일 참조면 React가 재렌더를 건너뛴다.
+  return changed ? result : existing;
 }
 
 /**

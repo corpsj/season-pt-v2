@@ -9,6 +9,7 @@ import { getRetention } from "@/lib/data/groups/perf-retention";
 import { getChatUnread } from "@/lib/data/groups/trainer-home";
 import { getStudioToday, getTrainerPerf } from "@/lib/data/groups/console";
 import { runStudioMaintenance } from "@/lib/data/groups/maintenance";
+import { scanExpiringMemberships } from "@/lib/data/groups/notifications";
 import type { SessionStatus } from "@/lib/types";
 
 const EXP_DAYS = 14;
@@ -53,6 +54,7 @@ function Kpi({
 
 export default async function ConsoleDashboard() {
   await runStudioMaintenance(); // best-effort: expire past memberships + materialize upcoming sessions
+  await scanExpiringMemberships().catch(() => {}); // 콘솔만 쓰는 날에도 만료 임박 알림이 생성되도록(감사 low)
   const [ops, retention, today, perf, chatUnread] = await Promise.all([
     getStudioOps(),
     getRetention(),

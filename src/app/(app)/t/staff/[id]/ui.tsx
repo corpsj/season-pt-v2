@@ -18,15 +18,38 @@ import {
   setInstructorActive,
   deleteInstructor,
 } from "@/lib/auth/trainer-actions";
+import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import type { StaffMemberDetail } from "@/lib/data/groups/owner-ops";
 
-export function StaffDetailClient({ member }: { member: StaffMemberDetail }) {
+export function StaffDetailClient({
+  member,
+  reassignTargets = [],
+}: {
+  member: StaffMemberDetail;
+  reassignTargets?: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone);
   const [active, setActive] = useState(member.status === "active");
   const [busy, setBusy] = useState(false);
+  const [reassignTo, setReassignTo] = useState("");
+
+  async function onReassign() {
+    if (busy || !reassignTo) return;
+    if (typeof window !== "undefined" && !confirm(`${member.name} 강사의 담당 회원·정기수업·채팅을 선택한 강사에게 이관할까요?`)) return;
+    setBusy(true);
+    const res = await reassignMembers(member.id, reassignTo);
+    setBusy(false);
+    if (res.ok) {
+      toast(`회원 ${res.moved ?? 0}명을 이관했어요`);
+      setReassignTo("");
+      router.refresh();
+    } else {
+      toast(res.error ?? "이관에 실패했어요");
+    }
+  }
 
   const roleText = member.isOwner ? "대표" : member.status === "invited" ? "초대 대기" : "강사";
   const roleVariant = member.isOwner ? "owner" : member.status === "invited" ? "invited" : "instructor";
@@ -146,6 +169,33 @@ export function StaffDetailClient({ member }: { member: StaffMemberDetail }) {
                     </div>
                   </div>
                   <Switch on={active} onChange={onToggle} disabled={busy} label="활성 상태" />
+                </Card>
+              </>
+            ) : null}
+
+            {/* reassign members (퇴사 인수인계) */}
+            {member.memberCount > 0 && reassignTargets.length > 0 ? (
+              <>
+                <div className="mb-2.5 mt-7">
+                  <Kicker>회원 이관</Kicker>
+                </div>
+                <Card className="p-4">
+                  <div className="mb-2.5 text-[12.5px] font-medium leading-[1.5] text-muted">
+                    담당 {member.memberCount}명과 정기수업·채팅을 다른 강사에게 넘겨요. 지난 출석·정산 기록은 원래 강사에 남아요.
+                  </div>
+                  <select
+                    value={reassignTo}
+                    onChange={(e) => setReassignTo(e.target.value)}
+                    className="mb-3 w-full rounded-[11px] border border-ink/[0.12] bg-card px-3.5 py-2.5 text-[14px] font-medium text-ink outline-none"
+                  >
+                    <option value="">이관 받을 강사 선택</option>
+                    {reassignTargets.map((tt) => (
+                      <option key={tt.id} value={tt.id}>{tt.name}</option>
+                    ))}
+                  </select>
+                  <PrimaryButton icon="persons" onClick={onReassign} disabled={busy || !reassignTo}>
+                    회원 이관
+                  </PrimaryButton>
                 </Card>
               </>
             ) : null}

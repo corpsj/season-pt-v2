@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { Card, OBtn, GBtn, pill } from "@/components/console/ui";
-import { confirmAttendance } from "@/lib/data/groups/scheduling-actions";
+import { confirmAttendance, revertAttendance } from "@/lib/data/groups/scheduling-actions";
 import type { StudioCalendarMonth, StudioClass } from "@/lib/data/groups/console";
 
 const WD = ["월", "화", "수", "목", "금", "토", "일"];
@@ -45,6 +45,17 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
     setBusy(null);
     if (!r.ok) return toast(r.error ?? "처리에 실패했어요");
     toast(action === "attend" ? "출석 처리했어요" : "노쇼 처리했어요");
+    router.refresh();
+  }
+
+  // 오처리 정정(감사 H1): 예정 상태로 되돌리고 차감된 회차를 복구한다.
+  async function revert(id: string) {
+    if (typeof window !== "undefined" && !window.confirm("이 수업 처리를 되돌릴까요? 차감된 회차가 복구되고 '예정' 상태로 돌아가요.")) return;
+    setBusy(id);
+    const r = await revertAttendance(id);
+    setBusy(null);
+    if (!r.ok) return toast(r.error ?? "되돌리지 못했어요");
+    toast("처리를 되돌렸어요");
     router.refresh();
   }
 
@@ -145,6 +156,18 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
                       <div className="flex flex-none gap-1.5">
                         <OBtn className="!px-3 !py-[7px] text-[12.5px]" disabled={busy === c.sessionId} onClick={() => mark(c.sessionId, "attend")}>출석</OBtn>
                         <GBtn disabled={busy === c.sessionId} onClick={() => mark(c.sessionId, "noshow")}>노쇼</GBtn>
+                      </div>
+                    ) : c.status === "attended" || c.status === "noshow" || c.status === "cancelled" ? (
+                      <div className="flex flex-none items-center gap-2">
+                        {statusPill(c)}
+                        <button
+                          type="button"
+                          disabled={busy === c.sessionId}
+                          onClick={() => revert(c.sessionId)}
+                          className="text-[11.5px] font-semibold text-[#9A917F] underline underline-offset-2 disabled:opacity-40"
+                        >
+                          되돌리기
+                        </button>
                       </div>
                     ) : (
                       statusPill(c)

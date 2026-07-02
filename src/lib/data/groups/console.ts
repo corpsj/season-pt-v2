@@ -198,6 +198,8 @@ export async function getStudioCalendarMonth(offset = 0): Promise<StudioCalendar
   const byDate: Record<string, StudioClass[]> = {};
   let monthTotal = 0;
   for (const s of (rows ?? []) as unknown as SessRow[]) {
+    // 멤버 없는 세션(일정 변경 시 원래 슬롯에 남긴 cancelled 표식 등)은 실제 수업이 아니라 렌더 제외.
+    if ((s.session_members?.length ?? 0) === 0) continue;
     const cls = mapClass(s, map, today);
     (byDate[kstDateISO(s.scheduled_at)] ??= []).push(cls);
     if (cls.status !== "cancelled") monthTotal += 1;

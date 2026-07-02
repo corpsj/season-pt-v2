@@ -208,6 +208,8 @@ export async function getTrainerCalendarMonth(): Promise<{
 
   const classesByDate: Record<string, TrainerDayClass[]> = {};
   for (const s of sessions) {
+    // 멤버 없는 세션(일정 변경 시 원래 슬롯에 남긴 cancelled 표식 등)은 실제 수업이 아니라 렌더 제외.
+    if ((s.session_members?.length ?? 0) === 0) continue;
     const dateISO = kstDateISO(s.scheduled_at);
     (classesByDate[dateISO] ??= []).push(mapDayClass(s, today));
   }
@@ -650,6 +652,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     injury: m.injury_note ?? undefined,
     activeMembershipId: ms?.id ?? null,
     membershipPaused,
+    memberStatus: m.status,
     events,
   };
 }

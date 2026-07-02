@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
+import { deactivateSoloSchedules } from "@/lib/data/groups/session-mutations";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -43,6 +44,25 @@ export async function createMember(input: {
   if (!birthdate) return { ok: false, error: "생년월일을 6자리(YYMMDD)로 입력해주세요" };
 
   const password_hash = hashPassword(input.birth.replace(/\D/g, ""));
+  const assignedTrainerId = input.trainerId ?? t.id;
+
+  // 더블부킹 가드(감사 H6): 같은 강사에 같은 요일·시각 정기수업이 이미 있으면 등록 거부(당일 겹침 방지).
+  for (const s of input.slots) {
+    const { data: clash } = await sb
+      .from("schedules")
+      .select("id")
+      .eq("trainer_id", assignedTrainerId)
+      .eq("active", true)
+      .eq("weekday", s.weekday)
+      .eq("hour", s.hour)
+      .eq("minute", s.minute)
+      .limit(1)
+      .maybeSingle();
+    if (clash) {
+      const wd = ["일", "월", "화", "수", "목", "금", "토"][s.weekday] ?? "";
+      return { ok: false, error: `${wd} ${s.hour}시${s.minute ? " " + s.minute + "분" : ""}에 이미 다른 수업이 있어요. 다른 시간을 선택해주세요.` };
+    }
+  }
 
   const { data: member, error: memErr } = await sb
     .from("members")
@@ -61,7 +81,6 @@ export async function createMember(input: {
     return { ok: false, error: "이미 등록된 연락처이거나 등록에 실패했어요" };
   }
 
-  const assignedTrainerId = input.trainerId ?? t.id;
   await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: assignedTrainerId });
 
   // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결.
@@ -280,7 +299,17 @@ export async function recordPayments(input: {
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
 
   const paidAt = input.paidAt ?? todayISO();
-  // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록·재시도 이중기록 없음
+  // 재시도 이중기록 방어: 직전 20초 내 '같은 시그니처(합계·건수)'의 배치가 이미 있으면 멱등 처리.
+  // 합계·건수를 맞춰야 정당한 2차 분할결제(다른 금액)를 막지 않는다(검증 후속 — 단건 recordPayment의 정밀도와 일치).
+  const totalAmt = lines.reduce((s, l) => s + Math.round(l.amount), 0);
+  const since = new Date(Date.now() - 20000).toISOString();
+  const { data: recent } = await sb.from("payments").select("amount")
+    .eq("membership_id", membershipId).eq("paid_at", paidAt).gte("created_at", since);
+  if (recent && recent.length === lines.length &&
+      recent.reduce((s, r) => s + ((r.amount as number | null) ?? 0), 0) === totalAmt) {
+    return { ok: true };
+  }
+  // 한 번의 다중행 insert는 Postgres에서 원자적(전부 성공 또는 전부 실패) → 부분기록 없음
   const { error } = await sb.from("payments").insert(
     lines.map((l) => ({ membership_id: membershipId, method: l.method, amount: Math.round(l.amount), paid_at: paidAt, recorded_by: t.id })),
   );
@@ -312,6 +341,91 @@ export async function addRevenue(input: {
   revalidatePath("/t/revenue");
   revalidatePath("/t/perf");
   return { ok: true };
+}
+
+/* ----------------------- 회원·스케줄 라이프사이클 (대표 전용) ----------------------- */
+
+/** 결제 기록 삭제(대표 전용). 금액 오입력 정정용 — 환불(음수) 행은 회원권 환불로만 처리(감사 H2). */
+export async function deletePayment(paymentId: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { data: p } = await sb.from("payments").select("amount").eq("id", paymentId).maybeSingle();
+  if (!p) return { ok: false, error: "결제 내역을 찾을 수 없어요" };
+  if ((p.amount as number | null) != null && (p.amount as number) < 0)
+    return { ok: false, error: "환불 내역은 회원권 환불 화면에서 처리해주세요" };
+  const { error } = await sb.from("payments").delete().eq("id", paymentId);
+  if (error) return { ok: false, error: "삭제에 실패했어요" };
+  revalidatePath("/t/revenue");
+  revalidatePath("/t/perf");
+  revalidatePath("/console/revenue");
+  revalidatePath("/console/finance");
+  return { ok: true };
+}
+
+/** 회원 상태 전환(활성/휴면/비활성). 대표 전용. 비활성 시 1:1 정기 스케줄 자동 중지(세션 무한 생성 방지, 감사 H5·H3). */
+export async function setMemberStatus(memberId: string, status: "active" | "rest" | "inactive"): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("members").update({ status }).eq("id", memberId);
+  if (error) return { ok: false, error: "상태 변경에 실패했어요" };
+  if (status === "inactive") await deactivateSoloSchedules(memberId);
+  revalidatePath("/t/members");
+  revalidatePath(`/t/members/${memberId}`);
+  return { ok: true };
+}
+
+/** 정기 스케줄 활성/중지(대표 전용). 중지하면 향후 세션이 더 생성되지 않는다(감사 H3). */
+export async function setScheduleActive(scheduleId: string, active: boolean): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { error } = await sb.from("schedules").update({ active }).eq("id", scheduleId);
+  if (error) return { ok: false, error: "스케줄 상태 변경에 실패했어요" };
+  revalidatePath("/t/members");
+  revalidatePath("/console");
+  return { ok: true };
+}
+
+/** 강사 퇴사 인수인계: from 강사의 회원·정기스케줄·향후 세션·채팅을 to 강사로 이관(대표 전용, 감사 H4). */
+export async function reassignMembers(fromTrainerId: string, toTrainerId: string): Promise<Result & { moved?: number }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  if (fromTrainerId === toTrainerId) return { ok: false, error: "같은 강사로는 이관할 수 없어요" };
+  const { data: to } = await sb.from("trainers").select("id, status").eq("id", toTrainerId).maybeSingle();
+  if (!to) return { ok: false, error: "이관 받을 강사를 찾을 수 없어요" };
+  if (to.status === "inactive") return { ok: false, error: "비활성 강사에게는 이관할 수 없어요" };
+
+  // 담당 회원 링크 이관(PK=(member_id,trainer_id) 충돌 방지: 이미 to에 연결된 회원은 from 링크만 제거).
+  const { data: links } = await sb.from("member_trainers").select("member_id").eq("trainer_id", fromTrainerId);
+  const memberIds = (links ?? []).map((l) => l.member_id as string);
+  for (const mid of memberIds) {
+    const { data: exists } = await sb
+      .from("member_trainers").select("member_id")
+      .eq("member_id", mid).eq("trainer_id", toTrainerId).maybeSingle();
+    if (exists) await sb.from("member_trainers").delete().eq("member_id", mid).eq("trainer_id", fromTrainerId);
+    else await sb.from("member_trainers").update({ trainer_id: toTrainerId }).eq("member_id", mid).eq("trainer_id", fromTrainerId);
+  }
+  // 정기 스케줄·향후 예정 세션 이관. 과거 출석 세션은 정산 귀속 위해 원 강사에 남긴다.
+  await sb.from("schedules").update({ trainer_id: toTrainerId }).eq("trainer_id", fromTrainerId);
+  await sb.from("sessions").update({ trainer_id: toTrainerId }).eq("trainer_id", fromTrainerId).eq("status", "scheduled");
+
+  // 채팅 이관: to 강사가 이미 같은 회원과의 스레드를 가진 경우 옮기지 않는다(중복 방(room) 생성 방지, 검증 후속).
+  const { data: fromThreads } = await sb.from("chat_threads").select("id, chat_participants(member_id)").eq("trainer_id", fromTrainerId);
+  const { data: toThreads } = await sb.from("chat_threads").select("chat_participants(member_id)").eq("trainer_id", toTrainerId);
+  const toSets = (toThreads ?? []).map((tt) => new Set(((tt as unknown as { chat_participants?: { member_id: string }[] }).chat_participants ?? []).map((p) => p.member_id)));
+  for (const th of fromThreads ?? []) {
+    const mids = ((th as unknown as { chat_participants?: { member_id: string }[] }).chat_participants ?? []).map((p) => p.member_id);
+    const dup = mids.length > 0 && toSets.some((s) => mids.every((m) => s.has(m)) && s.size === mids.length);
+    if (!dup) await sb.from("chat_threads").update({ trainer_id: toTrainerId }).eq("id", th.id as string);
+  }
+
+  revalidatePath("/t/staff");
+  revalidatePath("/t/members");
+  revalidatePath("/console");
+  return { ok: true, moved: memberIds.length };
 }
 
 /* ----------------------- notices (공지) ----------------------- */

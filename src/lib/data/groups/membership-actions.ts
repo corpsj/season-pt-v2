@@ -5,6 +5,7 @@ import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { hashPassword } from "@/lib/auth/password";
 import { computeRefund } from "@/lib/data/refund";
 import { getMembershipBalance } from "@/lib/data/groups/owner-ops";
+import { deactivateSoloSchedules } from "@/lib/data/groups/session-mutations";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -106,6 +107,15 @@ export async function refundMembership(input: { membershipId: string; method: Pa
     await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
   }
   await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "refund", amount: -preRefund, note: `환불 ${preRefund.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})`, created_by: t.id });
+  // 환불 후 그 회원의 1:1 정기 스케줄 중지 — 떠난 회원 세션이 매주 무한 생성되던 문제(감사 H3).
+  // 단, 그 회원에게 다른 활성 회원권이 남아 있으면(추가 결제·병행) 수업을 계속해야 하므로 건드리지 않는다(검증 후속).
+  const { data: refunded } = await sb.from("memberships").select("member_id").eq("id", input.membershipId).maybeSingle();
+  if (refunded?.member_id) {
+    const { data: others } = await sb
+      .from("memberships").select("id")
+      .eq("member_id", refunded.member_id as string).eq("status", "active").limit(1).maybeSingle();
+    if (!others) await deactivateSoloSchedules(refunded.member_id as string);
+  }
   revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
   return { ok: true, refund: preRefund };
 }

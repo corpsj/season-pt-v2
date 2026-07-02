@@ -11,7 +11,7 @@ import { confirmSettlement, unconfirmSettlement } from "@/lib/data/groups/financ
 import type { Settlement, SettlementRow } from "@/lib/data/groups/settlement";
 
 export function SettlementClient({ settlement }: { settlement: Settlement }) {
-  const { monthOffset, monthLabel, rows, total, confirmed } = settlement;
+  const { monthOffset, monthLabel, rows, total, confirmed, stale } = settlement;
 
   return (
     <>
@@ -27,9 +27,18 @@ export function SettlementClient({ settlement }: { settlement: Settlement }) {
             <span className="text-[12.5px] font-semibold text-[#CFC7B8]">이 달 지급 합계</span>
             <span className="text-[20px] font-bold text-surface">{won(total)}</span>
           </div>
-          <ConfirmControl monthOffset={monthOffset} confirmed={confirmed} rows={rows} />
+          <ConfirmControl monthOffset={monthOffset} confirmed={confirmed} stale={stale} rows={rows} />
         </div>
       </div>
+
+      {stale ? (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[13px] bg-[#FBF3E9] px-4 py-3">
+          <Icon name="circle-info" size={16} className="mt-px flex-none text-[#C67352]" />
+          <span className="text-[12.5px] font-medium leading-relaxed text-[#8A5A3C]">
+            확정 이후 이 달 출석이 변경돼 <b className="font-semibold">현재 지급액과 손익에 반영된 인건비가 달라요</b>. 위 <b className="font-semibold">재확정</b>을 눌러 손익을 최신 금액으로 맞춰주세요.
+          </span>
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="flex items-center border-b border-[rgba(75,59,46,0.07)] px-5 py-[13px] text-[11.5px] font-semibold tracking-[0.02em] text-[#9A917F]">
@@ -130,10 +139,12 @@ function TrainerRow({ row }: { row: SettlementRow }) {
 function ConfirmControl({
   monthOffset,
   confirmed,
+  stale,
   rows,
 }: {
   monthOffset: number;
   confirmed: boolean;
+  stale: boolean;
   rows: SettlementRow[];
 }) {
   const router = useRouter();
@@ -162,9 +173,18 @@ function ConfirmControl({
     <div className="flex items-center gap-2">
       {confirmed ? (
         <>
-          <span className="inline-flex items-center gap-1 rounded-[10px] bg-[#EDF4E3] px-2.5 py-1.5 text-[12.5px] font-bold text-[#5B6452]">
-            <Icon name="check-bold" size={14} />지급 완료
-          </span>
+          {stale ? (
+            <span className="inline-flex items-center gap-1 rounded-[10px] bg-[#FBF3E9] px-2.5 py-1.5 text-[12.5px] font-bold text-[#C67352]">
+              <Icon name="circle-info" size={14} />재확정 필요
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-[10px] bg-[#EDF4E3] px-2.5 py-1.5 text-[12.5px] font-bold text-[#5B6452]">
+              <Icon name="check-bold" size={14} />지급 완료
+            </span>
+          )}
+          {stale ? (
+            <PBtn icon="check-bold" onClick={() => run("confirm")}>재확정</PBtn>
+          ) : null}
           <button
             onClick={() => setModal("unconfirm")}
             className="rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-semibold text-[#9A917F] transition hover:bg-[#F4F0E8]"

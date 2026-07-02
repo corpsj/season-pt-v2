@@ -67,17 +67,21 @@ export async function markThreadRead(
 ): Promise<{ ok: boolean }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false };
-  let mq = sb.from("chat_threads").select("id").eq("id", threadId);
+  let mq = sb.from("chat_threads").select("id, trainer_id").eq("id", threadId);
   if (t.role !== "owner") mq = mq.eq("trainer_id", t.id);
   const { data: thread } = await mq.maybeSingle();
   if (!thread) return { ok: false };
 
-  await sb
-    .from("chat_messages")
-    .update({ read_by_trainer: true })
-    .eq("thread_id", threadId)
-    .eq("read_by_trainer", false)
-    .eq("sender_type", "member");
+  // 스레드 소유 강사일 때만 읽음 표시 — read_by_trainer는 강사·대표 공용이라, 대표가 남의 스레드를
+  // 읽음처리하면 담당 강사 배지가 사라진다(감사 H11 회귀 방지, getChatRoom·loadNewTrainerMessages와 동일 규칙).
+  if (t.id === (thread.trainer_id as string)) {
+    await sb
+      .from("chat_messages")
+      .update({ read_by_trainer: true })
+      .eq("thread_id", threadId)
+      .eq("read_by_trainer", false)
+      .eq("sender_type", "member");
+  }
 
   revalidatePath("/t/chat");
   return { ok: true };

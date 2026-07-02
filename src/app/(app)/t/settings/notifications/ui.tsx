@@ -11,12 +11,14 @@ import { useToast } from "@/components/ui/Toast";
 import { updateNotifications } from "@/lib/data/groups/owner-ops-actions";
 import type { StudioSettings } from "@/lib/types";
 
-type Row = { key: keyof Pick<StudioSettings, "notifExpiry" | "notifSession" | "notifPayment">; label: string; sub: string };
+type Row = { key: keyof Pick<StudioSettings, "notifExpiry" | "notifSession" | "notifPayment">; label: string; sub: string; ready: boolean };
 
+// 라벨은 실제 발송 로직(notifications.ts)과 일치해야 한다. 예전 라벨은 토글이 통제하는 실제 알림과 어긋나
+// '수업 리마인더'를 끄면 잔여 임박 알림이 통째로 멈추던 문제(감사 H13).
 const ROWS: Row[] = [
-  { key: "notifExpiry", label: "만료 임박 알림", sub: "회원권 잔여 3회 또는 7일 이하" },
-  { key: "notifSession", label: "수업 리마인더", sub: "수업 24시간 전 자동 발송" },
-  { key: "notifPayment", label: "결제 알림", sub: "결제 완료 시 회원에게 발송" },
+  { key: "notifSession", label: "잔여 회차 임박 알림", sub: "남은 수업이 3회 이하일 때 회원·선생님에게", ready: true },
+  { key: "notifExpiry", label: "만료 임박 알림", sub: "회원권 만료 7일 이하일 때 회원·선생님에게", ready: true },
+  { key: "notifPayment", label: "결제 완료 알림", sub: "준비 중 — 아직 발송되지 않아요", ready: false },
 ];
 
 export function NotificationsClient({ settings }: { settings: StudioSettings }) {
@@ -46,7 +48,7 @@ export function NotificationsClient({ settings }: { settings: StudioSettings }) 
         </div>
 
         <Banner tone="neutral" className="mb-5">
-          실제 발송 연동은 추후 제공될 예정이에요. 지금은 설정만 저장됩니다.
+          켜진 알림은 회원 앱·강사 앱에 인앱 알림으로 표시돼요. (휴대폰 푸시 알림은 준비 중)
         </Banner>
 
         <div className="mb-2.5">
@@ -63,8 +65,9 @@ export function NotificationsClient({ settings }: { settings: StudioSettings }) 
                 <div className="mt-0.5 text-[12px] font-medium text-muted">{row.sub}</div>
               </div>
               <Switch
-                on={state[row.key]}
-                onChange={(next) => setState((s) => ({ ...s, [row.key]: next }))}
+                on={row.ready && state[row.key]}
+                disabled={!row.ready}
+                onChange={(next) => row.ready && setState((s) => ({ ...s, [row.key]: next }))}
                 label={row.label}
               />
             </div>

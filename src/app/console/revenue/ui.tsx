@@ -6,7 +6,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, GBtn, ConsoleModal, won, pill } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
-import { recordPayment, addRevenue } from "@/lib/data/groups/owner-ops-actions";
+import { recordPayment, addRevenue, deletePayment } from "@/lib/data/groups/owner-ops-actions";
 import type { RevenueEntry } from "@/lib/data/groups/owner-ops";
 import type { AvatarTone, PaymentMethod } from "@/lib/types";
 
@@ -30,8 +30,23 @@ function classify(it: RevenueEntry): Kind {
 }
 
 export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
+  const router = useRouter();
+  const toast = useToast();
   const [filter, setFilter] = useState<Kind>("all");
+  const [busy, setBusy] = useState<string | null>(null);
   const list = items.filter((it) => filter === "all" || classify(it) === filter);
+
+  // 결제 오입력 정정(감사 H2): 환불(음수) 행은 회원권 환불로만 처리하므로 삭제 버튼을 숨긴다.
+  async function remove(id: string) {
+    if (busy) return;
+    if (typeof window !== "undefined" && !window.confirm("이 결제 기록을 삭제할까요? 매출·미수금·손익에서 제외돼요.")) return;
+    setBusy(id);
+    const r = await deletePayment(id);
+    setBusy(null);
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+    toast("결제 기록을 삭제했어요");
+    router.refresh();
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -48,7 +63,7 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
         </div>
       </div>
       <div className="flex items-center border-b border-[rgba(75,59,46,0.06)] px-[22px] py-[11px] text-[11px] font-semibold tracking-[0.02em] text-[#A89F92]">
-        <span className="w-[64px]">날짜</span><span className="flex-1">회원 · 항목</span><span className="w-[74px]">수단</span><span className="w-[120px] text-right">금액</span>
+        <span className="w-[64px]">날짜</span><span className="flex-1">회원 · 항목</span><span className="w-[74px]">수단</span><span className="w-[120px] text-right">금액</span><span className="w-[34px]" />
       </div>
       {list.length > 0 ? (
         list.map((it) => {
@@ -69,6 +84,19 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
               </div>
               <span className="w-[74px]"><span className="rounded-[7px] bg-[#F4EFE6] px-2.5 py-1 text-[11.5px] font-semibold text-[#5B5345]">{it.methodLabel}</span></span>
               <Money className="w-[120px] text-right text-[14px] font-bold" >{<span style={{ color: refund ? "#C67352" : "#4B3B2E" }}>{won(it.amount)}</span>}</Money>
+              <span className="w-[34px] text-right">
+                {refund ? null : (
+                  <button
+                    type="button"
+                    aria-label="결제 삭제"
+                    disabled={busy === it.id}
+                    onClick={() => remove(it.id)}
+                    className="tappable inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-[#B3AA9C] transition hover:bg-[#F4EFE6] hover:text-[#C67352] disabled:opacity-40"
+                  >
+                    <Icon name="close" size={15} />
+                  </button>
+                )}
+              </span>
             </div>
           );
         })

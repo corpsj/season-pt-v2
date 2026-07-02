@@ -24,8 +24,11 @@ async function isLocked(admin: Admin, phone: string): Promise<boolean> {
 }
 async function recordFail(admin: Admin, phone: string): Promise<void> {
   try {
-    const { data } = await admin.from("member_login_attempts").select("fail_count").eq("phone", phone).maybeSingle();
-    const fail = ((data?.fail_count as number) ?? 0) + 1;
+    const { data } = await admin.from("member_login_attempts").select("fail_count, locked_until").eq("phone", phone).maybeSingle();
+    // 이전 잠금이 이미 풀렸으면 카운트를 리셋하고 새로 센다 — 잠금 해제 후 1회 실패로 즉시 재잠금되던 문제(감사 low).
+    const lockPassed = !!data?.locked_until && new Date(data.locked_until as string).getTime() <= Date.now();
+    const prev = lockPassed ? 0 : ((data?.fail_count as number) ?? 0);
+    const fail = prev + 1;
     await admin.from("member_login_attempts").upsert({
       phone, fail_count: fail,
       locked_until: fail >= MAX_FAILS ? new Date(Date.now() + LOCK_MS).toISOString() : null,

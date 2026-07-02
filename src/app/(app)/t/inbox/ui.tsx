@@ -149,14 +149,19 @@ export default function InboxClient({ view }: { view: InboxView }) {
           if (!pending) return;
           const { id, kind, type } = pending;
           setPending(null);
+          // 서버 결과를 확인한다 — 원자 클레임으로 두 번째 처리가 거부됐는데도 성공으로 표시하던 버그(감사 H9).
           if (kind === "reject") {
-            await rejectRequest(id);
-            toast("요청을 거절했어요");
+            const r = await rejectRequest(id);
+            toast(r.ok ? "요청을 거절했어요" : r.error ?? "이미 처리된 요청이에요");
             router.refresh();
           } else {
-            await acceptRequest(id);
-            if (type === "change") router.push("/confirm");
-            else {
+            const r = await acceptRequest(id);
+            if (!r.ok) {
+              toast(r.error ?? "처리하지 못했어요");
+              router.refresh();
+            } else if (type === "change") {
+              router.push("/confirm");
+            } else {
               toast("요청을 처리했어요");
               router.refresh();
             }
