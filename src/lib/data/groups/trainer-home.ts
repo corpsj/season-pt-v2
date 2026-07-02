@@ -249,10 +249,12 @@ function mapDayClass(
   const showAttend = s.status === "scheduled" && isPastOrToday;
   let barColor: string;
   if (s.status === "attended") barColor = BAR.attended;
-  else if (s.status === "cancelled") barColor = BAR.cancelled;
+  else if (s.status === "cancelled" || s.status === "noshow") barColor = BAR.cancelled;
   else barColor = isTeam ? BAR["2on1"] : BAR["1on1"];
   let badge: BadgeView | undefined;
   if (s.status === "attended") badge = { text: "완료", variant: "done" };
+  else if (s.status === "noshow") badge = { text: "노쇼", variant: "cancelled" };
+  else if (s.status === "cancelled") badge = { text: "취소", variant: "cancelled" };
   else if (isTeam) badge = { text: "2:1", variant: "team" };
   else badge = { text: "예정", variant: "scheduled" };
   const href = isTeam ? `/t/attend/${s.id}` : `/t/class/${s.id}`;
