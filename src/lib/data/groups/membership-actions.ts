@@ -176,8 +176,11 @@ export async function undoRefund(membershipId: string): Promise<Result> {
     await sb.from("memberships").update({ status: "refunded", remaining_sessions: 0 }).eq("id", membershipId);
     return { ok: false, error: "환불 내역 삭제에 실패했어요. 다시 시도해주세요." };
   }
-  await sb.from("membership_events").update({ meta: { ...meta, undone: true } }).eq("id", ev.id);
-  await sb.from("membership_events").insert({ membership_id: membershipId, type: "refund", amount: 0, note: "환불 취소(복원)", meta: { undone: true, undo_of: ev.id }, created_by: t.id });
+  // 이벤트 기록은 이력 — 환불 취소 자체는 위에서 확정. 실패해도 삼키지 않고 로그만(refundMembership evErr 패턴과 대칭).
+  const { error: markErr } = await sb.from("membership_events").update({ meta: { ...meta, undone: true } }).eq("id", ev.id);
+  if (markErr) console.error("[undoRefund] event undone-mark failed:", membershipId, markErr.message);
+  const { error: logErr } = await sb.from("membership_events").insert({ membership_id: membershipId, type: "refund", amount: 0, note: "취소(복원)", meta: { undone: true, undo_of: ev.id }, created_by: t.id });
+  if (logErr) console.error("[undoRefund] audit event insert failed:", membershipId, logErr.message);
   revalidatePath("/t"); revalidatePath("/t/revenue"); revalidatePath("/t/members");
   revalidatePath("/console/revenue"); revalidatePath("/console/finance"); revalidatePath("/console/members"); // 콘솔 화면도 즉시 반영(감사3 #8)
   return { ok: true }; // 정기 스케줄은 자동 재활성화하지 않음 — UI 토스트로 안내
