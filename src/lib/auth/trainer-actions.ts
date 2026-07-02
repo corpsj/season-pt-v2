@@ -225,6 +225,8 @@ export async function resetInstructorPassword(id: string): Promise<Result & { te
   const tempPassword = Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
   const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password: tempPassword });
   if (error) return { ok: false, error: "초기화에 실패했어요. 다시 시도해주세요." };
-  await admin.from("trainers").update({ must_change_password: true }).eq("id", id);
+  // 비번은 이미 바뀜 — 변경강제 플래그 실패를 삼키면 첫 로그인 변경강제가 안 걸린다. 재시도는 새 임시비번으로 안전하게 재발급됨.
+  const { error: flagErr } = await admin.from("trainers").update({ must_change_password: true }).eq("id", id);
+  if (flagErr) return { ok: false, error: "비밀번호는 바뀌었지만 변경 강제 설정에 실패했어요. 다시 시도해주세요." };
   return { ok: true, tempPassword };
 }
