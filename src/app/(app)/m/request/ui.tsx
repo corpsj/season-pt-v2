@@ -8,6 +8,7 @@ import { Kicker } from "@/components/ui/Kicker";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import type { MemberRequestView } from "@/lib/types";
 import { sendMemberRequest } from "@/lib/data/groups/member-actions";
@@ -51,6 +52,28 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
     toast("요청을 보냈어요");
     router.push("/m");
     router.refresh();
+  }
+
+  // 예정 수업이 없으면 요일 빈칸·'0'일짜리 깨진 카드 대신 안내를 보여준다(감사 #40).
+  if (!view.sessionId) {
+    return (
+      <div className="scr flex min-h-0 flex-1 flex-col">
+        <Body>
+          <div className="mb-5 flex items-center gap-3">
+            <BackButton fallback="/m" />
+            <span className="text-[19px] font-bold text-ink">일정 변경 · 취소</span>
+          </div>
+          <EmptyState
+            icon="calendar"
+            title="변경할 예정 수업이 없어요"
+            desc="예정된 수업이 생기면 여기서 변경·취소를 요청할 수 있어요."
+          />
+        </Body>
+        <Footer>
+          <PrimaryButton onClick={() => router.push("/m")}>홈으로 가기</PrimaryButton>
+        </Footer>
+      </div>
+    );
   }
 
   return (

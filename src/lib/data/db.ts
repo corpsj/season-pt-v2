@@ -68,6 +68,22 @@ export function todayISO(): string {
   return kstDateISO(new Date());
 }
 
+/**
+ * "YYMMDD" → "YYYY-MM-DD" (YY>30 → 19YY, 아니면 20YY). 실존 날짜까지 검증 —
+ * 990230 같은 입력이 DB 에러로 떨어져 '연락처 중복'으로 오인되던 문제 방지(감사 #29).
+ */
+export function parseBirth6(yymmdd: string): string | null {
+  const d = yymmdd.replace(/\D/g, "");
+  if (d.length !== 6) return null;
+  const yy = Number(d.slice(0, 2));
+  const year = yy > 30 ? 1900 + yy : 2000 + yy;
+  const mo = Number(d.slice(2, 4));
+  const da = Number(d.slice(4, 6));
+  const dt = new Date(Date.UTC(year, mo - 1, da));
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) return null;
+  return `${year}-${d.slice(2, 4)}-${d.slice(4, 6)}`;
+}
+
 /** Days between two YYYY-MM-DD dates (b - a). */
 export function dayDiff(aISO: string, bISO: string): number {
   const a = new Date(aISO + "T00:00:00Z").getTime();

@@ -4,6 +4,7 @@ import { Topbar } from "@/components/console/Topbar";
 import { Card } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
 import { won } from "@/components/console/ui";
+import { requireOwnerPage } from "@/lib/auth/guard";
 import { getRevenue } from "@/lib/data/groups/owner-ops";
 import { getRetention } from "@/lib/data/groups/perf-retention";
 import { getMembersAll } from "@/lib/data/groups/trainer-home";
@@ -16,6 +17,7 @@ export default async function ConsoleRevenuePage({
 }: {
   searchParams: Promise<{ i?: string }>;
 }) {
+  await requireOwnerPage(); // 매출 장부는 대표 전용 — 레이아웃 렌더링에만 기대지 않는다(감사 #7)
   const sp = await searchParams;
   const i = Math.max(0, Number(sp.i ?? "0") || 0);
   const [rev, retention, membersAll] = await Promise.all([getRevenue(), getRetention(), getMembersAll()]);

@@ -6,18 +6,38 @@ import { sb } from "@/lib/data/db";
  * 양쪽이 같은 규칙을 쓰도록 한 곳에 둔다. "use server"가 아니라 server-only 헬퍼 — 액션에서 재사용.
  */
 
-/** 강사의 같은 시각 다른 scheduled 세션 존재 여부(더블부킹 가드, 감사 H6). 자기 세션은 제외. */
+/**
+ * 강사의 겹치는 scheduled 세션 존재 여부(더블부킹 가드, 감사 H6). 자기 세션은 제외.
+ * 수업은 60분 — 정확히 같은 시각만 보면 30분 어긋난 겹침이 통과하므로 |차이| < 60분을 겹침으로 본다.
+ */
 export async function hasSlotConflict(trainerId: string, atISO: string, exceptSessionId: string): Promise<boolean> {
+  const t = new Date(atISO).getTime();
+  if (Number.isNaN(t)) return true; // 잘못된 시각은 예약 불가로 취급
+  const lo = new Date(t - 3599999).toISOString(); // ponytail: 60분 고정 수업 길이 가정
+  const hi = new Date(t + 3599999).toISOString();
   const { data } = await sb
     .from("sessions")
     .select("id")
     .eq("trainer_id", trainerId)
-    .eq("scheduled_at", atISO)
+    .gte("scheduled_at", lo)
+    .lte("scheduled_at", hi)
     .eq("status", "scheduled")
     .neq("id", exceptSessionId)
     .limit(1)
     .maybeSingle();
   return !!data;
+}
+
+/**
+ * 세션의 남은 pending 변경/취소 요청 일괄 정리(rejected). 세션이 이동·취소·출석 확정된 뒤에도
+ * 낡은 요청이 살아남아 뒤늦게 수락되면 이미 합의된 세션을 다시 움직인다(감사 high #2) — 상태 전이 지점에서 항상 호출.
+ */
+export async function rejectPendingRequestsForSession(sessionId: string): Promise<void> {
+  await sb
+    .from("schedule_change_requests")
+    .update({ status: "rejected", resolved_at: new Date().toISOString() })
+    .eq("session_id", sessionId)
+    .eq("status", "pending");
 }
 
 /**
@@ -34,13 +54,45 @@ export async function moveSessionWithTombstone(sessionId: string, newISO: string
   if (!cur || cur.status !== "scheduled") return false;
   const originalAt = cur.scheduled_at as string;
 
+  // 목적지에 남아있던 '멤버 없는' 표식 세션은 회수 — 되돌아오는 이동이 (source_schedule_id, scheduled_at)
+  // unique 백스톱(0017)에 걸리지 않게. 멤버가 있는 진짜 취소 세션은 기록이므로 건드리지 않는다.
+  let removedTombs: { trainer_id: string; scheduled_at: string; type: string; source_schedule_id: string }[] = [];
+  if (cur.source_schedule_id) {
+    const { data: marks } = await sb
+      .from("sessions")
+      .select("id, trainer_id, scheduled_at, type, source_schedule_id, session_members(member_id)")
+      .eq("source_schedule_id", cur.source_schedule_id)
+      .eq("scheduled_at", newISO)
+      .eq("status", "cancelled")
+      .neq("id", sessionId);
+    const tombs = (marks ?? []).filter(
+      (m) => !(m as unknown as { session_members?: unknown[] }).session_members?.length,
+    );
+    if (tombs.length) {
+      removedTombs = tombs.map((m) => ({
+        trainer_id: m.trainer_id as string,
+        scheduled_at: m.scheduled_at as string,
+        type: m.type as string,
+        source_schedule_id: m.source_schedule_id as string,
+      }));
+      await sb.from("sessions").delete().in("id", tombs.map((m) => m.id as string));
+    }
+  }
+
   const { data: claimed } = await sb
     .from("sessions")
     .update({ scheduled_at: newISO })
     .eq("id", sessionId)
     .eq("status", "scheduled")
     .select("id");
-  if (!claimed || claimed.length === 0) return false;
+  if (!claimed || claimed.length === 0) {
+    // 이동 실패 — 회수했던 표식을 되살려 유령 세션 재생성을 막는다.
+    if (removedTombs.length) await sb.from("sessions").insert(removedTombs.map((r) => ({ ...r, status: "cancelled" })));
+    return false;
+  }
+
+  // 이동 확정 — 이 세션의 다른 pending 요청은 낡았으므로 정리(감사 high #2).
+  await rejectPendingRequestsForSession(sessionId);
 
   if (cur.source_schedule_id) {
     await sb.from("sessions").insert({
@@ -62,7 +114,9 @@ export async function claimCancelSession(sessionId: string): Promise<boolean> {
     .eq("id", sessionId)
     .eq("status", "scheduled")
     .select("id");
-  return !!data && data.length > 0;
+  const ok = !!data && data.length > 0;
+  if (ok) await rejectPendingRequestsForSession(sessionId); // 취소된 세션의 낡은 요청 정리(감사 high #2)
+  return ok;
 }
 
 /**

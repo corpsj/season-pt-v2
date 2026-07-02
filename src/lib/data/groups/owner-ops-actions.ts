@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
+import { sb, getTrainerContext, todayISO, parseBirth6 } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules } from "@/lib/data/groups/session-mutations";
@@ -10,15 +10,13 @@ type Result = { ok: boolean; error?: string };
 
 const normPhone = (p: string) => p.replace(/\D/g, "");
 
-/** YYMMDD → YYYY-MM-DD (YY>30 → 19YY, 아니면 20YY). */
-function parseBirth(yymmdd: string): string | null {
-  const d = yymmdd.replace(/\D/g, "");
-  if (d.length !== 6) return null;
-  const yy = Number(d.slice(0, 2));
-  const mm = d.slice(2, 4);
-  const dd = d.slice(4, 6);
-  const century = yy > 30 ? "19" : "20";
-  return `${century}${d.slice(0, 2)}-${mm}-${dd}`;
+/** 상품 입력 서버측 검증 — 음수 회차/기간/가격이 그대로 저장되던 문제(감사 #43). */
+function productError(input: { name: string; sessions: number; price: number; durationDays: number }): string | null {
+  if (!input.name.trim()) return "상품명을 입력해주세요";
+  if (!Number.isInteger(input.sessions) || input.sessions < 1) return "회차는 1 이상의 정수여야 해요";
+  if (!Number.isInteger(input.durationDays) || input.durationDays < 1) return "기간(일)은 1 이상의 정수여야 해요";
+  if (!Number.isFinite(input.price) || input.price < 0) return "가격을 확인해주세요";
+  return null;
 }
 
 /** 신규 회원 등록 + 담당 트레이너 연결 + 정기 수업 스케줄 생성. 옵션으로 회원권 발급·결제 기록. */
@@ -38,10 +36,10 @@ export async function createMember(input: {
 
   const name = input.name.trim();
   const phone = normPhone(input.phone);
-  const birthdate = parseBirth(input.birth);
+  const birthdate = parseBirth6(input.birth);
   if (!name) return { ok: false, error: "이름을 입력해주세요" };
   if (!phone) return { ok: false, error: "연락처를 입력해주세요" };
-  if (!birthdate) return { ok: false, error: "생년월일을 6자리(YYMMDD)로 입력해주세요" };
+  if (!birthdate) return { ok: false, error: "생년월일을 올바른 6자리(YYMMDD) 날짜로 입력해주세요" };
 
   const password_hash = hashPassword(input.birth.replace(/\D/g, ""));
   const assignedTrainerId = input.trainerId ?? t.id;
@@ -81,22 +79,33 @@ export async function createMember(input: {
     return { ok: false, error: "이미 등록된 연락처이거나 등록에 실패했어요" };
   }
 
-  await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: assignedTrainerId });
+  // 담당 강사 연결 실패는 치명적(회원이 어느 강사에게도 안 보임) — 방금 만든 회원을 지우고 실패 처리(감사 #20).
+  const { error: linkErr } = await sb
+    .from("member_trainers")
+    .insert({ member_id: member.id, trainer_id: assignedTrainerId });
+  if (linkErr) {
+    await sb.from("members").delete().eq("id", member.id);
+    return { ok: false, error: "담당 강사 연결에 실패했어요. 다시 시도해주세요." };
+  }
 
-  // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결.
+  // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결. 실패는 경고로 노출(감사 #20: 조용히 삼키지 않는다).
+  let warn: string | undefined;
   for (const s of input.slots) {
-    const { data: sched } = await sb
+    const { data: sched, error: schedErr } = await sb
       .from("schedules")
       .insert({ trainer_id: assignedTrainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
       .select("id")
       .single();
-    if (sched) {
-      await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: member.id });
+    let smErr = schedErr;
+    if (!smErr && sched) {
+      const { error } = await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: member.id });
+      smErr = error;
+      if (error) await sb.from("schedules").delete().eq("id", sched.id); // 회원 없는 스케줄 잔류 방지
     }
+    if (smErr) warn = "회원은 등록됐지만 일부 정기 수업 등록에 실패했어요. 회원 상세에서 다시 등록해주세요.";
   }
 
   // 회원권 발급 (옵션) — 하위 단계 실패는 회원 등록을 되돌리진 않되, 대표에게 경고로 노출(매출 누락 방지)
-  let warn: string | undefined;
   if (input.product?.productId) {
     const issued = await issueMembership(member.id, input.product.productId);
     if (!issued.ok) {
@@ -245,6 +254,11 @@ export async function recordPayment(input: {
   }
 
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
+  // 0원·null·음수 결제가 '기록 완료'로 통과해 장부에서 조용히 누락되던 문제(감사 #28).
+  if (amount == null || !Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, error: "결제 금액을 확인해주세요" };
+  }
+  amount = Math.round(amount);
 
   const paidAt = input.paidAt ?? todayISO();
   // 더블클릭/재시도 방어: 직전 20초 내 동일 (회원권·금액·일자) 결제가 있으면 멱등 처리.
@@ -473,6 +487,8 @@ export async function createProduct(input: {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const invalid = productError(input);
+  if (invalid) return { ok: false, error: invalid };
   const unitListPrice = input.unitListPrice || (input.sessions > 0 ? Math.round(input.price / input.sessions) : 0);
   const { error } = await sb.from("membership_products").insert({
     name: input.name.trim(),
@@ -493,6 +509,8 @@ export async function updateProduct(
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const invalid = productError(input);
+  if (invalid) return { ok: false, error: invalid };
   const unitListPrice = input.unitListPrice || (input.sessions > 0 ? Math.round(input.price / input.sessions) : 0);
   const { error } = await sb
     .from("membership_products")

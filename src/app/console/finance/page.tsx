@@ -3,6 +3,7 @@ import { Icon } from "@/components/ui/icon";
 import { Topbar } from "@/components/console/Topbar";
 import { Card, won } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
+import { requireOwnerPage } from "@/lib/auth/guard";
 import { getFinanceSummary, getExpenses } from "@/lib/data/groups/finance";
 import { getStaff } from "@/lib/data/groups/owner-ops";
 import { ExpenseLedger } from "./ui";
@@ -27,6 +28,7 @@ export default async function ConsoleFinancePage({
 }: {
   searchParams: Promise<{ m?: string }>;
 }) {
+  await requireOwnerPage(); // 손익은 대표 전용 — 레이아웃 렌더링에만 기대지 않는다(감사 #7)
   const sp = await searchParams;
   const off = Math.max(0, Number(sp.m ?? "0") || 0);
   const [summary, exp, staff] = await Promise.all([getFinanceSummary(off), getExpenses(off), getStaff()]);

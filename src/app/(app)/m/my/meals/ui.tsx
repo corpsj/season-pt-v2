@@ -143,7 +143,8 @@ export function MemberMealsClient({ initial }: { initial: MealLog[] }) {
                 <Icon name="camera" size={18} />사진 추가
               </button>
             )}
-            <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pickPhoto} />
+            {/* capture 미지정 — 카메라 강제 시 이미 찍어둔 음식 사진(갤러리)을 첨부할 수 없다(감사 #27) */}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
 
             <textarea
               value={memo}

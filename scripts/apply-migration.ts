@@ -6,6 +6,11 @@ if (!files.length) throw new Error("usage: bun run scripts/apply-migration.ts <f
 const url = process.env.SUPABASE_DB_URL;
 if (!url) throw new Error("missing SUPABASE_DB_URL — `set -a; . ./.env.deploy.local; set +a` 먼저");
 const sql = new SQL(url);
-for (const f of files) { console.log(`→ applying ${f}`); await sql.unsafe(await Bun.file(f).text()); }
+// 파일 단위 트랜잭션 — 중간 실패 시 반쪽 스키마로 남지 않게 전체 롤백(감사 #44)
+for (const f of files) {
+  console.log(`→ applying ${f}`);
+  const text = await Bun.file(f).text();
+  await sql.begin(async (tx) => { await tx.unsafe(text); });
+}
 await sql.end();
 console.log("done");

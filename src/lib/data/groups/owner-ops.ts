@@ -179,14 +179,25 @@ const METHOD_LABEL: Record<string, string> = { card: "카드", cash: "현금", a
 
 /** 매출 장부: 모든 결제(회원권 + 수동/과거)를 월별로 묶어 합계. 대표 전용. */
 export async function getRevenue(): Promise<RevenueView> {
-  const { data: pays } = await sb
-    .from("payments")
-    .select("id, amount, method, paid_at, membership_id, note")
-    .order("paid_at", { ascending: false });
-  const rows = (pays ?? []) as {
+  // PostgREST 기본 1,000행 캡 — 무제한 단건 조회는 결제가 쌓이면 누적매출·CSV가 조용히 잘린다(감사 #6).
+  // 1,000행씩 끝까지 페이지네이션.
+  type PayRow = {
     id: string; amount: number | null; method: string; paid_at: string;
     membership_id: string | null; note: string | null;
-  }[];
+  };
+  const rows: PayRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data: pays } = await sb
+      .from("payments")
+      .select("id, amount, method, paid_at, membership_id, note")
+      .order("paid_at", { ascending: false })
+      .order("id", { ascending: false }) // paid_at 동률 시 페이지 경계 중복/누락 방지용 2차 정렬
+      .range(from, from + PAGE - 1);
+    const chunk = (pays ?? []) as PayRow[];
+    rows.push(...chunk);
+    if (chunk.length < PAGE) break;
+  }
 
   const msIds = [...new Set(rows.map((r) => r.membership_id).filter((x): x is string => !!x))];
   const labelByMs = new Map<string, string>();
@@ -719,13 +730,14 @@ export async function getStudioNotices(): Promise<OwnerNotice[]> {
   }));
 }
 
-/** 미수금(받을 돈) 집계: active/expired 회원권 중 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나).
- *  만료로 flip되는 순간 밀린 잔금이 목록에서 사라지던 문제(감사 H16) — expired도 포함(refunded만 제외). */
+/** 미수금(받을 돈) 집계: 결제액 < 정가인 건. 대표 핵심 지표(누가 얼마 밀렸나).
+ *  만료(감사 H16)·일시정지(감사 #9)로 flip되는 순간 밀린 잔금이 목록에서 사라지지 않게
+ *  refunded만 제외하고 전부 포함. */
 export async function getOutstanding(): Promise<OutstandingView> {
   const { data: msRows } = await sb
     .from("memberships")
     .select("id, member_id, product, price, members(name)")
-    .in("status", ["active", "expired"]);
+    .in("status", ["active", "expired", "paused"]);
   const ms = (msRows ?? []) as unknown as { id: string; member_id: string; product: string; price: number | null; members: { name: string } | null }[];
   if (!ms.length) return { total: 0, count: 0, items: [] };
 

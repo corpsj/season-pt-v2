@@ -82,20 +82,44 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
           </RadioOption>
         </div>
 
-        {/* remaining */}
-        <Card className="mt-3.5 flex items-center gap-3 px-[15px] py-[13px]">
-          <Icon name="ticket-fill" size={18} className="flex-none text-sage-deep" />
-          <span className="flex-1 text-[13.5px] font-medium text-ink-soft">{deducted ? "차감 후 잔여" : "잔여 (차감 없음)"}</span>
-          <span className="serif text-[18px] font-bold text-ink">{t.remaining}</span>
-          {deducted && <Icon name="arrow-right" size={16} className="flex-none text-chevron" />}
-          {deducted && <span className="serif text-[18px] font-bold text-terracotta">{after}</span>}
-        </Card>
+        {/* remaining — 2:1은 회원별로 표기(파트너 잔여 0이 경고 없이 무료 수업 되던 문제, 감사 #25) */}
+        {t.isTeam && t.balances.length >= 2 ? (
+          <Card className="mt-3.5 flex flex-col gap-2.5 px-[15px] py-[13px]">
+            {t.balances.map((b) => (
+              <div key={b.name} className="flex items-center gap-3">
+                <Icon name="ticket-fill" size={18} className="flex-none text-sage-deep" />
+                <span className="flex-1 text-[13.5px] font-medium text-ink-soft">
+                  {b.name} {deducted ? "차감 후 잔여" : "잔여"}
+                </span>
+                <span className="serif text-[18px] font-bold text-ink">{b.remaining}</span>
+                {deducted && <Icon name="arrow-right" size={16} className="flex-none text-chevron" />}
+                {deducted && (
+                  <span className="serif text-[18px] font-bold text-terracotta">{Math.max(0, b.remaining - 1)}</span>
+                )}
+              </div>
+            ))}
+          </Card>
+        ) : (
+          <Card className="mt-3.5 flex items-center gap-3 px-[15px] py-[13px]">
+            <Icon name="ticket-fill" size={18} className="flex-none text-sage-deep" />
+            <span className="flex-1 text-[13.5px] font-medium text-ink-soft">{deducted ? "차감 후 잔여" : "잔여 (차감 없음)"}</span>
+            <span className="serif text-[18px] font-bold text-ink">{t.remaining}</span>
+            {deducted && <Icon name="arrow-right" size={16} className="flex-none text-chevron" />}
+            {deducted && <span className="serif text-[18px] font-bold text-terracotta">{after}</span>}
+          </Card>
+        )}
 
-        {deducted && t.remaining <= 0 ? (
-          <Banner tone="warn" className="mt-3.5">
-            잔여 회차가 없어요. 이대로 처리하면 무료 수업으로 남아요 — 재등록(결제)을 먼저 확인하세요.
-          </Banner>
-        ) : null}
+        {(() => {
+          const zeros = deducted
+            ? (t.balances.length ? t.balances : [{ name: t.name, remaining: t.remaining }]).filter((b) => b.remaining <= 0)
+            : [];
+          return zeros.length ? (
+            <Banner tone="warn" className="mt-3.5">
+              {t.isTeam ? `${zeros.map((z) => z.name).join(", ")}님은 ` : ""}잔여 회차가 없어요. 이대로 처리하면 무료
+              수업으로 남아요 — 재등록(결제)을 먼저 확인하세요.
+            </Banner>
+          ) : null;
+        })()}
       </Body>
 
       <Footer>

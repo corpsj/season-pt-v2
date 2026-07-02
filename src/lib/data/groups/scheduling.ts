@@ -77,11 +77,15 @@ function sessionName(members: MemberRow[]): string {
 }
 
 async function fetchSession(sessionId: string): Promise<SessionRow | null> {
-  const { data } = await sb
+  // 강사는 본인 담당 세션만 조회(대표는 전체) — 임의 sessionId로 타 강사 수업·회원 정보 열람 차단(감사 #33).
+  const t = await getTrainerContext();
+  if (!t) return null;
+  let q = sb
     .from("sessions")
     .select("id, trainer_id, scheduled_at, type, status")
-    .eq("id", sessionId)
-    .maybeSingle();
+    .eq("id", sessionId);
+  if (t.role !== "owner") q = q.eq("trainer_id", t.id);
+  const { data } = await q.maybeSingle();
   return (data as SessionRow) ?? null;
 }
 
@@ -100,8 +104,11 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
   const members = session ? await sessionMembers(sessionId) : [];
   const isTeam = (session?.type ?? "1on1") === "2on1";
   const first = members[0];
-  // remaining shown reflects the (first) member's active membership
-  const remaining = first ? await remainingFor(first.id) : 0;
+  // 회원별 잔여 — 2:1은 파트너 회원 잔여 0도 경고해야 무료 수업으로 새지 않는다(감사 #25).
+  const balances = await Promise.all(
+    members.map(async (m) => ({ name: m.name, remaining: await remainingFor(m.id) })),
+  );
+  const remaining = balances[0]?.remaining ?? 0;
   const timeLbl = session ? clockHM(session.scheduled_at) : "";
   const name = members.length ? sessionName(members) : "";
   return {
@@ -114,6 +121,7 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
     meta: `${isTeam ? "2:1 PT" : "1:1 PT"} · ${timeLbl} · 잔여 ${remaining}회`,
     type: isTeam ? "2on1" : "1on1",
     remaining,
+    balances,
     scheduledAt: session?.scheduled_at ?? new Date().toISOString(),
   };
 }

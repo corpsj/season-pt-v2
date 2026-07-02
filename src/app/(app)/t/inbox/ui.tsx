@@ -83,9 +83,21 @@ export default function InboxClient({ view }: { view: InboxView }) {
                       </span>
                     </div>
                   ) : (
-                    <Banner tone="warn" className="mt-3">
-                      {item.reason}
-                    </Banner>
+                    <>
+                      {/* 어느 수업의 취소인지 일시를 표기 — 대상 없이 수락/거절해야 하던 문제(감사 #24) */}
+                      {item.before ? (
+                        <div className="mt-3">
+                          <span className="rounded-[10px] bg-sage-banner px-3 py-2 text-[12.5px] font-semibold text-muted6">
+                            {item.before} 수업
+                          </span>
+                        </div>
+                      ) : null}
+                      {item.reason ? (
+                        <Banner tone="warn" className="mt-3">
+                          {item.reason}
+                        </Banner>
+                      ) : null}
+                    </>
                   )}
 
                   <div className="mt-3.5 flex gap-2.5">

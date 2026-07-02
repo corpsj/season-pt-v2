@@ -7,10 +7,12 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { hashPassword } from "../src/lib/auth/password";
+import { assertSeedTargetAllowed } from "./_seed-guard";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 if (!url || !service) throw new Error("missing supabase env");
+assertSeedTargetAllowed(url); // 프로드 오실행 가드(감사 #5)
 const db = createClient(url, service, { auth: { persistSession: false } });
 
 const TODAY = "2026-06-24";

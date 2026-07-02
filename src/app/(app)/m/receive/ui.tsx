@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import type { MemberReceiveView } from "@/lib/types";
 import { acceptMemberChange, rejectMemberChange } from "@/lib/data/groups/member-actions";
@@ -41,6 +42,7 @@ export function MemberReceiveClient({
     } else {
       setPending(false);
       toast(res.error ?? (isCancel ? "처리하지 못했어요" : "변경하지 못했어요"));
+      router.refresh(); // 이미 처리·만료된 요청이면 화면을 최신 상태로(죽은 버튼 방지, 감사 #39)
     }
   }
 
@@ -50,6 +52,24 @@ export function MemberReceiveClient({
     const res = await rejectMemberChange(requestId);
     toast(res.ok ? "요청을 거절했어요" : res.error ?? "처리하지 못했어요");
     router.push("/m");
+  }
+
+  // 요청이 이미 처리·소멸됐으면 빈 정보 화면 + 반응 없는 버튼 대신 안내를 보여준다(감사 #39).
+  if (!requestId) {
+    return (
+      <div className="scr flex min-h-0 flex-1 flex-col">
+        <Body>
+          <div className="mb-5 flex items-center gap-3">
+            <BackButton fallback="/m" />
+            <span className="text-[19px] font-bold text-ink">일정 요청</span>
+          </div>
+          <EmptyState icon="circle-check" tone="green" title="처리할 요청이 없어요" desc="요청이 이미 처리됐거나 만료됐어요." />
+        </Body>
+        <Footer>
+          <PrimaryButton onClick={() => router.push("/m")}>홈으로 가기</PrimaryButton>
+        </Footer>
+      </div>
+    );
   }
 
   return (

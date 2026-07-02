@@ -17,7 +17,9 @@ export function validateUpload(
   size: number,
 ): { ok: true } | { ok: false; error: string } {
   if (size > MAX_UPLOAD_BYTES) return { ok: false, error: "파일이 너무 커요 (최대 10MB)" };
-  if (kind === "photo" && !mime.startsWith("image/")) return { ok: false, error: "이미지 파일만 올릴 수 있어요" };
+  // SVG는 이미지지만 스크립트를 품을 수 있어 차단 — 회원이 올린 활성 SVG를 강사가 새 탭으로 열면 실행됨(감사 #41).
+  if (kind === "photo" && (mime === "image/svg+xml" || !mime.startsWith("image/")))
+    return { ok: false, error: "사진 파일(JPG·PNG 등)만 올릴 수 있어요" };
   if (kind === "inbody" && mime !== "application/pdf") return { ok: false, error: "PDF 파일만 올릴 수 있어요" };
   return { ok: true };
 }

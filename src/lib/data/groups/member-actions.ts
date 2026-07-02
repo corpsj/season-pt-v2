@@ -36,7 +36,7 @@ async function requireMember() {
 async function loadOwnTrainerRequest(requestId: string, memberId: string) {
   const { data: req } = await sb
     .from("schedule_change_requests")
-    .select("id, session_id, proposed_slots, requester_type, requester_id, type, status")
+    .select("id, session_id, proposed_slots, requester_type, requester_id, type, status, original_at")
     .eq("id", requestId)
     .maybeSingle();
   if (!req || req.requester_type !== "trainer" || req.status !== "pending") return null;
@@ -63,12 +63,19 @@ export async function acceptMemberChange(requestId: string, slotIso?: string): P
   // 대상 세션이 아직 예정 상태인지 확인(이미 진행/취소됐으면 요청 정리, 감사 C1).
   const { data: session } = await sb
     .from("sessions")
-    .select("trainer_id, status")
+    .select("trainer_id, status, scheduled_at")
     .eq("id", req.session_id)
     .maybeSingle();
   if (!session || session.status !== "scheduled") {
     await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
     return { ok: false, error: "이미 진행됐거나 처리된 수업이에요" };
+  }
+
+  // 요청 생성 후 수업 시간이 이미 바뀌었으면(다른 합의가 먼저 이뤄짐) 낡은 제안 — 수락하면 합의된
+  // 시간이 옛 제안 시각으로 조용히 되돌아간다(감사 high #2). 정리하고 알린다.
+  if (req.original_at && session.scheduled_at !== req.original_at) {
+    await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
+    return { ok: false, error: "수업 시간이 이미 변경돼 이 제안은 만료됐어요" };
   }
 
   if (req.type === "cancel") {
@@ -151,6 +158,10 @@ export async function sendMemberRequest(input: {
     .maybeSingle();
   if (!sm) return { ok: false, error: "수업을 찾을 수 없어요" };
 
+  if (input.type === "change" && !(input.proposedSlots && input.proposedSlots.length)) {
+    return { ok: false, error: "변경할 시간을 선택해주세요" };
+  }
+
   // 중복 방지: 같은 수업에 대기 중인 내 요청이 이미 있으면 막는다(인박스 중복 노출 방지).
   const { data: dupReq } = await sb
     .from("schedule_change_requests")
@@ -164,9 +175,19 @@ export async function sendMemberRequest(input: {
 
   const { data: session } = await sb
     .from("sessions")
-    .select("scheduled_at")
+    .select("scheduled_at, status")
     .eq("id", input.sessionId)
     .maybeSingle();
+  if (!session || session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요" };
+
+  // 같은 수업의 대기 중 '트레이너 제안'은 이 요청이 대체한다(역제안) — 둘이 공존하면 어느 쪽이든
+  // 늦게 수락될 때 세션이 다시 움직인다(감사 high #2). 회원의 새 요청이 곧 기존 제안 거절 의사.
+  await sb
+    .from("schedule_change_requests")
+    .update({ status: "rejected", resolved_at: new Date().toISOString() })
+    .eq("session_id", input.sessionId)
+    .eq("requester_type", "trainer")
+    .eq("status", "pending");
 
   const { error } = await sb.from("schedule_change_requests").insert({
     session_id: input.sessionId,

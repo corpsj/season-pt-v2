@@ -560,6 +560,30 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const trainerId = me.trainerId ?? "";
   const today = todayISO();
 
+  // 강사는 담당 회원만 상세 열람(대표는 전체) — 임의 id로 타 강사 회원 PII를 열람하는 IDOR 차단(감사 #13).
+  let allowed = me.isOwner;
+  if (!allowed && trainerId) {
+    const { data: link } = await sb
+      .from("member_trainers")
+      .select("member_id")
+      .eq("member_id", id)
+      .eq("trainer_id", trainerId)
+      .maybeSingle();
+    allowed = !!link;
+  }
+  if (!allowed) {
+    // 빈 껍데기 반환 — 회원권·인바디·일정 서브쿼리까지 전부 차단.
+    return {
+      id, name: "", phone: "", gender: null, isTeam: false, team: undefined,
+      initial: "", avatarTone: asTone("sage"), badge: badgeForMember(null),
+      typeLabel: "1:1 PT", product: "1:1 PT", remaining: 0, total: 0, dDay: 0,
+      startDate: "", endDate: "", barPct: 0,
+      body: { weight: 0, skeletalMuscle: 0, bodyFat: 0 },
+      schedule: "정기 일정 미설정", injury: undefined,
+      activeMembershipId: null, membershipPaused: false, memberStatus: "active", events: [],
+    };
+  }
+
   const { data: member } = await sb
     .from("members")
     .select("id, name, phone, gender, status, avatar_tone, injury_note")

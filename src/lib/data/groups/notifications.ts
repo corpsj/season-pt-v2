@@ -16,6 +16,16 @@ async function hasUnread(membershipId: string, type: "low_sessions" | "expiring"
   return !!data;
 }
 
+/**
+ * 최근 N일 내 같은 (회원권, 타입) 알림 존재 여부 — 읽음/안읽음 무관. 스캔형 알림(만료 임박)이
+ * '읽으면 즉시 재발송'되는 스팸 루프를 막는다(감사 #31: unread만 보던 dedup의 구멍).
+ */
+async function hasRecent(membershipId: string, type: "low_sessions" | "expiring", days = 7): Promise<boolean> {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+  const { data } = await sb.from("notifications").select("id").eq("membership_id", membershipId).eq("type", type).gte("created_at", since).limit(1).maybeSingle();
+  return !!data;
+}
+
 /** 회원별 알림 토글(미설정이면 기본 on). 스튜디오 게이트는 호출부에서 이미 적용됨. */
 async function memberNotifEnabled(memberId: string, key: string): Promise<boolean> {
   const { data } = await sb.from("members").select("notif_prefs").eq("id", memberId).maybeSingle();
@@ -46,7 +56,7 @@ export async function scanExpiringMemberships(): Promise<{ created: number }> {
   for (const m of rows ?? []) {
     const dDay = dayDiff(todayISO(), String(m.end_date));
     if (!isExpiringSoon(dDay)) continue;
-    if (await hasUnread(m.id as string, "expiring")) continue;
+    if (await hasRecent(m.id as string, "expiring")) continue; // 읽어도 7일 내 재발송 금지(감사 #31)
     const common = { type: "expiring", title: "회원권 만료 임박", body: `만료 D-${dDay}예요.`, membership_id: m.id };
     const inserts = [
       // 회원 본인 알림은 회원 설정을 따른다(트레이너 알림은 항상 발송).

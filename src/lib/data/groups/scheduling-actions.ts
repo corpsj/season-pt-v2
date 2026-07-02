@@ -5,7 +5,12 @@ import { sb, getTrainerContext } from "@/lib/data/db";
 import { getStudioSettings } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
 import { notifyLowSessions, notifyRequestResult } from "@/lib/data/groups/notifications";
-import { hasSlotConflict, moveSessionWithTombstone } from "@/lib/data/groups/session-mutations";
+import {
+  hasSlotConflict,
+  moveSessionWithTombstone,
+  claimCancelSession,
+  rejectPendingRequestsForSession,
+} from "@/lib/data/groups/session-mutations";
 import type { AttendanceAction, WorkoutExercise } from "@/lib/types";
 
 type ActionResult = { ok: boolean; error?: string };
@@ -38,6 +43,111 @@ async function activeMembership(memberId: string) {
 }
 
 /**
+ * 세션 처리(출석/노쇼/취소 차감)의 회차 차감 + 원장 기록. 실패 시 에러 문구 반환(성공 시 null).
+ * - 차감은 낙관적 CAS: 잔여값이 읽은 값과 같을 때만 갱신 — 절대값 덮어쓰기로 동시 차감 1회가
+ *   유실되던 문제(감사 #12). 충돌 시 한 번 다시 읽고 재시도.
+ * - 차감/원장 insert 에러를 삼키지 않는다(감사 #4) — 호출부가 보상(세션 원복)을 수행.
+ */
+async function deductForMembers(args: {
+  sessionId: string;
+  memberIds: string[];
+  action: AttendanceAction;
+  deducted: boolean;
+  createdBy: string;
+}): Promise<string | null> {
+  for (const memberId of args.memberIds) {
+    let ms = await activeMembership(memberId);
+    let before = ms?.remaining_sessions ?? null;
+    let after = before;
+    if (args.deducted && ms) {
+      let applied = false;
+      for (let attempt = 0; attempt < 2 && ms; attempt++) {
+        const cur = ms.remaining_sessions ?? 0;
+        const next = Math.max(0, cur - 1);
+        const { data: rows, error } = await sb
+          .from("memberships")
+          .update({ remaining_sessions: next })
+          .eq("id", ms.id)
+          .eq("remaining_sessions", cur)
+          .select("id");
+        if (error) return "차감을 저장하지 못했어요.";
+        if (rows && rows.length) {
+          before = cur;
+          after = next;
+          applied = true;
+          break;
+        }
+        ms = await activeMembership(memberId); // 동시 차감으로 잔여가 바뀜 — 다시 읽고 재시도
+      }
+      if (!applied && ms) return "동시에 처리되고 있어요. 잠시 후 다시 시도해주세요.";
+      if (!ms) {
+        before = null;
+        after = null;
+      }
+    }
+    const { error: ledErr } = await sb.from("attendance_ledger").insert({
+      session_id: args.sessionId,
+      member_id: memberId,
+      membership_id: ms?.id ?? null, // 되돌리기 시 정확히 이 회원권에 복원(감사 후속)
+      action: args.action,
+      deducted: args.deducted,
+      remaining_before: before,
+      remaining_after: after,
+      created_by: args.createdBy,
+    });
+    if (ledErr) return "출석 기록을 저장하지 못했어요.";
+    if (args.deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after).catch(() => {}); // ponytail: notify is best-effort
+  }
+  return null;
+}
+
+/**
+ * 처리된 세션의 복구 공용부(정정·보상 겸용): 원장에서 실차감 행만 그 회원권에 +1 복원하고
+ * 행 단위로 원장을 지운 뒤 세션을 scheduled로 되돌린다. 복원 실패 시 원장을 보존해 재시도 가능(감사 #17).
+ */
+async function restoreProcessedSession(sessionId: string): Promise<ActionResult> {
+  const { data: ledger, error: ledErr } = await sb
+    .from("attendance_ledger")
+    .select("id, membership_id, deducted, remaining_before, remaining_after")
+    .eq("session_id", sessionId);
+  if (ledErr) return { ok: false, error: "기록 조회에 실패했어요. 다시 시도해주세요." };
+  const credited = new Set<string>();
+  for (const row of ledger ?? []) {
+    const msId = row.membership_id as string | null;
+    const before = row.remaining_before as number | null;
+    const after = row.remaining_after as number | null;
+    const reallyDeducted = !!row.deducted && before != null && after != null && before > after;
+    if (reallyDeducted && msId && !credited.has(msId)) {
+      credited.add(msId);
+      const { data: ms, error: msErr } = await sb
+        .from("memberships")
+        .select("remaining_sessions, total_sessions")
+        .eq("id", msId)
+        .maybeSingle();
+      if (msErr) return { ok: false, error: "회차 복원에 실패했어요. 다시 시도해주세요." };
+      if (ms) {
+        const cur = (ms.remaining_sessions as number) ?? 0;
+        const cap = (ms.total_sessions as number | null) ?? cur + 1;
+        const { error: upErr } = await sb
+          .from("memberships")
+          .update({ remaining_sessions: Math.min(cap, cur + 1) })
+          .eq("id", msId);
+        if (upErr) return { ok: false, error: "회차 복원에 실패했어요. 다시 시도해주세요." }; // 원장 보존 — 재시도 가능
+      }
+    }
+    // 행 단위 삭제 — 중간 실패 시 남은 행만 재처리(전체 후행 삭제는 재시도 시 이중 복원 위험)
+    const { error: delErr } = await sb.from("attendance_ledger").delete().eq("id", row.id);
+    if (delErr) return { ok: false, error: "기록 정리에 실패했어요. 다시 시도해주세요." };
+  }
+  await sb
+    .from("sessions")
+    .update({ status: "scheduled", pay_rate: null })
+    .eq("id", sessionId)
+    .in("status", ["attended", "noshow", "cancelled"]);
+  return { ok: true };
+}
+
+/**
  * Attendance: set session status; for attend/noshow decrement each member's
  * active membership remaining_sessions by 1; record an attendance_ledger row.
  */
@@ -67,36 +177,27 @@ export async function confirmAttendance(
   if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리됐거나 담당 수업이 아니에요." };
   const scheduledAt = claimed[0].scheduled_at ?? new Date().toISOString();
 
+  // 처리 확정된 세션의 낡은 pending 요청 정리 — 뒤늦은 수락으로 되살아나는 것 방지(감사 high #2).
+  await rejectPendingRequestsForSession(sessionId);
+
   // 정산용: 진행(출석) 확정 시점의 회당 단가를 세션에 스냅샷. 이후 강사 단가를 바꿔도 과거 정산은 불변.
+  // 단가 미설정(0)은 스냅샷하지 않는다(null 유지) — 대표가 단가를 나중에 입력해도 정산 시 현재 단가로
+  // 소급 계산되고, 지급 확정 때 확정값이 백필된다(감사 high #1: 0 스냅샷이 영구 0원이 되던 문제).
   if (action === "attend") {
     const { data: tr } = await sb.from("trainers").select("rate_1on1, rate_2on1").eq("id", claimed[0].trainer_id).maybeSingle();
     const rate = claimed[0].type === "2on1" ? (tr?.rate_2on1 ?? 0) : (tr?.rate_1on1 ?? 0);
-    await sb.from("sessions").update({ pay_rate: rate }).eq("id", sessionId);
+    if (rate > 0) await sb.from("sessions").update({ pay_rate: rate }).eq("id", sessionId);
   }
 
   const settings = await getStudioSettings();
   const deducted = shouldDeduct(action, scheduledAt, settings);
 
   const memberIds = await memberIdsForSession(sessionId);
-  for (const memberId of memberIds) {
-    const ms = await activeMembership(memberId);
-    const before = ms?.remaining_sessions ?? null;
-    let after = before;
-    if (deducted && ms) {
-      after = Math.max(0, (ms.remaining_sessions ?? 0) - 1);
-      await sb.from("memberships").update({ remaining_sessions: after }).eq("id", ms.id);
-    }
-    await sb.from("attendance_ledger").insert({
-      session_id: sessionId,
-      member_id: memberId,
-      membership_id: ms?.id ?? null, // 되돌리기 시 정확히 이 회원권에 복원(감사 후속)
-      action,
-      deducted,
-      remaining_before: before,
-      remaining_after: after,
-      created_by: t.id,
-    });
-    if (deducted && ms && after != null) await notifyLowSessions(ms.id, memberId, after).catch(() => {}); // ponytail: notify is best-effort, attendance must not fail
+  const failMsg = await deductForMembers({ sessionId, memberIds, action, deducted, createdBy: t.id });
+  if (failMsg) {
+    // 보상: 부분 차감·원장 정리 후 세션을 scheduled로 원복 — 반쪽 상태로 남기지 않는다(감사 #4).
+    await restoreProcessedSession(sessionId);
+    return { ok: false, error: failMsg };
   }
 
   revalidatePath("/t");
@@ -111,6 +212,11 @@ export async function saveRecord(
 ): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
+
+  // 강사는 본인 담당 세션만 기록(대표는 전체) — 임의 sessionId 변이 차단(감사 #14).
+  const { data: target } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+  if (!target) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && target.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
 
   const memberIds = await memberIdsForSession(sessionId);
   if (memberIds.length === 0) return { ok: false, error: "기록할 회원이 없어요." };
@@ -138,23 +244,46 @@ export async function sendPropose(
 ): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
+  if (!proposedSlots || proposedSlots.length === 0) return { ok: false, error: "제안할 시간을 선택해주세요." };
 
+  // 세션 상태·담당 가드(감사 #14·#16): 이미 처리된 수업이나 남의 수업에 제안 불가.
   const { data: session } = await sb
     .from("sessions")
-    .select("scheduled_at")
+    .select("scheduled_at, status, trainer_id")
     .eq("id", sessionId)
     .maybeSingle();
+  if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  if (session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요." };
 
-  await sb.from("schedule_change_requests").insert({
+  // 기존 pending 정리(감사 #16): 회원 요청이 대기 중이면 먼저 응답하도록 막고,
+  // 이전 강사 제안이 남아 있으면 새 제안으로 대체(reject 후 insert).
+  const { data: pend } = await sb
+    .from("schedule_change_requests")
+    .select("id, requester_type")
+    .eq("session_id", sessionId)
+    .eq("status", "pending");
+  if ((pend ?? []).some((r) => r.requester_type === "member")) {
+    return { ok: false, error: "회원의 요청이 대기 중이에요. 받은 요청에서 먼저 응답해주세요." };
+  }
+  if (pend && pend.length) {
+    await sb
+      .from("schedule_change_requests")
+      .update({ status: "rejected", resolved_at: new Date().toISOString() })
+      .in("id", pend.map((r) => r.id as string));
+  }
+
+  const { error } = await sb.from("schedule_change_requests").insert({
     session_id: sessionId,
     requester_type: "trainer",
     requester_id: t.id,
     type: "change",
     status: "pending",
     reason: reason ?? null,
-    original_at: session?.scheduled_at ?? null,
+    original_at: session.scheduled_at,
     proposed_slots: proposedSlots,
   });
+  if (error) return { ok: false, error: "제안을 보내지 못했어요. 다시 시도해주세요." }; // 유실을 성공으로 표시하지 않는다(감사 #37)
 
   revalidatePath("/t");
   revalidatePath("/t/inbox");
@@ -168,10 +297,11 @@ export async function sendCancelRequest(sessionId: string, reason?: string): Pro
 
   const { data: session } = await sb
     .from("sessions")
-    .select("scheduled_at, status")
+    .select("scheduled_at, status, trainer_id")
     .eq("id", sessionId)
     .maybeSingle();
   if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." }; // 감사 #14
   if (session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요." };
 
   // 동일 세션에 대기 중인 요청이 있으면 중복 생성 방지
@@ -184,7 +314,7 @@ export async function sendCancelRequest(sessionId: string, reason?: string): Pro
     .maybeSingle();
   if (dup) return { ok: false, error: "이미 대기 중인 요청이 있어요." };
 
-  await sb.from("schedule_change_requests").insert({
+  const { error } = await sb.from("schedule_change_requests").insert({
     session_id: sessionId,
     requester_type: "trainer",
     requester_id: t.id,
@@ -194,6 +324,7 @@ export async function sendCancelRequest(sessionId: string, reason?: string): Pro
     original_at: session.scheduled_at,
     proposed_slots: [],
   });
+  if (error) return { ok: false, error: "요청을 보내지 못했어요. 다시 시도해주세요." }; // 감사 #37
 
   revalidatePath("/t");
   revalidatePath("/t/inbox");
@@ -220,7 +351,7 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
     .update({ status: "accepted", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
     .eq("status", "pending")
-    .select("id, session_id, requester_id, type, proposed_slots, created_at");
+    .select("id, session_id, requester_id, type, proposed_slots, created_at, original_at");
   if (!claimedReq || claimedReq.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
   const req = claimedReq[0];
 
@@ -235,6 +366,13 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
   if (!session || session.status !== "scheduled") {
     await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
     return { ok: false, error: "이미 진행됐거나 처리된 수업이에요. 요청을 정리했어요." };
+  }
+
+  // 요청 생성 후 세션 시간이 이미 바뀌었으면(다른 요청 수락 등) 낡은 요청 — 수락하면 합의된 시간을
+  // 되돌리므로 정리한다(감사 high #2 신선도 가드).
+  if (req.original_at && session.scheduled_at !== req.original_at) {
+    await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
+    return { ok: false, error: "수업 시간이 이미 변경돼 요청이 만료됐어요. 요청을 정리했어요." };
   }
 
   if (req.type === "change") {
@@ -267,38 +405,29 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
     const requestedMs = req.created_at ? new Date(req.created_at as string).getTime() : Date.now();
     const deducted = shouldDeduct("cancel", session.scheduled_at as string, settings, requestedMs);
 
-    const { data: cancelledRows } = await sb
-      .from("sessions")
-      .update({ status: "cancelled" })
-      .eq("id", req.session_id)
-      .eq("status", "scheduled")
-      .select("id");
-    if (!cancelledRows || cancelledRows.length === 0) {
+    const cancelled = await claimCancelSession(req.session_id); // 취소 + 낡은 pending 정리
+    if (!cancelled) {
       await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
       return { ok: false, error: "이미 진행됐거나 처리된 수업이에요. 요청을 정리했어요." };
     }
 
     if (deducted) {
       const memberIds = await memberIdsForSession(req.session_id);
-      for (const memberId of memberIds) {
-        const ms = await activeMembership(memberId);
-        const before = ms?.remaining_sessions ?? null;
-        let after = before;
-        if (ms) {
-          after = Math.max(0, (ms.remaining_sessions ?? 0) - 1);
-          await sb.from("memberships").update({ remaining_sessions: after }).eq("id", ms.id);
-        }
-        await sb.from("attendance_ledger").insert({
-          session_id: req.session_id,
-          member_id: memberId,
-          membership_id: ms?.id ?? null, // 되돌리기 시 정확히 이 회원권에 복원(감사 후속)
-          action: "cancel",
-          deducted: true,
-          remaining_before: before,
-          remaining_after: after,
-          created_by: t.id,
-        });
-        if (ms && after != null) await notifyLowSessions(ms.id, memberId, after).catch(() => {});
+      const failMsg = await deductForMembers({
+        sessionId: req.session_id,
+        memberIds,
+        action: "cancel",
+        deducted: true,
+        createdBy: t.id,
+      });
+      if (failMsg) {
+        // 보상: 세션·차감·원장을 원복하고 요청을 pending으로 되돌려 재시도 가능하게(감사 #4).
+        await restoreProcessedSession(req.session_id);
+        await sb
+          .from("schedule_change_requests")
+          .update({ status: "pending", resolved_at: null })
+          .eq("id", req.id);
+        return { ok: false, error: failMsg };
       }
     }
     await notifyRequestResult({
@@ -355,32 +484,22 @@ export async function revertAttendance(sessionId: string): Promise<ActionResult>
     .in("status", ["attended", "noshow", "cancelled"]);
   if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);
   const { data: claimed } = await claimQ.select("id");
-  if (!claimed || claimed.length === 0) return { ok: false, error: "되돌릴 수 없는 수업이에요(이미 예정 상태이거나 담당이 아니에요)." };
-
-  // 차감됐던 회차 복원: 원장에서 '실제로 감소한' 행만(remaining_before>after) 그 회원권에 +1 복원.
-  // membership_id로 차감된 바로 그 회원권을 집는다 — 만료 임박 다른 회원권에 잘못 붙거나(재등록 중복),
-  // 차감이 없었는데(잔여0) 유령 회차가 생기던 문제를 막는다(감사 후속).
-  const { data: ledger } = await sb
-    .from("attendance_ledger")
-    .select("membership_id, deducted, remaining_before, remaining_after")
-    .eq("session_id", sessionId);
-  const credited = new Set<string>();
-  for (const row of ledger ?? []) {
-    const msId = row.membership_id as string | null;
-    const before = row.remaining_before as number | null;
-    const after = row.remaining_after as number | null;
-    const reallyDeducted = !!row.deducted && before != null && after != null && before > after;
-    if (!reallyDeducted || !msId || credited.has(msId)) continue;
-    credited.add(msId);
-    const { data: ms } = await sb.from("memberships").select("remaining_sessions, total_sessions").eq("id", msId).maybeSingle();
-    if (ms) {
-      const cur = (ms.remaining_sessions as number) ?? 0;
-      const cap = (ms.total_sessions as number | null) ?? cur + 1;
-      await sb.from("memberships").update({ remaining_sessions: Math.min(cap, cur + 1) }).eq("id", msId);
-    }
+  if (!claimed || claimed.length === 0) {
+    // 재개 경로: 직전 되돌리기가 복원 중 실패해 세션은 이미 scheduled인데 원장이 남은 경우 이어서 복구.
+    let chk = sb.from("sessions").select("id").eq("id", sessionId).eq("status", "scheduled");
+    if (t.role !== "owner") chk = chk.eq("trainer_id", t.id);
+    const { data: s } = await chk.maybeSingle();
+    if (!s) return { ok: false, error: "되돌릴 수 없는 수업이에요(담당이 아니거나 없는 수업이에요)." };
+    const { count } = await sb
+      .from("attendance_ledger")
+      .select("id", { count: "exact", head: true })
+      .eq("session_id", sessionId);
+    if (!count) return { ok: false, error: "이미 예정 상태예요." };
   }
-  // 원장 정리 — 세션이 미처리 상태로 돌아가므로 이 세션의 처리 기록을 제거(재처리 시 새로 기록).
-  await sb.from("attendance_ledger").delete().eq("session_id", sessionId);
+
+  // 차감됐던 회차 복원 + 원장 정리(행 단위, 실패 시 원장 보존 — 감사 #17). 복원 로직은 보상 경로와 공용.
+  const restored = await restoreProcessedSession(sessionId);
+  if (!restored.ok) return restored;
 
   revalidatePath("/t");
   revalidatePath("/console");

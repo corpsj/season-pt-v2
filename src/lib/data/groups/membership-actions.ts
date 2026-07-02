@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { sb, getTrainerContext, todayISO, kstDateISO, dayDiff } from "@/lib/data/db";
+import { sb, getTrainerContext, todayISO, kstDateISO, dayDiff, parseBirth6 } from "@/lib/data/db";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { hashPassword } from "@/lib/auth/password";
 import { computeRefund } from "@/lib/data/refund";
@@ -27,7 +27,7 @@ export async function extendMembership(membershipId: string): Promise<Result> {
   const { t, err } = await requireOwner();
   if (!t) return { ok: false, error: err! };
   const { data: ms } = await sb.from("memberships")
-    .select("end_date, remaining_sessions, product_id").eq("id", membershipId).maybeSingle();
+    .select("end_date, remaining_sessions, product_id, status").eq("id", membershipId).maybeSingle();
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   if ((ms.remaining_sessions ?? 0) <= 0) return { ok: false, error: "잔여 회차가 없어 연장할 수 없어요" };
   const { data: prod } = await sb.from("membership_products").select("duration_days").eq("id", ms.product_id).maybeSingle();
@@ -35,7 +35,11 @@ export async function extendMembership(membershipId: string): Promise<Result> {
   const days = prod.duration_days;
   const today = todayISO();
   const base = String(ms.end_date) > today ? String(ms.end_date) : today; // 만료됐으면 오늘부터
-  await sb.from("memberships").update({ end_date: addDays(base, days), status: "active" }).eq("id", membershipId);
+  // 일시정지 중 연장은 정지 상태 유지 — 연장이 정지를 조용히 풀고 paused_at만 남기던 문제(감사 #8).
+  const nextStatus = ms.status === "paused" ? "paused" : "active";
+  const { error: upErr } = await sb.from("memberships")
+    .update({ end_date: addDays(base, days), status: nextStatus }).eq("id", membershipId);
+  if (upErr) return { ok: false, error: "연장에 실패했어요. 다시 시도해주세요." }; // 감사 #22
   await sb.from("membership_events").insert({ membership_id: membershipId, type: "extend", amount: days, note: `+${days}일`, created_by: t.id });
   revalidatePath("/t"); revalidatePath(`/t/members`);
   return { ok: true };
@@ -95,6 +99,9 @@ export async function refundMembership(input: { membershipId: string; method: Pa
   // ponytail: cast after guard — tsc can't narrow inferred union without explicit discriminant
   const { status: preStatus, refund: preRefund, used: preUsed, penalty: prePenalty } = pre as { ok: true; status: string; refund: number; used: number; deduction: number; penalty: number };
   if (preStatus === "refunded") return { ok: false, error: "이미 환불된 회원권이에요" };
+  // 실패 시 원복용 스냅샷(감사 #3: 음수 결제행 insert 실패가 영구 누락으로 남던 문제).
+  const { data: msPre } = await sb.from("memberships")
+    .select("status, remaining_sessions").eq("id", input.membershipId).maybeSingle();
   // Atomic claim: flip to refunded only if not already. The DB enforces a single transition,
   // so a double-click / concurrent refund can't insert two negative-payment rows (double payout).
   const { data: claimed } = await sb.from("memberships")
@@ -104,9 +111,17 @@ export async function refundMembership(input: { membershipId: string; method: Pa
     .select("id");
   if (!claimed || claimed.length === 0) return { ok: false, error: "이미 환불된 회원권이에요" };
   if (preRefund > 0) {
-    await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
+    const { error: payErr } = await sb.from("payments").insert({ membership_id: input.membershipId, method: input.method, amount: -preRefund, paid_at: todayISO(), note: `환불: 사용 ${preUsed}회 정상가 차감 / 위약금 10%`, recorded_by: t.id });
+    if (payErr) {
+      // 보상: 환불 표시를 원복해 재시도 가능하게 — 표시만 남고 장부에 환불이 빠지는 반쪽 상태 방지.
+      await sb.from("memberships")
+        .update({ status: msPre?.status ?? "active", remaining_sessions: msPre?.remaining_sessions ?? 0 })
+        .eq("id", input.membershipId);
+      return { ok: false, error: "환불 기록 저장에 실패했어요. 다시 시도해주세요." };
+    }
   }
-  await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "refund", amount: -preRefund, note: `환불 ${preRefund.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})`, created_by: t.id });
+  const { error: evErr } = await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "refund", amount: -preRefund, note: `환불 ${preRefund.toLocaleString()}원(사용 ${preUsed}회·위약금 ${prePenalty.toLocaleString()})`, created_by: t.id });
+  if (evErr) console.error("[refund] event insert failed:", input.membershipId, evErr.message); // 이벤트는 이력 — 환불 자체는 확정
   // 환불 후 그 회원의 1:1 정기 스케줄 중지 — 떠난 회원 세션이 매주 무한 생성되던 문제(감사 H3).
   // 단, 그 회원에게 다른 활성 회원권이 남아 있으면(추가 결제·병행) 수업을 계속해야 하므로 건드리지 않는다(검증 후속).
   const { data: refunded } = await sb.from("memberships").select("member_id").eq("id", input.membershipId).maybeSingle();
@@ -136,7 +151,8 @@ export async function transferMembership(input: { membershipId: string; toMember
   if (!toId && input.newMember) {
     const n = input.newMember;
     const phone = n.phone.replace(/\D/g, "");
-    const birthdate = `${Number(n.birth.slice(0, 2)) > 30 ? "19" : "20"}${n.birth.slice(0, 2)}-${n.birth.slice(2, 4)}-${n.birth.slice(4, 6)}`;
+    const birthdate = parseBirth6(n.birth); // 실존 날짜 검증 — DB 에러가 '연락처 중복'으로 오인되던 문제(감사 #29)
+    if (!birthdate) return { ok: false, error: "생년월일을 올바른 6자리(YYMMDD) 날짜로 입력해주세요" };
     const { data: m, error } = await sb.from("members").insert({ name: n.name.trim(), phone, birthdate, password_hash: hashPassword(n.birth.replace(/\D/g, "")), gender: n.gender, status: "active", avatar_tone: "sage" }).select("id").single();
     if (error || !m) return { ok: false, error: "양도 대상 등록 실패(연락처 중복?)" };
     await sb.from("member_trainers").insert({ member_id: m.id, trainer_id: t.id });
@@ -147,8 +163,16 @@ export async function transferMembership(input: { membershipId: string; toMember
   if (!ms) return { ok: false, error: "회원권을 찾을 수 없어요" };
   if ((ms as { member_id: string; status: string }).status === "refunded") return { ok: false, error: "환불된 회원권은 양도할 수 없어요" };
   if ((ms as { member_id: string }).member_id === toId) return { ok: false, error: "이미 이 회원의 회원권이에요" };
-  await sb.from("memberships").update({ member_id: toId }).eq("id", input.membershipId);
+  const { error: trErr } = await sb.from("memberships").update({ member_id: toId }).eq("id", input.membershipId);
+  if (trErr) return { ok: false, error: "양도에 실패했어요. 다시 시도해주세요." }; // 감사 #22: 실패를 성공으로 표시하지 않는다
   await sb.from("membership_events").insert({ membership_id: input.membershipId, type: "transfer", note: `${ms.member_id} → ${toId}`, created_by: t.id });
+  // 양도로 원 회원에게 활성 회원권이 남지 않으면 1:1 정기 스케줄 중지 — 떠난 회원의 유령 세션이
+  // 매주 생성되던 문제(감사 #10). 환불(refundMembership)과 동일 규칙.
+  const fromId = (ms as { member_id: string }).member_id;
+  const { data: others } = await sb
+    .from("memberships").select("id")
+    .eq("member_id", fromId).eq("status", "active").limit(1).maybeSingle();
+  if (!others) await deactivateSoloSchedules(fromId);
   revalidatePath("/t"); revalidatePath("/t/members");
   return { ok: true, toMemberId: toId };
 }

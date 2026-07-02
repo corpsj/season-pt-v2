@@ -13,10 +13,12 @@
  * Run:  bun run scripts/seed-payments.ts
  */
 import { createClient } from "@supabase/supabase-js";
+import { assertSeedTargetAllowed } from "./_seed-guard";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !serviceKey) throw new Error("missing supabase env (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)");
+assertSeedTargetAllowed(url); // 프로드 오실행 가드(감사 #5)
 
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
 

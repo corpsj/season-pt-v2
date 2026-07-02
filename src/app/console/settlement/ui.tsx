@@ -11,7 +11,7 @@ import { confirmSettlement, unconfirmSettlement } from "@/lib/data/groups/financ
 import type { Settlement, SettlementRow } from "@/lib/data/groups/settlement";
 
 export function SettlementClient({ settlement }: { settlement: Settlement }) {
-  const { monthOffset, monthLabel, rows, total, confirmed, stale } = settlement;
+  const { monthOffset, monthKey, monthLabel, rows, total, confirmed, stale } = settlement;
 
   return (
     <>
@@ -27,7 +27,7 @@ export function SettlementClient({ settlement }: { settlement: Settlement }) {
             <span className="text-[12.5px] font-semibold text-[#CFC7B8]">이 달 지급 합계</span>
             <span className="text-[20px] font-bold text-surface">{won(total)}</span>
           </div>
-          <ConfirmControl monthOffset={monthOffset} confirmed={confirmed} stale={stale} rows={rows} />
+          <ConfirmControl monthOffset={monthOffset} monthKey={monthKey} confirmed={confirmed} stale={stale} rows={rows} />
         </div>
       </div>
 
@@ -138,11 +138,13 @@ function TrainerRow({ row }: { row: SettlementRow }) {
 
 function ConfirmControl({
   monthOffset,
+  monthKey,
   confirmed,
   stale,
   rows,
 }: {
   monthOffset: number;
+  monthKey: string;
   confirmed: boolean;
   stale: boolean;
   rows: SettlementRow[];
@@ -158,7 +160,8 @@ function ConfirmControl({
   async function run(kind: "confirm" | "unconfirm") {
     if (busy) return;
     setBusy(true);
-    const res = kind === "confirm" ? await confirmSettlement(monthOffset) : await unconfirmSettlement(monthOffset);
+    // 절대 월 키를 함께 넘겨 자정(KST 월 전환) 직후 클릭이 다른 달을 확정·삭제하지 않게(감사 #32).
+    const res = kind === "confirm" ? await confirmSettlement(monthOffset, monthKey) : await unconfirmSettlement(monthOffset, monthKey);
     setBusy(false);
     if (!res.ok) {
       setModal(null);

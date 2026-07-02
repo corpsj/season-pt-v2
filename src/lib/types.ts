@@ -275,6 +275,7 @@ export interface AttendTarget {
   meta: string; // "1:1 PT · 오후 7:00 · 잔여 3회"
   type: SessionType;
   remaining: number;
+  balances: { name: string; remaining: number }[]; // 회원별 잔여 — 2:1 파트너 경고용(감사 #25)
   scheduledAt: string; // ISO — for deduction policy check
 }
 
@@ -384,7 +385,6 @@ export interface MemberCalendarView {
   calDays: CalendarDay[];
   selDateLabel: string;
   scheduleLegend: string;
-  dayClass?: MemberDayClass;
 }
 /** A class shown under the selected calendar day. `isPast` hides the 변경 affordance. */
 export interface MemberDayClass {

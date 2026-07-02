@@ -1,5 +1,5 @@
 "use server";
-import { getTrainerContext } from "@/lib/data/db";
+import { sb, getTrainerContext } from "@/lib/data/db";
 import { ensureOwner } from "@/lib/auth/guard";
 import { markNotificationRead } from "@/lib/data/groups/notifications";
 import { getMemberDetail } from "@/lib/data/groups/trainer-home";
@@ -30,7 +30,12 @@ export async function consoleIssueMembership(
   const issued = await issueMembership(memberId, productId);
   if (!issued.ok || !issued.membershipId) return { ok: false, error: issued.error ?? "발급에 실패했어요" };
   const paid = await recordPayment({ membershipId: issued.membershipId, method });
-  if (!paid.ok) return { ok: false, error: paid.error ?? "결제 기록에 실패했어요" };
+  if (!paid.ok) {
+    // 보상: 결제 없는 회원권이 남으면 재시도 시 중복 발급된다(감사 #18) — 방금 발급분을 회수.
+    await sb.from("membership_events").delete().eq("membership_id", issued.membershipId);
+    await sb.from("memberships").delete().eq("id", issued.membershipId);
+    return { ok: false, error: paid.error ?? "결제 기록에 실패했어요. 처음부터 다시 시도해주세요." };
+  }
   return { ok: true };
 }
 

@@ -17,6 +17,9 @@ test("validateUpload: 잘못된 MIME 거부", () => {
   expect(validateUpload("inbody", "image/png", 1000).ok).toBe(false);
   expect(validateUpload("photo", "application/pdf", 1000).ok).toBe(false);
 });
+test("validateUpload: 활성 콘텐츠 가능한 SVG 거부", () => {
+  expect(validateUpload("photo", "image/svg+xml", 1000).ok).toBe(false);
+});
 test("validateUpload: 정상 통과", () => {
   expect(validateUpload("photo", "image/jpeg", 1000).ok).toBe(true);
   expect(validateUpload("inbody", "application/pdf", 1000).ok).toBe(true);

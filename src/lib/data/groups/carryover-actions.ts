@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { sb, getTrainerContext, todayISO } from "@/lib/data/db";
+import { sb, getTrainerContext, todayISO, weekdayKo, parseBirth6 } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { parseEndDate, type CarrySlot, type Gender } from "@/lib/import/carryover-parse";
@@ -8,12 +8,6 @@ import { parseEndDate, type CarrySlot, type Gender } from "@/lib/import/carryove
 type Result = { ok: boolean; error?: string };
 
 const normPhone = (p: string) => p.replace(/\D/g, "");
-function parseBirth(yymmdd: string): string | null {
-  const d = yymmdd.replace(/\D/g, "");
-  if (d.length !== 6) return null;
-  const yy = Number(d.slice(0, 2));
-  return `${yy > 30 ? "19" : "20"}${d.slice(0, 2)}-${d.slice(2, 4)}-${d.slice(4, 6)}`;
-}
 
 export type CarryInput = {
   name: string;
@@ -54,7 +48,7 @@ export async function carryoverMembers(
   for (const r of rows) {
     const name = r.name.trim();
     const phone = normPhone(r.phone);
-    const birthdate = parseBirth(r.birth);
+    const birthdate = parseBirth6(r.birth); // 실존 날짜 검증(감사 #29)
     const prod = prodByName.get(r.productName.trim());
 
     if (!name || !phone || !birthdate) {
@@ -84,6 +78,30 @@ export async function carryoverMembers(
         continue;
       }
       trainerId = found;
+    }
+
+    // 더블부킹 가드(감사 #11): 같은 강사의 같은 요일·시각 활성 정기수업이 이미 있으면 이 행 거부 —
+    // 신규 등록(createMember H6)과 동일 규칙. 회원 생성 前에 걸러 고아 방지.
+    let clashMsg: string | null = null;
+    for (const s of r.slots) {
+      const { data: clash } = await sb
+        .from("schedules")
+        .select("id")
+        .eq("trainer_id", trainerId)
+        .eq("active", true)
+        .eq("weekday", s.weekday)
+        .eq("hour", s.hour)
+        .eq("minute", s.minute)
+        .limit(1)
+        .maybeSingle();
+      if (clash) {
+        clashMsg = `${weekdayKo(s.weekday)} ${s.hour}시${s.minute ? " " + s.minute + "분" : ""}에 이미 다른 수업이 있어요`;
+        break;
+      }
+    }
+    if (clashMsg) {
+      failed.push({ name, error: clashMsg });
+      continue;
     }
 
     // 1) 회원

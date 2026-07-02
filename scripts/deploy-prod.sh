@@ -20,6 +20,22 @@ if [ ! -f .env.deploy.local ]; then
 fi
 set -a; . ./.env.deploy.local; set +a
 
+# 0) 배포 전 git 상태 검증(감사 #30) — 직접 업로드 방식은 '현재 워킹트리'가 그대로 라이브로 나간다.
+#    백그라운드 자동커밋 세션의 브랜치 전환·더티 트리와 결합하면 엉뚱한 코드가 배포되므로
+#    main + clean + origin/main 일치일 때만 진행. 의도적 예외는 DEPLOY_ALLOW_DIRTY=1.
+if [ "${DEPLOY_ALLOW_DIRTY:-0}" != "1" ]; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$BRANCH" != "main" ]; then
+    echo "ERROR: 현재 브랜치($BRANCH)가 main이 아닙니다. (예외: DEPLOY_ALLOW_DIRTY=1)" >&2; exit 1
+  fi
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "ERROR: 워킹트리가 깨끗하지 않습니다 — 커밋/스태시 후 배포하세요. (예외: DEPLOY_ALLOW_DIRTY=1)" >&2; exit 1
+  fi
+  if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main 2>/dev/null || echo none)" ]; then
+    echo "ERROR: HEAD가 origin/main과 다릅니다 — 먼저 git push origin main. (예외: DEPLOY_ALLOW_DIRTY=1)" >&2; exit 1
+  fi
+fi
+
 # 1) (선택) 마이그레이션을 운영 DB에 적용 — 로컬 supabase_db 컨테이너의 psql 사용
 if [ "$#" -gt 0 ]; then
   CID="$(docker ps --format '{{.Names}}' | grep -i supabase_db | head -1 || true)"
@@ -29,7 +45,8 @@ if [ "$#" -gt 0 ]; then
   fi
   for f in "$@"; do
     echo "→ PROD DB 적용: $f"
-    docker exec -i "$CID" psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 < "$f"
+    # -1(single-transaction): 파일 중간 실패 시 반쪽 스키마로 남지 않게 전체 롤백(감사 #44)
+    docker exec -i "$CID" psql "$SUPABASE_DB_URL" -1 -v ON_ERROR_STOP=1 < "$f"
   done
 fi
 

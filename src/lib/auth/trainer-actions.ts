@@ -1,4 +1,5 @@
 "use server";
+import { randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
@@ -92,14 +93,16 @@ export async function inviteInstructor(
   const admin = createSupabaseAdmin();
   const { data: exists } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
   if (exists) return { ok: false, error: "이미 사용 중인 아이디예요" };
-  const tempPassword = String(Math.floor(100000 + Math.random() * 900000)); // 랜덤 6자리 숫자
+  // CSPRNG 8자리 영문+숫자 — Math.random 6자리 숫자는 추측 가능(감사 #42). 첫 로그인 시 변경 강제는 유지.
+  const ALPHANUM = "abcdefghjkmnpqrstuvwxyz23456789"; // 혼동 문자(l/1, o/0) 제외
+  const tempPassword = Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
   const { data: created, error } = await admin.auth.admin.createUser({
     email: toEmail(uname),
     password: tempPassword,
     email_confirm: true,
   });
   if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 생성에 실패했어요" };
-  await admin.from("trainers").insert({
+  const { error: insErr } = await admin.from("trainers").insert({
     auth_user_id: created.user.id,
     username: uname,
     display_name: name.trim() || uname,
@@ -108,6 +111,11 @@ export async function inviteInstructor(
     must_change_password: true,
     phone: phone.trim() || null,
   });
+  if (insErr) {
+    // 실패했는데 임시비밀번호와 함께 성공 반환되고 고아 auth 계정이 남던 문제(감사 #19).
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
+  }
   return { ok: true, username: uname, tempPassword };
 }
 

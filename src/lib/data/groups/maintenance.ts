@@ -79,16 +79,25 @@ export async function generateUpcomingSessions(weeks = 4): Promise<{ created: nu
   const fresh = slots.filter((s) => !seen.has(`${s.schedId}|${s.at.getTime()}`));
   if (fresh.length === 0) return { created: 0 };
 
-  const { data: inserted } = await sb
+  // upsert + ignoreDuplicates: 동시 실행(두 기기가 동시에 대시보드 로드)이 같은 슬롯을 이중 생성하던
+  // 문제(감사 #15) — unique 인덱스(0017: source_schedule_id, scheduled_at)를 백스톱으로 충돌분은 조용히 skip.
+  const { data: inserted, error: insErr } = await sb
     .from("sessions")
-    .insert(fresh.map((s) => ({
-      trainer_id: s.trainerId,
-      scheduled_at: s.at.toISOString(),
-      type: s.type,
-      status: "scheduled",
-      source_schedule_id: s.schedId,
-    })))
+    .upsert(
+      fresh.map((s) => ({
+        trainer_id: s.trainerId,
+        scheduled_at: s.at.toISOString(),
+        type: s.type,
+        status: "scheduled",
+        source_schedule_id: s.schedId,
+      })),
+      { onConflict: "source_schedule_id,scheduled_at", ignoreDuplicates: true },
+    )
     .select("id, source_schedule_id, scheduled_at");
+  if (insErr) {
+    console.error("[maintenance] sessions insert failed:", insErr.message);
+    return { created: 0 };
+  }
 
   // 새 세션마다 멤버 연결
   const memberRows: { session_id: string; member_id: string }[] = [];
@@ -97,13 +106,22 @@ export async function generateUpcomingSessions(weeks = 4): Promise<{ created: nu
     if (!slot) continue;
     for (const mid of slot.memberIds) memberRows.push({ session_id: row.id as string, member_id: mid });
   }
-  if (memberRows.length > 0) await sb.from("session_members").insert(memberRows);
+  if (memberRows.length > 0) {
+    const { error: smErr } = await sb.from("session_members").insert(memberRows);
+    if (smErr) {
+      // 멤버 연결 실패 시 이번 실행이 만든 세션을 회수 — 회원 없는 세션이 dedup 키를 점유해
+      // 영구 잔류하던 문제(감사 #21). 다음 실행이 처음부터 다시 생성한다.
+      console.error("[maintenance] session_members insert failed — rolling back:", smErr.message);
+      await sb.from("sessions").delete().in("id", (inserted ?? []).map((r) => r.id as string));
+      return { created: 0 };
+    }
+  }
 
   return { created: (inserted ?? []).length };
 }
 
-/** 대표 대시보드 로드 시 best-effort 유지보수: 만료 전이 → 세션 생성. */
+/** 대표 대시보드 로드 시 best-effort 유지보수: 만료 전이 → 세션 생성. 실패는 로그로 남긴다(감사 #45). */
 export async function runStudioMaintenance(): Promise<void> {
-  await flipExpiredMemberships().catch(() => {});
-  await generateUpcomingSessions().catch(() => {});
+  await flipExpiredMemberships().catch((e) => console.error("[maintenance] flipExpiredMemberships:", e));
+  await generateUpcomingSessions().catch((e) => console.error("[maintenance] generateUpcomingSessions:", e));
 }

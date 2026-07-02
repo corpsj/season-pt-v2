@@ -413,18 +413,28 @@ export async function ensureChatThread(memberId: string): Promise<string | null>
     if (canon.memberIds.every((id) => set.has(id))) return cand.id;
   }
 
-  // None — create the thread + all participants under the canonical trainer.
+  // None — create under a canonical key(0017 unique 인덱스). 같은 회원·강사 조합의 동시 첫 접속이
+  // 스레드를 이중 생성하던 check-then-create 레이스(감사 #35)를 DB가 백스톱.
+  const canonicalKey = `${canon.trainerId}:${canon.type}:${[...canon.memberIds].sort().join(",")}`;
   const now = new Date().toISOString();
   const { data: thread, error } = await sb
     .from("chat_threads")
-    .insert({ trainer_id: canon.trainerId, type: canon.type, updated_at: now })
+    .insert({ trainer_id: canon.trainerId, type: canon.type, updated_at: now, canonical_key: canonicalKey })
     .select("id")
     .single();
-  if (error || !thread) return null;
-  const threadId = thread.id as string;
+  let threadId = thread?.id as string | undefined;
+  if (error || !threadId) {
+    // unique 충돌(동시 생성 패배) → 이긴 쪽 스레드 재사용
+    const { data: existing } = await sb.from("chat_threads").select("id").eq("canonical_key", canonicalKey).maybeSingle();
+    if (!existing) return null;
+    threadId = existing.id as string;
+  }
   const { error: pErr } = await sb
     .from("chat_participants")
-    .insert(canon.memberIds.map((mid) => ({ thread_id: threadId, member_id: mid })));
+    .upsert(
+      canon.memberIds.map((mid) => ({ thread_id: threadId, member_id: mid })),
+      { ignoreDuplicates: true },
+    );
   if (pErr) return null;
   return threadId;
 }

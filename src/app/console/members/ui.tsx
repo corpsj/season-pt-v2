@@ -155,9 +155,19 @@ export function MembersClient({
     setCsvResult(null);
     setModal("csv");
   }
+  // UTF-8 강제 디코딩만 쓰면 한국 엑셀 기본 저장(CP949/EUC-KR) CSV의 이름이 깨진 채 통과된다(감사 #46).
+  // UTF-8 strict 시도 → 실패 시 EUC-KR 폴백.
+  async function decodeCsvFile(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+    } catch {
+      return new TextDecoder("euc-kr").decode(buf);
+    }
+  }
   async function onCsvFile(file: File) {
     setCsvResult(null);
-    setCsvRows(parseCsv(await file.text()));
+    setCsvRows(parseCsv(await decodeCsvFile(file)));
   }
   async function doCsvAdd() {
     if (busy || !csvRows) return;
@@ -178,7 +188,7 @@ export function MembersClient({
   }
   async function onCarryFile(file: File) {
     setCarryResult(null);
-    setCarryRows(parseCarryoverCsv(await file.text()));
+    setCarryRows(parseCarryoverCsv(await decodeCsvFile(file)));
   }
   async function doCarry() {
     if (busy || !carryRows) return;

@@ -15,6 +15,7 @@ export type SettlementRow = {
 };
 export type Settlement = {
   monthOffset: number; // 0=이번 달, 1=지난 달 …
+  monthKey: string; // 'YYYY-MM' — 확정/취소 시 절대 월 고정용(감사 #32: 월 전환 순간 오확정 방지)
   monthLabel: string;
   rows: SettlementRow[];
   total: number;
@@ -29,11 +30,11 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const target = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth() - off, 1));
   const monthLabel = monthLabelFromKst(target);
 
+  const monthKey = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}`;
   const t = await getTrainerContext();
-  if (!t || t.role !== "owner") return { monthOffset: off, monthLabel, rows: [], total: 0, confirmed: false, stale: false };
+  if (!t || t.role !== "owner") return { monthOffset: off, monthKey, monthLabel, rows: [], total: 0, confirmed: false, stale: false };
 
   const { startISO, endISO } = monthBoundsFromKst(target);
-  const monthKey = `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, "0")}`;
 
   const [{ data: trainers }, { data: sessions }, { data: settleRows }] = await Promise.all([
     sb.from("trainers").select("id, display_name, role, status, rate_1on1, rate_2on1").order("role", { ascending: false }),
@@ -88,5 +89,5 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const liveLabor = rows.filter((r) => r.role !== "owner" && r.payout > 0).reduce((s, r) => s + r.payout, 0);
   const stale = confirmed && storedLabor !== liveLabor;
 
-  return { monthOffset: off, monthLabel, rows, total, confirmed, stale };
+  return { monthOffset: off, monthKey, monthLabel, rows, total, confirmed, stale };
 }

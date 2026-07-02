@@ -122,13 +122,13 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const monthEndExcl = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, "0")}-01`;
 
-  // Sessions + trainer/membership/legend are all independent → fetch concurrently.
-  const [{ data: sm }, tr, membership, scheduleLegend] = await Promise.all([
+  // Sessions + membership/legend are all independent → fetch concurrently.
+  // (선택일 수업 카드는 getMemberCalendarDayMap.dayClasses가 담당 — 여기선 달력 도트/배지만)
+  const [{ data: sm }, membership, scheduleLegend] = await Promise.all([
     sb
       .from("session_members")
       .select("session_id, sessions(id, scheduled_at, status, trainer_id)")
       .eq("member_id", me.memberId),
-    primaryTrainer(me.memberId),
     activeMembership(me.memberId),
     scheduleLegendFor(me.memberId),
   ]);
@@ -156,17 +156,12 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     };
   });
 
-  // Selected day's session (first non-cancelled).
   const selDay = Number(selISO.slice(8, 10));
   const selWd = (firstWeekday + selDay - 1) % 7;
   const selDateLabel = `${month}월 ${selDay}일 ${weekdayKo(selWd)}`;
-  const sessionOnDay = rows
-    .filter((s) => kstDateISO(s.scheduled_at) === selISO)
-    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0];
 
   const remaining = membership?.remaining_sessions ?? 0;
   const dDay = membership ? dayDiff(today, membership.end_date) : 0;
-  const nowIso = new Date().toISOString(); // real instant — for past-session check
 
   // Pending trainer change request on ANY of this member's sessions — must not be scoped to
   // the viewed month, or a request for a session in another month leaves the member with no
@@ -196,14 +191,6 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     calDays,
     selDateLabel,
     scheduleLegend,
-    dayClass: sessionOnDay
-      ? {
-          sessionId: sessionOnDay.id,
-          time: clockLabel(sessionOnDay.scheduled_at),
-          trainerName: tr?.display_name ?? "",
-          isPast: sessionOnDay.scheduled_at < nowIso,
-        }
-      : undefined,
   };
 }
 
@@ -214,7 +201,9 @@ export type MemberCalendarDayMap = {
     string,
     {
       selDateLabel: string;
-      dayClass?: MemberDayClass;
+      // 하루에 수업이 2개(보강 등)여도 전부 노출 — 첫 세션만 보여 두 번째 수업이 회원 화면에서
+      // 보이지도, 변경 요청도 불가하던 문제(감사 #38).
+      dayClasses: MemberDayClass[];
     }
   >;
 };
@@ -247,22 +236,26 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     });
 
   const nowIso = new Date().toISOString();
-  const byDay = new Map<string, { id: string; scheduled_at: string }>();
+  const byDay = new Map<string, { id: string; scheduled_at: string }[]>();
   for (const s of rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))) {
     const d = kstDateISO(s.scheduled_at);
-    if (!byDay.has(d)) byDay.set(d, { id: s.id, scheduled_at: s.scheduled_at });
+    const arr = byDay.get(d) ?? [];
+    arr.push({ id: s.id, scheduled_at: s.scheduled_at });
+    byDay.set(d, arr);
   }
 
   const days: MemberCalendarDayMap["days"] = {};
   for (let n = 1; n <= daysInMonth; n++) {
     const dISO = `${year}-${String(month).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
     const wd = (firstWeekday + n - 1) % 7;
-    const sess = byDay.get(dISO);
     days[dISO] = {
       selDateLabel: `${month}월 ${n}일 ${weekdayKo(wd)}`,
-      dayClass: sess
-        ? { sessionId: sess.id, time: clockLabel(sess.scheduled_at), trainerName, isPast: sess.scheduled_at < nowIso }
-        : undefined,
+      dayClasses: (byDay.get(dISO) ?? []).map((sess) => ({
+        sessionId: sess.id,
+        time: clockLabel(sess.scheduled_at),
+        trainerName,
+        isPast: sess.scheduled_at < nowIso,
+      })),
     };
   }
 

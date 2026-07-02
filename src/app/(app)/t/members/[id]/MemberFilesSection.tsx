@@ -10,7 +10,8 @@ import { uploadMemberFile, deleteMemberFile } from "@/lib/data/groups/member-fil
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 
 const CFG = {
-  photo: { title: "진행 사진", icon: "camera", accept: "image/*", capture: true, empty: "아직 사진이 없어요" },
+  // capture 미강제 — 카메라 전용이면 이미 찍어둔 사진(갤러리)을 못 올린다(감사 #27과 동일 문제)
+  photo: { title: "진행 사진", icon: "camera", accept: "image/*", capture: false, empty: "아직 사진이 없어요" },
   inbody: { title: "인바디", icon: "document-text", accept: "application/pdf", capture: false, empty: "아직 인바디 결과가 없어요" },
 } as const;
 
