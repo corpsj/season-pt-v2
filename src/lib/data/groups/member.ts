@@ -453,6 +453,7 @@ export async function getMemberChatRoom() {
       isTeam: false,
       messages: [] as ChatMessageView[],
       cursor: null as string | null,
+      truncated: false,
     };
   }
 
@@ -478,11 +479,15 @@ export async function getMemberChatRoom() {
     }
   }
 
-  const { data: msgs } = await sb
+  // 최근 100건만(감사3 #19) — desc로 뽑은 뒤 원래 순서(오름차순)로 되돌린다.
+  const { data: msgsDesc } = await sb
     .from("chat_messages")
     .select("id, sender_type, sender_id, text, created_at")
     .eq("thread_id", threadId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const truncated = (msgsDesc ?? []).length === 100;
+  const msgs = (msgsDesc ?? []).slice().reverse();
 
   // 이 회원의 읽음 지점 갱신(참여자별 — 2:1에서 상대 배지에 영향 없음).
   await sb
@@ -517,6 +522,7 @@ export async function getMemberChatRoom() {
     isTeam,
     messages,
     cursor,
+    truncated,
   };
 }
 

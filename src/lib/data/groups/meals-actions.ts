@@ -3,8 +3,14 @@ import { revalidatePath } from "next/cache";
 import { sb, getMemberContext } from "@/lib/data/db";
 import { validateUpload } from "@/lib/media/upload-guard";
 import { FILES_BUCKET, trainerCanAccess } from "./member-files";
+import { getMyMeals, type MealsPage } from "./meals";
 
 type Result = { ok: boolean; error?: string };
+
+/** 회원 본인 식단 더보기(무한스크롤 아님, 버튼 클릭 페이지네이션) — getMyMeals와 동일 권한. */
+export async function loadMoreMeals(offset: number): Promise<MealsPage> {
+  return getMyMeals(offset);
+}
 
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const MEAL_TYPES = ["아침", "점심", "저녁", "간식"];

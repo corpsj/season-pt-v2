@@ -21,14 +21,21 @@ async function signed(path: string | null): Promise<string | null> {
   return data?.signedUrl ?? null;
 }
 
-async function listMeals(memberId: string): Promise<MealLog[]> {
+export type MealsPage = { meals: MealLog[]; hasMore: boolean };
+
+// ponytail: 60건/페이지 고정 상한 — 사용 개월수에 비례해 무거워지는 문제(감사3 #19) 방지.
+const PAGE_SIZE = 60;
+
+async function listMeals(memberId: string, offset = 0): Promise<MealsPage> {
   const { data } = await sb
     .from("meal_logs")
     .select("id, photo_path, memo, meal_type, eaten_at, feedback, feedback_at")
     .eq("member_id", memberId)
-    .order("eaten_at", { ascending: false });
-  return Promise.all(
-    (data ?? []).map(async (r) => ({
+    .order("eaten_at", { ascending: false })
+    .range(offset, offset + PAGE_SIZE - 1);
+  const rows = data ?? [];
+  const meals = await Promise.all(
+    rows.map(async (r) => ({
       id: r.id as string,
       photoUrl: await signed(r.photo_path as string | null),
       memo: (r.memo as string | null) ?? null,
@@ -38,17 +45,18 @@ async function listMeals(memberId: string): Promise<MealLog[]> {
       feedbackAt: (r.feedback_at as string | null) ?? null,
     })),
   );
+  return { meals, hasMore: rows.length === PAGE_SIZE };
 }
 
-/** 강사/대표 열람. 권한 없으면 빈 배열. */
-export async function getMemberMeals(memberId: string): Promise<MealLog[]> {
-  if (!(await trainerCanAccess(memberId))) return [];
+/** 강사/대표 열람. 권한 없으면 빈 배열. 최근 60건만(더보기 없음 — 강사 열람 화면은 요약용). */
+export async function getMemberMeals(memberId: string): Promise<MealsPage> {
+  if (!(await trainerCanAccess(memberId))) return { meals: [], hasMore: false };
   return listMeals(memberId);
 }
 
-/** 회원 본인 열람. */
-export async function getMyMeals(): Promise<MealLog[]> {
+/** 회원 본인 열람. offset으로 페이지네이션(더보기). */
+export async function getMyMeals(offset = 0): Promise<MealsPage> {
   const me = await getMemberContext();
-  if (!me) return [];
-  return listMeals(me.memberId);
+  if (!me) return { meals: [], hasMore: false };
+  return listMeals(me.memberId, offset);
 }

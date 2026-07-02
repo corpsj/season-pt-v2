@@ -30,6 +30,7 @@ export function MemberChatClient({
   isTeam,
   messages: initialMessages,
   cursor: initialCursor,
+  truncated,
 }: {
   trainerName: string;
   initial: string;
@@ -37,6 +38,7 @@ export function MemberChatClient({
   isTeam: boolean;
   messages: ChatMessageView[];
   cursor: string | null;
+  truncated?: boolean;
 }) {
   const showToast = useToast();
   const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
@@ -112,6 +114,11 @@ export function MemberChatClient({
       </div>
 
       <Body className="gap-2.5 py-3">
+        {truncated ? (
+          <div className="mx-auto mb-1 rounded-full bg-chip-soft px-3 py-1 text-[11px] font-medium text-muted2">
+            최근 100개 메시지만 표시돼요
+          </div>
+        ) : null}
         {(() => {
           const todayKey = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
           const yesterdayKey = new Date(Date.now() - 86400000 + 9 * 3600000).toISOString().slice(0, 10);

@@ -364,6 +364,7 @@ export interface ChatRoomView {
   sub: string;
   messages: ChatMessageView[];
   cursor?: string | null; // newest message's created_at; initial poll cursor
+  truncated?: boolean; // true when the initial load hit the 100-message cap(older history not shown)
 }
 /** A member a trainer can start a chat with (new-message picker). */
 export interface ChatMemberPick {
