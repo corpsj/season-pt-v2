@@ -65,7 +65,9 @@ async function main() {
   // --- schedules + sessions ---
   let sess = 0;
   for (const s of SCHEDS) {
-    const sch = (await db.from("schedules").insert({ trainer_id: owner.id, type: "1on1", weekday: s.weekday, hour: s.hour, active: true }).select("id").single()).data!;
+    // minute을 안 넣으면 schedules.minute이 0으로 저장돼, 유지보수 크론(maintenance.ts)이 미래 세션을
+    // 정각(:00)으로 잘못 생성해 실제 :30 수업과 중복된다 — createMember/carryoverMembers와 동일하게 명시.
+    const sch = (await db.from("schedules").insert({ trainer_id: owner.id, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true }).select("id").single()).data!;
     await db.from("schedule_members").insert({ schedule_id: sch.id, member_id: m.id });
     let cur = SINCE;
     while (cur <= "2026-06-30") {
