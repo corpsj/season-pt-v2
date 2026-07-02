@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { PBtn, OBtn, ConsoleModal } from "@/components/console/ui";
-import { inviteInstructor, updateInstructor, setInstructorActive, deleteInstructor } from "@/lib/auth/trainer-actions";
+import { inviteInstructor, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword } from "@/lib/auth/trainer-actions";
 
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
@@ -104,6 +104,7 @@ export function TrainerActions({
   const [busy, setBusy] = useState(false);
   const [eName, setEName] = useState(name);
   const [ePhone, setEPhone] = useState(phone);
+  const [tempPw, setTempPw] = useState<string | null>(null);
 
   if (isOwner) {
     return <div className="rounded-[13px] bg-[#FBF7F1] px-4 py-3.5 text-center text-[12.5px] font-medium text-[#9A917F]">대표 계정은 콘솔에서 수정·삭제할 수 없어요</div>;
@@ -126,6 +127,15 @@ export function TrainerActions({
     toast(active ? "비활성화했어요" : "활성화했어요");
     router.refresh();
   }
+  async function resetPassword() {
+    if (busy) return;
+    if (!confirm(`${name} 강사의 비밀번호를 초기화할까요? 임시 비밀번호가 발급돼요.`)) return;
+    setBusy(true);
+    const r = await resetInstructorPassword(id);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요");
+    setTempPw(r.tempPassword ?? null);
+  }
   async function remove() {
     setBusy(true);
     const r = await deleteInstructor(id);
@@ -141,8 +151,16 @@ export function TrainerActions({
       <div className="flex gap-2.5">
         <OBtn icon="pencil" className="flex-1" onClick={() => { setEName(name); setEPhone(phone); setModal("edit"); }}>정보 수정</OBtn>
         <OBtn icon={active ? "pause" : "play"} className="flex-1" disabled={busy || isMe} onClick={toggle}>{active ? "비활성화" : "활성화"}</OBtn>
+        <OBtn icon="lock" className="flex-1" disabled={busy || isMe} onClick={resetPassword}>비번 초기화</OBtn>
         <button onClick={() => setModal("delete")} disabled={busy || isMe} className="flex-none rounded-[12px] border-[1.4px] border-[rgba(198,115,82,0.4)] bg-white px-4 text-[13.5px] font-semibold text-terracotta transition hover:bg-[#FBF3E9] disabled:opacity-40">삭제</button>
       </div>
+
+      {tempPw ? (
+        <div className="mt-2.5 rounded-[14px] bg-[#FBF7F1] px-5 py-4">
+          <Row k="임시 비밀번호" v={tempPw} mono />
+          <div className="mt-2 text-[12px] leading-relaxed text-[#8A8175]">지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.</div>
+        </div>
+      ) : null}
 
       {modal === "edit" ? (
         <ConsoleModal title="강사 정보 수정" onClose={() => setModal(null)} footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={save}>저장</PBtn></>}>

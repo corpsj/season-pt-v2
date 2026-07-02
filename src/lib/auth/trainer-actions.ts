@@ -210,3 +210,21 @@ export async function deleteInstructor(id: string): Promise<Result> {
   revalidatePath("/t/staff");
   return { ok: true };
 }
+
+/** 강사 비밀번호 초기화. 대표 전용. 임시비밀번호를 발급하고 첫 로그인 시 변경을 강제한다. */
+export async function resetInstructorPassword(id: string): Promise<Result & { tempPassword?: string }> {
+  const me = await ensureOwner();
+  if (!me) return { ok: false, error: OWNER_ONLY_ERROR };
+  const admin = createSupabaseAdmin();
+  const target = await fetchTrainer(admin, id);
+  if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
+  if (target.role === "owner") return { ok: false, error: "대표 계정은 초기화할 수 없어요. scripts/reset-trainer-password.ts를 사용하세요." };
+  if (!target.auth_user_id) return { ok: false, error: "로그인 계정이 없는 강사예요" };
+  // inviteInstructor와 동일한 CSPRNG 임시비번(혼동 문자 제외 8자리)
+  const ALPHANUM = "abcdefghjkmnpqrstuvwxyz23456789";
+  const tempPassword = Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
+  const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password: tempPassword });
+  if (error) return { ok: false, error: "초기화에 실패했어요. 다시 시도해주세요." };
+  await admin.from("trainers").update({ must_change_password: true }).eq("id", id);
+  return { ok: true, tempPassword };
+}

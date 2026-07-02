@@ -10,13 +10,14 @@ import { Banner } from "@/components/ui/Banner";
 import { Kicker } from "@/components/ui/Kicker";
 import { Field, TextInput } from "@/components/ui/Field";
 import { Switch } from "@/components/ui/Switch";
-import { PrimaryButton } from "@/components/ui/Button";
+import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import {
   updateInstructor,
   setInstructorActive,
   deleteInstructor,
+  resetInstructorPassword,
 } from "@/lib/auth/trainer-actions";
 import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import type { StaffMemberDetail } from "@/lib/data/groups/owner-ops";
@@ -35,6 +36,7 @@ export function StaffDetailClient({
   const [active, setActive] = useState(member.status === "active");
   const [busy, setBusy] = useState(false);
   const [reassignTo, setReassignTo] = useState("");
+  const [tempPw, setTempPw] = useState<string | null>(null);
 
   async function onReassign() {
     if (busy || !reassignTo) return;
@@ -76,6 +78,16 @@ export function StaffDetailClient({
       toast(next ? "강사를 활성화했어요" : "강사를 비활성화했어요");
       router.refresh();
     }
+  }
+
+  async function onResetPassword() {
+    if (busy) return;
+    if (!confirm(`${member.name} 강사의 비밀번호를 초기화할까요? 임시 비밀번호가 발급돼요.`)) return;
+    setBusy(true);
+    const r = await resetInstructorPassword(member.id);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요");
+    setTempPw(r.tempPassword ?? null);
   }
 
   async function onDelete() {
@@ -171,6 +183,22 @@ export function StaffDetailClient({
                   <Switch on={active} onChange={onToggle} disabled={busy} label="활성 상태" />
                 </Card>
               </>
+            ) : null}
+
+            {/* password reset */}
+            <div className="mb-2.5 mt-7">
+              <Kicker>비밀번호</Kicker>
+            </div>
+            <OutlineButton icon="lock" onClick={onResetPassword} disabled={busy || member.isMe}>
+              비밀번호 초기화
+            </OutlineButton>
+            {member.isMe ? (
+              <div className="mt-2.5 text-[12px] font-medium text-muted">본인 계정은 여기서 초기화할 수 없어요</div>
+            ) : null}
+            {tempPw ? (
+              <Banner tone="warn" className="mt-2.5">
+                임시 비밀번호: <b className="select-all">{tempPw}</b> — 지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.
+              </Banner>
             ) : null}
 
             {/* reassign members (퇴사 인수인계) */}
