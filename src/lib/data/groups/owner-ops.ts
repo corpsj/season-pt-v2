@@ -834,3 +834,36 @@ export async function getMemberSchedule(memberId: string): Promise<MemberSchedul
 
   return { trainerId, slots };
 }
+
+/**
+ * 2:1 팀 파트너 후보: 이 회원과 같은 담당 강사의 회원 중 자기·비활성·이미 팀인 회원을 제외한 목록.
+ * 모바일/콘솔 팀 만들기 화면에서 파트너 선택용. buildTeamSchedule이 같은 강사 여부를 최종 검증한다.
+ */
+export async function getTeamCandidates(memberId: string): Promise<{ id: string; name: string }[]> {
+  const { data: mt } = await sb.from("member_trainers").select("trainer_id").eq("member_id", memberId).maybeSingle();
+  const trainerId = (mt?.trainer_id as string | null) ?? null;
+  if (!trainerId) return [];
+
+  const { data: links } = await sb
+    .from("member_trainers")
+    .select("member_id, members(id, name, status)")
+    .eq("trainer_id", trainerId);
+  const others = (links ?? [])
+    .map((l) => (l as unknown as { members: { id: string; name: string; status: string } | null }).members)
+    .filter((m): m is { id: string; name: string; status: string } => !!m && m.id !== memberId && m.status !== "inactive");
+  if (others.length === 0) return [];
+
+  // 이미 활성 2:1 팀인 회원 제외(2:1은 고정 페어).
+  const { data: teamScheds } = await sb
+    .from("schedules")
+    .select("schedule_members(member_id)")
+    .eq("type", "2on1")
+    .eq("active", true);
+  const teamed = new Set(
+    (teamScheds ?? []).flatMap((s) =>
+      ((s as unknown as { schedule_members: { member_id: string }[] }).schedule_members ?? []).map((m) => m.member_id),
+    ),
+  );
+
+  return others.filter((m) => !teamed.has(m.id)).map((m) => ({ id: m.id, name: m.name }));
+}

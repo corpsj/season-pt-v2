@@ -251,7 +251,7 @@ export function MemberRegisterClient({
         </>
         ) : (
           <Banner tone="team" className="mt-6">
-            2:1 팀 수업은 회원 등록 후 [회원 관리 → 2:1 팀 만들기]에서 두 회원을 함께 묶어 시간을 정해요.
+            2:1 팀 수업은 회원 등록 후 회원 상세 화면의 [2:1 팀으로 묶기]에서 두 회원을 함께 묶어 시간을 정해요.
           </Banner>
         )}
 
