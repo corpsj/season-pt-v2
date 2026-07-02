@@ -48,7 +48,8 @@ export function MembershipActions({
     }
     // ponytail: cast — ok:true branch not a proper discriminant in inferred union
     const pp = p as { ok: true; refund: number; used: number; noBaseline?: boolean };
-    setAmt(String(pp.refund));
+    // noBaseline(이관): 산식 항상 0원 → prefill하면 0원 원클릭 환불 가능(감사3 #7). 직접 입력 강제.
+    setAmt(pp.noBaseline ? "" : String(pp.refund));
     setMethod("account");
     setRefundModal({ base: pp.refund, used: pp.used, noBaseline: !!pp.noBaseline });
   }

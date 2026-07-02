@@ -102,7 +102,8 @@ export function MembersClient({
     const p = (await previewRefund(detail.activeMembershipId)) as { ok: boolean; refund?: number; used?: number; noBaseline?: boolean; error?: string };
     if (!p.ok) { setRefundErr(p.error ?? "환불 금액을 계산하지 못했어요. 금액을 직접 입력해주세요."); return; }
     setRefund({ refund: p.refund ?? 0, used: p.used ?? 0, noBaseline: !!p.noBaseline });
-    setRefundAmt(String(p.refund ?? 0));
+    // noBaseline(이관): 산식이 항상 0원 → prefill하면 0원 원클릭 환불 가능(감사3 #7). 직접 입력 강제.
+    setRefundAmt(p.noBaseline ? "" : String(p.refund ?? 0));
   }
   async function doRefund() {
     if (!detail?.activeMembershipId) return;
