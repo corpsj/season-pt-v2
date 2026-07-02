@@ -241,8 +241,6 @@ export async function recordPayment(input: {
 
   let membershipId = input.membershipId;
   let amount: number | null = input.amount ?? null;
-  // 결제 당시의 결제자 스냅샷(양도 후에도 원 결제자에게 결제내역이 남도록, 감사3 #14).
-  let payerMemberId: string | null = input.memberId ?? null;
 
   if (!membershipId && input.memberId) {
     const { data: ms } = await sb
@@ -258,18 +256,17 @@ export async function recordPayment(input: {
   } else if (membershipId && amount === null) {
     const { data: ms } = await sb
       .from("memberships")
-      .select("price, member_id")
+      .select("price")
       .eq("id", membershipId)
       .maybeSingle();
     amount = ms?.price ?? null;
-    payerMemberId = ms?.member_id ?? null;
   }
 
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
-  if (!payerMemberId) {
-    const { data: ms } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
-    payerMemberId = ms?.member_id ?? null;
-  }
+  // 결제자 스냅샷은 회원권 소유자를 단일 소스로 확정 조회(양도 후에도 결제내역이 원 결제자에게 남도록, 감사3 #14).
+  // input.memberId를 신뢰하면 페이지 로드~제출 사이 양도 시 stale 결제자가 박힘 → 항상 membership row에서 새로 읽는다.
+  const { data: payerRow } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+  const payerMemberId: string | null = payerRow?.member_id ?? null;
   // 0원·null·음수 결제가 '기록 완료'로 통과해 장부에서 조용히 누락되던 문제(감사 #28).
   if (amount == null || !Number.isFinite(amount) || amount <= 0) {
     return { ok: false, error: "결제 금액을 확인해주세요" };
@@ -316,8 +313,6 @@ export async function recordPayments(input: {
   if (lines.length === 0) return { ok: false, error: "금액을 입력해주세요" };
 
   let membershipId = input.membershipId;
-  // 결제 당시의 결제자 스냅샷(양도 후에도 원 결제자에게 결제내역이 남도록, 감사3 #14).
-  let payerMemberId: string | null = input.memberId ?? null;
   if (!membershipId && input.memberId) {
     const { data: ms } = await sb
       .from("memberships")
@@ -330,10 +325,10 @@ export async function recordPayments(input: {
     membershipId = ms?.id;
   }
   if (!membershipId) return { ok: false, error: "결제할 회원권을 찾지 못했어요" };
-  if (!payerMemberId) {
-    const { data: ms } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
-    payerMemberId = ms?.member_id ?? null;
-  }
+  // 결제자 스냅샷은 회원권 소유자를 단일 소스로 확정 조회(양도 후에도 결제내역이 원 결제자에게 남도록, 감사3 #14).
+  // input.memberId를 신뢰하면 페이지 로드~제출 사이 양도 시 stale 결제자가 박힘 → 항상 membership row에서 새로 읽는다.
+  const { data: payerRow } = await sb.from("memberships").select("member_id").eq("id", membershipId).maybeSingle();
+  const payerMemberId: string | null = payerRow?.member_id ?? null;
 
   const paidAt = input.paidAt ?? todayISO();
   // 재시도 이중기록 방어: 직전 20초 내 '같은 시그니처(합계·건수)'의 배치가 이미 있으면 멱등 처리.
