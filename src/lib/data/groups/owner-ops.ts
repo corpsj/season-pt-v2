@@ -783,3 +783,54 @@ export async function getOutstanding(): Promise<OutstandingView> {
 
   return { total: items.reduce((s, x) => s + x.outstanding, 0), count: items.length, items };
 }
+
+/* --------------------------- 회원 정기 일정 편집 --------------------------- */
+
+export type MemberScheduleSlot = {
+  scheduleId: string;
+  weekday: number; // 0=일 … 6=토
+  hour: number;
+  minute: number;
+  type: "1on1" | "2on1";
+  editable: boolean; // 1:1 솔로만 편집 가능 — 2:1 팀은 파트너에게 영향이라 읽기전용
+  partnerName?: string;
+};
+export type MemberScheduleView = { trainerId: string | null; slots: MemberScheduleSlot[] };
+
+/** 회원의 활성 정기 스케줄을 편집용 슬롯 목록으로. 담당 강사(스케줄 소유자)도 함께 반환. */
+export async function getMemberSchedule(memberId: string): Promise<MemberScheduleView> {
+  const { data: mt } = await sb.from("member_trainers").select("trainer_id").eq("member_id", memberId).maybeSingle();
+  const trainerId = (mt?.trainer_id as string | null) ?? null;
+
+  const { data: links } = await sb.from("schedule_members").select("schedule_id").eq("member_id", memberId);
+  const ids = (links ?? []).map((l) => l.schedule_id as string);
+  if (ids.length === 0) return { trainerId, slots: [] };
+
+  const { data: rows } = await sb
+    .from("schedules")
+    .select("id, type, weekday, hour, minute, schedule_members(member_id, members(name))")
+    .in("id", ids)
+    .eq("active", true);
+
+  const slots: MemberScheduleSlot[] = ((rows ?? []) as unknown as {
+    id: string; type: "1on1" | "2on1"; weekday: number; hour: number; minute: number | null;
+    schedule_members: { member_id: string; members: { name: string } | null }[];
+  }[])
+    .map((s) => {
+      const members = s.schedule_members ?? [];
+      const partner = members.find((m) => m.member_id !== memberId)?.members?.name;
+      const isTeam = s.type === "2on1" || members.length > 1;
+      return {
+        scheduleId: s.id,
+        weekday: s.weekday,
+        hour: s.hour,
+        minute: s.minute ?? 0,
+        type: s.type,
+        editable: !isTeam,
+        partnerName: isTeam ? partner ?? undefined : undefined,
+      };
+    })
+    .sort((a, b) => a.weekday - b.weekday || a.hour - b.hour || a.minute - b.minute);
+
+  return { trainerId, slots };
+}

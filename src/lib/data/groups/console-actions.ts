@@ -6,6 +6,7 @@ import { getProposeSlots } from "@/lib/data/groups/scheduling";
 import { getMemberDetail } from "@/lib/data/groups/trainer-home";
 import { getChatRoom } from "@/lib/data/groups/chat";
 import { issueMembership, recordPayment } from "@/lib/data/groups/owner-ops-actions";
+import { getMemberSchedule, type MemberScheduleView } from "@/lib/data/groups/owner-ops";
 import type { ChatRoomView, MemberDetailView, PaymentMethod } from "@/lib/types";
 
 /** Mark one of the owner's in-app notifications read (topbar bell). */
@@ -61,4 +62,10 @@ export async function loadSessionSignature(sessionId: string): Promise<string | 
   if (!data) return null;
   if (t.role !== "owner" && data.trainer_id !== t.id) return null; // 강사는 본인 수업만
   return (data.member_signature as string | null) ?? null;
+}
+
+/** 콘솔(클라이언트)에서 회원 선택 시 정기 일정 편집용 슬롯 로드 — 대표만. */
+export async function loadMemberSchedule(memberId: string): Promise<MemberScheduleView | null> {
+  if (!(await ensureOwner())) return null;
+  return getMemberSchedule(memberId);
 }

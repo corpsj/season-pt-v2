@@ -4,6 +4,7 @@ import { sb, getTrainerContext, todayISO, parseBirth6 } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules } from "@/lib/data/groups/session-mutations";
+import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -592,4 +593,108 @@ export async function setExerciseActive(id: string, active: boolean): Promise<Re
   if (error) return { ok: false, error: "상태 변경에 실패했어요" };
   revalidatePath("/t/settings/exercises");
   return { ok: true };
+}
+
+const WD_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+/**
+ * 회원의 정기 수업 일정(1:1)을 목표 슬롯 집합으로 맞춘다(대표 전용). 현재와 비교해:
+ *  - 삭제된 슬롯: 스케줄 비활성화 + 그 슬롯의 미래 예정(scheduled) 세션 일괄 삭제(과거·처리분은 불변).
+ *  - 추가된 슬롯: 더블부킹 가드 후 스케줄+참여 생성 → 미래 세션 즉시 materialize.
+ * 2:1 팀 스케줄은 파트너 영향이라 건드리지 않는다(슬롯은 1:1만 받는다).
+ */
+export async function setMemberSchedule(
+  memberId: string,
+  slots: { weekday: number; hour: number; minute: number }[],
+): Promise<Result & { warn?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  // 입력 검증 + 정확 중복 제거
+  const seen = new Set<string>();
+  const desired: { weekday: number; hour: number; minute: number }[] = [];
+  for (const s of slots) {
+    const weekday = Number(s.weekday), hour = Number(s.hour), minute = Number(s.minute);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return { ok: false, error: "요일이 올바르지 않아요." };
+    if (!Number.isInteger(hour) || hour < 6 || hour > 22) return { ok: false, error: "수업 시간은 오전 6시~오후 10시 사이여야 해요." };
+    if (minute !== 0 && minute !== 30) return { ok: false, error: "분은 정각 또는 30분만 가능해요." };
+    const k = `${weekday}|${hour}|${minute}`;
+    if (!seen.has(k)) { seen.add(k); desired.push({ weekday, hour, minute }); }
+  }
+
+  const { data: mt } = await sb.from("member_trainers").select("trainer_id").eq("member_id", memberId).maybeSingle();
+  const trainerId = (mt?.trainer_id as string | null) ?? null;
+  if (!trainerId) return { ok: false, error: "담당 강사가 지정되지 않은 회원이에요." };
+
+  // 현재: 이 회원의 편집 가능한(1:1 솔로) 활성 스케줄
+  const { data: links } = await sb.from("schedule_members").select("schedule_id").eq("member_id", memberId);
+  const ids = (links ?? []).map((l) => l.schedule_id as string);
+  let current: { id: string; weekday: number; hour: number; minute: number }[] = [];
+  if (ids.length) {
+    const { data: rows } = await sb
+      .from("schedules")
+      .select("id, type, weekday, hour, minute, schedule_members(member_id)")
+      .in("id", ids)
+      .eq("active", true);
+    current = ((rows ?? []) as unknown as { id: string; type: string; weekday: number; hour: number; minute: number | null; schedule_members: { member_id: string }[] }[])
+      .filter((s) => s.type === "1on1" && (s.schedule_members ?? []).length <= 1)
+      .map((s) => ({ id: s.id, weekday: s.weekday, hour: s.hour, minute: s.minute ?? 0 }));
+  }
+
+  const key = (x: { weekday: number; hour: number; minute: number }) => `${x.weekday}|${x.hour}|${x.minute}`;
+  const curKeys = new Set(current.map(key));
+  const desKeys = new Set(desired.map(key));
+  const toRemove = current.filter((c) => !desKeys.has(key(c)));
+  const toAdd = desired.filter((d) => !curKeys.has(key(d)));
+
+  // 더블부킹 가드: 담당 강사가 같은 요일·시각에 이미 다른 활성 스케줄을 가지면 거부(당일 겹침 방지, createMember와 동일).
+  for (const s of toAdd) {
+    const { data: clash } = await sb
+      .from("schedules")
+      .select("id")
+      .eq("trainer_id", trainerId)
+      .eq("active", true)
+      .eq("weekday", s.weekday)
+      .eq("hour", s.hour)
+      .eq("minute", s.minute)
+      .limit(1)
+      .maybeSingle();
+    if (clash) {
+      return { ok: false, error: `${WD_KO[s.weekday]} ${s.hour}시${s.minute ? " " + s.minute + "분" : ""}에 이미 다른 수업이 있어요. 다른 시간을 선택해주세요.` };
+    }
+  }
+
+  const nowISO = new Date().toISOString();
+  let warn: string | undefined;
+
+  // 삭제: 스케줄 비활성화(→ 재생성 중단) 후 그 슬롯의 미래 예정 세션 삭제. 스케줄이 이미 비활성이라 유령 재생성 없음.
+  for (const c of toRemove) {
+    const { error: deErr } = await sb.from("schedules").update({ active: false }).eq("id", c.id);
+    if (deErr) { warn = "일부 정기 일정 삭제에 실패했어요. 다시 시도해주세요."; continue; }
+    await sb.from("sessions").delete().eq("source_schedule_id", c.id).eq("status", "scheduled").gte("scheduled_at", nowISO);
+  }
+
+  // 추가: 스케줄 + 참여 회원. 참여 연결 실패 시 방금 만든 스케줄 회수(회원 없는 스케줄 잔류 방지).
+  for (const s of toAdd) {
+    const { data: sched, error: schedErr } = await sb
+      .from("schedules")
+      .insert({ trainer_id: trainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
+      .select("id")
+      .single();
+    if (schedErr || !sched) { warn = "일부 정기 일정 추가에 실패했어요. 다시 시도해주세요."; continue; }
+    const { error: linkErr } = await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: memberId });
+    if (linkErr) {
+      await sb.from("schedules").delete().eq("id", sched.id);
+      warn = "일부 정기 일정 추가에 실패했어요. 다시 시도해주세요.";
+    }
+  }
+
+  // 추가분의 미래 세션을 즉시 생성 — 다음 대시보드 로드까지 기다리지 않고 바로 반영.
+  if (toAdd.length) await generateUpcomingSessions().catch(() => {});
+
+  revalidatePath("/t");
+  revalidatePath("/t/members");
+  revalidatePath("/console");
+  return { ok: true, warn };
 }

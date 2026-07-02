@@ -14,6 +14,7 @@ import { extendMembership, previewRefund, refundMembership } from "@/lib/data/gr
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
+import { ScheduleEditModal } from "./ScheduleEditor";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
@@ -58,7 +59,7 @@ export function MembersClient({
   const [files, setFiles] = useState<MemberFileView[]>(initialFiles);
   const [meals, setMeals] = useState<MealLog[]>(initialMeals);
   const [, startLoad] = useTransition();
-  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund">(null);
+  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule">(null);
   const [busy, setBusy] = useState(false);
 
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "" });
@@ -270,10 +271,23 @@ export function MembersClient({
               )}
 
               {/* actions */}
-              <div className="mb-[18px] grid grid-cols-3 gap-[9px]">
+              <div className="mb-3 grid grid-cols-3 gap-[9px]">
                 <OBtn icon="calendar" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={() => setModal("extend")}>기간 연장</OBtn>
                 <OBtn icon="coins" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={openRefund}>환불</OBtn>
                 <PBtn className="whitespace-nowrap !px-2" onClick={openIssue}>회원권 발급</PBtn>
+              </div>
+
+              {/* 정기 수업 일정 */}
+              <div className="mb-[18px] flex items-center gap-2.5 rounded-[13px] border border-[rgba(75,59,46,0.1)] bg-white px-4 py-3">
+                <Icon name="calendar" size={16} className="flex-none text-sage-deep" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">{d.schedule}</span>
+                <button
+                  type="button"
+                  onClick={() => setModal("schedule")}
+                  className="flex-none rounded-[9px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-3 py-[6px] text-[12.5px] font-semibold text-[#5B6452] transition hover:bg-[#F4F0E8]"
+                >
+                  일정 편집
+                </button>
               </div>
 
               {d.injury ? (
@@ -372,6 +386,15 @@ export function MembersClient({
           trainers={trainers}
           onClose={() => setModal(null)}
           onDone={() => router.refresh()}
+        />
+      ) : null}
+
+      {modal === "schedule" && d ? (
+        <ScheduleEditModal
+          memberId={d.id}
+          memberName={d.name}
+          onClose={() => setModal(null)}
+          onDone={async () => { await reload(); router.refresh(); }}
         />
       ) : null}
 
