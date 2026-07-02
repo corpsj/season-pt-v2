@@ -316,11 +316,11 @@ function SlotsCell({ value, onChange }: { value: CarrySlot[]; onChange: (v: Carr
             </div>
             <div className="mb-2 text-[11px] font-semibold text-[#9A917F]">시각</div>
             <div className="mb-3 flex items-center gap-1.5">
-              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className={`${CELL} ${OK_B} w-[84px] cursor-pointer appearance-none text-center`}>
+              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className={`flex-1 cursor-pointer appearance-none rounded-[10px] border bg-[#FBF9F5] py-[8px] text-center text-[13px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 ${OK_B}`}>
                 {HOURS.map((h) => <option key={h} value={h}>{h}시</option>)}
               </select>
               {([0, 30] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setMinute(m)} className={`flex-1 rounded-[10px] py-[8px] text-[12.5px] font-semibold transition ${minute === m ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>
+                <button key={m} type="button" onClick={() => setMinute(m)} className={`w-[62px] flex-none rounded-[10px] py-[8px] text-[12.5px] font-semibold transition ${minute === m ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>
                   {m === 0 ? "정각" : "30분"}
                 </button>
               ))}
@@ -329,7 +329,7 @@ function SlotsCell({ value, onChange }: { value: CarrySlot[]; onChange: (v: Carr
               <button type="button" onClick={add} disabled={days.length === 0} className="flex-1 rounded-[10px] bg-sage py-[9px] text-[12.5px] font-semibold text-white transition hover:brightness-[1.06] disabled:opacity-40">
                 {days.length > 0 ? `${days.map((w) => WD_KO[w]).join("·")} ${hour}:${minute === 30 ? "30" : "00"} 추가` : "요일을 선택하세요"}
               </button>
-              <button type="button" onClick={() => setOpen(false)} aria-label="닫기" className="rounded-[10px] border border-[rgba(75,59,46,0.14)] bg-white px-3 text-[12.5px] font-semibold text-[#766D60] transition hover:bg-[#F4F0E8]">
+              <button type="button" onClick={() => setOpen(false)} className="rounded-[10px] border border-[rgba(75,59,46,0.14)] bg-white px-3 text-[12.5px] font-semibold text-[#766D60] transition hover:bg-[#F4F0E8]">
                 완료
               </button>
             </div>
