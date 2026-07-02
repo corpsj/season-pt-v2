@@ -9,12 +9,9 @@ import { loadMemberDetail, consoleIssueMembership } from "@/lib/data/groups/cons
 import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
-import { createMember, createMembersCsv } from "@/lib/data/groups/owner-ops-actions";
-import { carryoverMembers } from "@/lib/data/groups/carryover-actions";
-import { parseCarryoverCsv, type CarryRow } from "@/lib/import/carryover-parse";
+import { createMember } from "@/lib/data/groups/owner-ops-actions";
+import { BulkAddModal, type TrainerOpt } from "./bulk";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
-
-const WD_LABEL = ["일", "월", "화", "수", "목", "금", "토"];
 
 type Status = "active" | "expiring" | "rest" | "inactive";
 const FILTERS: { key: "all" | "expiring" | "active" | "rest"; label: string }[] = [
@@ -34,12 +31,14 @@ export function MembersClient({
   items,
   statusById,
   products,
+  trainers,
   initialId,
   initialDetail,
 }: {
   items: MemberListItem[];
   statusById: Record<string, Status>;
   products: MembershipProduct[];
+  trainers: TrainerOpt[];
   initialId: string | null;
   initialDetail: MemberDetailView | null;
 }) {
@@ -51,12 +50,8 @@ export function MembersClient({
   const [detail, setDetail] = useState(initialDetail);
   const [files, setFiles] = useState<MemberFileView[]>([]);
   const [, startLoad] = useTransition();
-  const [modal, setModal] = useState<null | "add" | "csv" | "carry" | "issue" | "extend" | "refund">(null);
+  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund">(null);
   const [busy, setBusy] = useState(false);
-  const [csvRows, setCsvRows] = useState<CsvRow[] | null>(null);
-  const [csvResult, setCsvResult] = useState<{ created: number; failed: { name: string; phone: string; error: string }[] } | null>(null);
-  const [carryRows, setCarryRows] = useState<CarryRow[] | null>(null);
-  const [carryResult, setCarryResult] = useState<{ created: number; failed: { name: string; error: string }[] } | null>(null);
 
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "" });
   const [issueProduct, setIssueProduct] = useState("");
@@ -164,60 +159,6 @@ export function MembersClient({
     if (r.memberId) select(r.memberId);
   }
 
-  function openCsv() {
-    setCsvRows(null);
-    setCsvResult(null);
-    setModal("csv");
-  }
-  // UTF-8 강제 디코딩만 쓰면 한국 엑셀 기본 저장(CP949/EUC-KR) CSV의 이름이 깨진 채 통과된다(감사 #46).
-  // UTF-8 strict 시도 → 실패 시 EUC-KR 폴백.
-  async function decodeCsvFile(file: File): Promise<string> {
-    const buf = await file.arrayBuffer();
-    try {
-      return new TextDecoder("utf-8", { fatal: true }).decode(buf);
-    } catch {
-      return new TextDecoder("euc-kr").decode(buf);
-    }
-  }
-  async function onCsvFile(file: File) {
-    setCsvResult(null);
-    setCsvRows(parseCsv(await decodeCsvFile(file)));
-  }
-  async function doCsvAdd() {
-    if (busy || !csvRows) return;
-    const valid = csvRows.filter((r) => r.valid);
-    if (valid.length === 0) return toast("등록할 유효한 회원이 없어요");
-    setBusy(true);
-    const r = await createMembersCsv(valid.map((v) => ({ name: v.name, phone: v.phone, birth: v.birth, gender: v.gender })));
-    setBusy(false);
-    if (!r.ok && r.error) return toast(r.error);
-    setCsvResult({ created: r.created, failed: r.failed });
-    router.refresh();
-  }
-
-  function openCarry() {
-    setCarryRows(null);
-    setCarryResult(null);
-    setModal("carry");
-  }
-  async function onCarryFile(file: File) {
-    setCarryResult(null);
-    setCarryRows(parseCarryoverCsv(await decodeCsvFile(file)));
-  }
-  async function doCarry() {
-    if (busy || !carryRows) return;
-    const valid = carryRows.filter((r) => r.valid);
-    if (valid.length === 0) return toast("이관할 유효한 회원이 없어요");
-    setBusy(true);
-    const r = await carryoverMembers(
-      valid.map((v) => ({ name: v.name, phone: v.phone, birth: v.birth, gender: v.gender, productName: v.productName, remaining: v.remaining, endDate: v.endDate, slots: v.slots, trainerName: v.trainerName })),
-    );
-    setBusy(false);
-    if (!r.ok && r.error) return toast(r.error);
-    setCarryResult({ created: r.created, failed: r.failed });
-    router.refresh();
-  }
-
   const d = detail;
 
   return (
@@ -239,8 +180,7 @@ export function MembersClient({
             );
           })}
         </div>
-        <OBtn icon="refresh" className="ml-auto" onClick={openCarry}>기존 회원권 이관</OBtn>
-        <OBtn icon="document-text" onClick={openCsv}>CSV 일괄 등록</OBtn>
+        <OBtn icon="persons" className="ml-auto" onClick={() => setModal("bulk")}>한꺼번에 입력</OBtn>
         <PBtn icon="person-plus" onClick={() => setModal("add")}>회원 등록</PBtn>
       </div>
 
@@ -436,162 +376,13 @@ export function MembersClient({
         </ConsoleModal>
       ) : null}
 
-      {modal === "csv" ? (
-        <ConsoleModal
-          title="CSV 일괄 등록"
-          width={460}
+      {modal === "bulk" ? (
+        <BulkAddModal
+          products={products}
+          trainers={trainers}
           onClose={() => setModal(null)}
-          footer={
-            csvResult ? (
-              <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>완료</PBtn>
-            ) : (
-              <>
-                <OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn>
-                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !csvRows?.some((r) => r.valid)} onClick={doCsvAdd}>
-                  {csvRows ? `${csvRows.filter((r) => r.valid).length}명 등록` : "등록"}
-                </PBtn>
-              </>
-            )
-          }
-        >
-          {csvResult ? (
-            <div>
-              <div className="mb-4 rounded-[14px] bg-[#EDF4E3] px-[18px] py-4 text-center">
-                <div className="text-[13px] font-medium text-[#5B6452]">등록 완료</div>
-                <div className="mt-0.5 text-[26px] font-bold text-sage-deep">{csvResult.created}명</div>
-              </div>
-              {csvResult.failed.length > 0 ? (
-                <>
-                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">실패 {csvResult.failed.length}건</div>
-                  <div className="flex flex-col gap-1.5">
-                    {csvResult.failed.map((fr, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-[11px] bg-[#FBF3E9] px-3.5 py-2.5">
-                        <Icon name="triangle-exclamation" size={15} className="flex-none text-terracotta" />
-                        <span className="flex-1 truncate text-[12.5px] font-semibold text-[#5B5345]">{fr.name || fr.phone}</span>
-                        <span className="text-[11.5px] font-medium text-[#9A8772]">{fr.error}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <div>
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-[14px] border-[1.4px] border-dashed border-[rgba(75,59,46,0.22)] bg-[#FBF9F5] px-5 py-7 text-center transition hover:bg-[#F4F0E8]">
-                <Icon name="document-text" size={26} className="text-[#A89F92]" />
-                <span className="text-[13.5px] font-semibold text-[#766D60]">CSV 파일 선택</span>
-                <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onCsvFile(f); }} />
-              </label>
-              <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
-                <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
-                <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
-                  열 순서: <b className="font-semibold text-[#5B5345]">이름, 연락처, 생년월일(YYMMDD), 성별</b>. 첫 행이 머리글이면 자동으로 건너뛰어요. 엑셀은 <b className="font-semibold text-[#5B5345]">CSV UTF-8</b>로 저장하세요.{" "}
-                  <button onClick={downloadCsvTemplate} className="font-semibold text-sage-deep underline underline-offset-2">양식 내려받기</button>
-                </span>
-              </div>
-              {csvRows ? (
-                <div className="mt-4">
-                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">
-                    총 {csvRows.length}명 · <span className="text-sage-deep">유효 {csvRows.filter((r) => r.valid).length}명</span>
-                    {csvRows.some((r) => !r.valid) ? <span className="text-terracotta"> · 오류 {csvRows.filter((r) => !r.valid).length}명</span> : null}
-                  </div>
-                  <div className="flex max-h-[230px] flex-col gap-1.5 overflow-y-auto">
-                    {csvRows.map((r, i) => (
-                      <div key={i} className={`flex items-center gap-2 rounded-[11px] px-3.5 py-2.5 ${r.valid ? "bg-[#FBF7F1]" : "bg-[#FBF3E9]"}`}>
-                        <Icon name={r.valid ? "circle-check" : "triangle-exclamation"} size={15} className={`flex-none ${r.valid ? "text-sage-deep" : "text-terracotta"}`} />
-                        <span className="w-[68px] flex-none truncate text-[12.5px] font-semibold text-[#5B5345]">{r.name || "—"}</span>
-                        <span className="flex-1 truncate text-[12px] font-medium text-[#9A917F]">{r.phone}</span>
-                        <span className="text-[11.5px] font-medium text-[#9A8772]">{r.valid ? (r.gender === "male" ? "남" : "여") : r.reason}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </ConsoleModal>
-      ) : null}
-
-      {modal === "carry" ? (
-        <ConsoleModal
-          title="기존 회원권 이관"
-          width={520}
-          onClose={() => setModal(null)}
-          footer={
-            carryResult ? (
-              <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>완료</PBtn>
-            ) : (
-              <>
-                <OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn>
-                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !carryRows?.some((r) => r.valid)} onClick={doCarry}>
-                  {carryRows ? `${carryRows.filter((r) => r.valid).length}명 이관` : "이관"}
-                </PBtn>
-              </>
-            )
-          }
-        >
-          {carryResult ? (
-            <div>
-              <div className="mb-4 rounded-[14px] bg-[#EDF4E3] px-[18px] py-4 text-center">
-                <div className="text-[13px] font-medium text-[#5B6452]">이관 완료</div>
-                <div className="mt-0.5 text-[26px] font-bold text-sage-deep">{carryResult.created}명</div>
-              </div>
-              {carryResult.failed.length > 0 ? (
-                <>
-                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">실패 {carryResult.failed.length}건</div>
-                  <div className="flex flex-col gap-1.5">
-                    {carryResult.failed.map((fr, i) => (
-                      <div key={i} className="flex items-center gap-2 rounded-[11px] bg-[#FBF3E9] px-3.5 py-2.5">
-                        <Icon name="triangle-exclamation" size={15} className="flex-none text-terracotta" />
-                        <span className="flex-1 truncate text-[12.5px] font-semibold text-[#5B5345]">{fr.name}</span>
-                        <span className="text-[11.5px] font-medium text-[#9A8772]">{fr.error}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <div>
-              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-[14px] border-[1.4px] border-dashed border-[rgba(75,59,46,0.22)] bg-[#FBF9F5] px-5 py-7 text-center transition hover:bg-[#F4F0E8]">
-                <Icon name="refresh" size={24} className="text-[#A89F92]" />
-                <span className="text-[13.5px] font-semibold text-[#766D60]">이관 CSV 파일 선택</span>
-                <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onCarryFile(f); }} />
-              </label>
-              <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
-                <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
-                <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
-                  열: <b className="font-semibold text-[#5B5345]">이름, 연락처, 생년월일, 성별, 상품명, 잔여횟수, 만료일, 정기일정, 담당강사</b>. 상품명은 <b className="font-semibold text-[#5B5345]">미리 등록한 회원권 상품</b>과 정확히 같아야 해요(설정에서 먼저 등록). 결제는 기록되지 않아 매출에 잡히지 않아요.{" "}
-                  <button onClick={downloadCarryTemplate} className="font-semibold text-sage-deep underline underline-offset-2">양식 내려받기</button>
-                </span>
-              </div>
-              {carryRows ? (
-                <div className="mt-4">
-                  <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">
-                    총 {carryRows.length}명 · <span className="text-sage-deep">유효 {carryRows.filter((r) => r.valid).length}명</span>
-                    {carryRows.some((r) => !r.valid) ? <span className="text-terracotta"> · 오류 {carryRows.filter((r) => !r.valid).length}명</span> : null}
-                  </div>
-                  <div className="flex max-h-[240px] flex-col gap-1.5 overflow-y-auto">
-                    {carryRows.map((r, i) => (
-                      <div key={i} className={`flex items-center gap-2 rounded-[11px] px-3.5 py-2.5 ${r.valid ? "bg-[#FBF7F1]" : "bg-[#FBF3E9]"}`}>
-                        <Icon name={r.valid ? "circle-check" : "triangle-exclamation"} size={15} className={`flex-none ${r.valid ? "text-sage-deep" : "text-terracotta"}`} />
-                        <span className="w-[64px] flex-none truncate text-[12.5px] font-semibold text-[#5B5345]">{r.name || "—"}</span>
-                        {r.valid ? (
-                          <>
-                            <span className="flex-1 truncate text-[12px] font-medium text-[#9A917F]">{r.productName} · 잔여 {r.remaining}</span>
-                            <span className="text-[11.5px] font-medium text-[#9A8772]">~{r.endDate.slice(2).replace(/-/g, ".")} · {r.slots.map((s) => `${WD_LABEL[s.weekday]}${s.hour}${s.minute ? ":30" : ""}`).join(" ") || "일정없음"}</span>
-                          </>
-                        ) : (
-                          <span className="flex-1 truncate text-[11.5px] font-medium text-[#9A8772]">{r.reason}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-        </ConsoleModal>
+          onDone={() => router.refresh()}
+        />
       ) : null}
 
       {modal === "issue" && d ? (
@@ -666,49 +457,6 @@ export function MembersClient({
       ) : null}
     </>
   );
-}
-
-/* ----- CSV bulk register ----- */
-type CsvRow = { name: string; phone: string; birth: string; gender: Gender; valid: boolean; reason?: string };
-
-/** 열 순서: 이름,연락처,생년월일(YYMMDD),성별. 헤더 행은 자동 감지해 건너뛴다. */
-function parseCsv(text: string): CsvRow[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return [];
-  const body = /이름|name|연락처|phone/i.test(lines[0]) ? lines.slice(1) : lines;
-  return body.map((line) => {
-    const [name = "", phone = "", birth = "", gender = ""] = line.split(",").map((c) => c.trim());
-    const g: Gender = /남|^m/i.test(gender) ? "male" : "female";
-    let reason: string | undefined;
-    if (!name) reason = "이름 없음";
-    else if (phone.replace(/\D/g, "").length < 9) reason = "연락처 오류";
-    else if (birth.replace(/\D/g, "").length !== 6) reason = "생년월일 6자리 아님";
-    return { name, phone, birth, gender: g, valid: !reason, reason };
-  });
-}
-
-/** UTF-8 BOM 포함 → 엑셀에서 한글 깨짐 방지. */
-function downloadCsvTemplate() {
-  const csv = "이름,연락처,생년월일,성별\n홍길동,010-1234-5678,920101,남\n김영희,010-2345-6789,950312,여\n";
-  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "회원등록_양식.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadCarryTemplate() {
-  const csv =
-    "이름,연락처,생년월일,성별,상품명,잔여횟수,만료일,정기일정,담당강사\n" +
-    "김서연,010-1234-5678,920101,여,1:1 PT 20회권,7,2026-08-31,월 19:00 / 수 19:00,박지훈\n" +
-    "박민수,010-2222-3333,880303,남,1:1 PT 10회권,3,2026-07-15,화 07:00,\n";
-  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "회원권이관_양식.csv";
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 /* ----- small shared pieces ----- */

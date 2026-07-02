@@ -248,6 +248,16 @@ export async function getRevenue(): Promise<RevenueView> {
   return { totalAmount, totalCount: rows.filter((r) => (r.amount ?? 0) > 0 && r.membership_id != null).length, months };
 }
 
+/** 배정 가능한 강사(비활성 제외) — 한꺼번에 입력 담당강사 드롭다운용. */
+export async function getAssignableTrainers(): Promise<{ id: string; name: string }[]> {
+  const { data } = await sb
+    .from("trainers")
+    .select("id, display_name")
+    .neq("status", "inactive")
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((t) => ({ id: t.id as string, name: t.display_name as string }));
+}
+
 /* ------------------------- membership products ------------------------ */
 /** Active products only, ordered by sort_order. */
 export async function getMembershipProducts(): Promise<MembershipProduct[]> {

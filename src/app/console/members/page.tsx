@@ -1,6 +1,6 @@
 import { Topbar } from "@/components/console/Topbar";
 import { getMembersAll, getMemberDetail } from "@/lib/data/groups/trainer-home";
-import { getMembershipProducts } from "@/lib/data/groups/owner-ops";
+import { getMembershipProducts, getAssignableTrainers } from "@/lib/data/groups/owner-ops";
 import { MembersClient } from "./ui";
 
 export default async function ConsoleMembersPage({
@@ -9,9 +9,10 @@ export default async function ConsoleMembersPage({
   searchParams: Promise<{ sel?: string }>;
 }) {
   const sp = await searchParams;
-  const [{ view, statusById }, products] = await Promise.all([
+  const [{ view, statusById }, products, trainers] = await Promise.all([
     getMembersAll(),
     getMembershipProducts(),
+    getAssignableTrainers(),
   ]);
   const initialId = sp.sel ?? view.items[0]?.id ?? null;
   const initialDetail = initialId ? await getMemberDetail(initialId) : null;
@@ -24,6 +25,7 @@ export default async function ConsoleMembersPage({
           items={view.items}
           statusById={statusById}
           products={products}
+          trainers={trainers}
           initialId={initialId}
           initialDetail={initialDetail}
         />
