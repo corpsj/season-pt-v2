@@ -53,6 +53,12 @@ export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLo
       setLoadingMore(false);
     }
   }
+  // 목록이 바뀌면(추가·삭제) 절대 offset 기반 페이지 창이 어긋난다 — 페이지네이션 리셋 후 router.refresh()로 top-60만 다시 그린다(다음 더보기는 깨끗한 상태에서 재요청).
+  function resetPaging() {
+    setExtra([]);
+    setOffset(60);
+    setHasMore(initialHasMore);
+  }
 
   function pickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -82,6 +88,7 @@ export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLo
       if (!r.ok) return toast(r.error ?? "기록에 실패했어요");
       toast("식단을 기록했어요");
       reset();
+      resetPaging();
       refresh(() => router.refresh());
     } catch {
       toast("기록에 실패했어요");
@@ -95,7 +102,7 @@ export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLo
     try {
       const r = await deleteMeal(id);
       if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
-      setExtra((prev) => prev.filter((m) => m.id !== id));
+      resetPaging();
       refresh(() => router.refresh());
     } finally {
       setBusy(false);
