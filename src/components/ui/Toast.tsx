@@ -23,9 +23,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       {msg ? (
-        <div className="toast-in absolute bottom-9 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-[14px] bg-frame px-4 py-3 shadow-toast">
-          <Icon name="circle-check-fill" size={18} className="text-sage-leaf" />
-          <span className="whitespace-nowrap text-[13px] font-semibold text-surface">{msg}</span>
+        <div className="toast-in absolute bottom-9 left-1/2 z-50 flex w-max max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-[14px] bg-frame px-4 py-3 shadow-toast">
+          <Icon name="circle-check-fill" size={18} className="shrink-0 text-sage-leaf" />
+          <span className="text-[13px] font-semibold text-surface">{msg}</span>
         </div>
       ) : null}
     </ToastContext.Provider>
