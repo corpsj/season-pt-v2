@@ -656,6 +656,15 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const sm = meta.get(id);
   const isTeam = sm?.type === "2on1";
 
+  // 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용.
+  const { data: mtl } = await sb
+    .from("member_trainers")
+    .select("trainers(role)")
+    .eq("member_id", id)
+    .limit(1)
+    .maybeSingle();
+  const trainerIsOwner = (mtl as unknown as { trainers?: { role?: string } } | null)?.trainers?.role === "owner";
+
   const dDay = ms ? dayDiff(today, ms.end_date) : 0;
   const remaining = ms?.remaining_sessions ?? 0;
   const total = ms?.total_sessions ?? 0;
@@ -701,6 +710,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     activeMembershipId: ms?.id ?? null,
     membershipPaused,
     memberStatus: m.status,
+    trainerIsOwner,
     events,
   };
 }

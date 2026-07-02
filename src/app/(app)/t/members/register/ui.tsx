@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
+import { productType, tierMatches } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -24,13 +25,6 @@ function hourLabel(h: number) {
 }
 const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => ({ value: String(i + 6), label: hourLabel(i + 6) }));
 const MINUTE_OPTIONS = [{ value: "0", label: "정각" }, { value: "30", label: "30분" }];
-
-/** 상품명에 박힌 "1:1"/"2:1" 표기로 분류 — 별도 type 컬럼 없이 기존 명명 규칙을 재사용. */
-function productType(name: string): "1on1" | "2on1" | null {
-  if (name.includes("2:1")) return "2on1";
-  if (name.includes("1:1")) return "1on1";
-  return null;
-}
 
 const todayStr = () => {
   const d = new Date(Date.now() + 9 * 3600000); // KST
@@ -60,6 +54,7 @@ export function MemberRegisterClient({
   const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
   const [productFilter, setProductFilter] = useState<"all" | "1on1" | "2on1">("all");
+  const [allTiers, setAllTiers] = useState(false); // 담당 기반 자동 필터 해제(예외 발급용)
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
@@ -137,6 +132,29 @@ export function MemberRegisterClient({
   // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
   const is2on1 = classType === "2on1";
 
+  // 담당 기반 자동 필터: 대표 담당이면 대표+공용, 강사 담당이면 강사+공용 상품만.
+  const trainerIsOwner = trainerId === ownerId;
+  const tierVisible = products.filter((p) => allTiers || tierMatches(p.name, trainerIsOwner));
+
+  /** 담당/필터 변경으로 선택 상품이 숨겨지면 선택 해제 — 강사 회원에게 대표 상품이 조용히 발급되는 것 방지. */
+  function resetIfHidden(nextTrainerId: string, nextAllTiers: boolean) {
+    if (selectedProduct === "later") return;
+    const p = products.find((pp) => pp.id === selectedProduct);
+    if (p && !nextAllTiers && !tierMatches(p.name, nextTrainerId === ownerId)) {
+      setSelectedProduct("later");
+      setPayAmount("");
+    }
+  }
+  function onTrainerChange(v: string) {
+    setTrainerId(v);
+    resetIfHidden(v, allTiers);
+  }
+  function onToggleAllTiers() {
+    const next = !allTiers;
+    setAllTiers(next);
+    resetIfHidden(trainerId, next);
+  }
+
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body>
@@ -186,7 +204,7 @@ export function MemberRegisterClient({
             <Select
               value={trainerId}
               options={staffOptions}
-              onChange={setTrainerId}
+              onChange={onTrainerChange}
             />
           </div>
 
@@ -275,9 +293,18 @@ export function MemberRegisterClient({
           </Banner>
         )}
 
-        {/* 회원권 상품 선택 */}
-        <div className="mb-2.5 mt-6">
+        {/* 회원권 상품 선택 — 담당(대표/강사) 기준 자동 필터 + 유형 토글 */}
+        <div className="mb-2.5 mt-6 flex items-center">
           <Kicker>회원권 상품</Kicker>
+          {tierVisible.length !== products.length || allTiers ? (
+            <button
+              type="button"
+              onClick={onToggleAllTiers}
+              className="tappable ml-auto text-[12px] font-semibold text-muted5 underline underline-offset-2"
+            >
+              {allTiers ? `${trainerIsOwner ? "대표" : "강사"} 상품만 보기` : "전체 상품 보기"}
+            </button>
+          ) : null}
         </div>
         {products.length > 0 ? (
           <div className="mb-2.5">
@@ -293,7 +320,7 @@ export function MemberRegisterClient({
           </div>
         ) : null}
         <div className="mb-4 flex flex-col gap-2.5">
-          {products
+          {tierVisible
             .filter((p) => productFilter === "all" || productType(p.name) === productFilter)
             .map((p) => (
             <RadioOption

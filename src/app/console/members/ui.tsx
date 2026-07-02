@@ -12,6 +12,7 @@ import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
+import { productType, tierMatches } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
@@ -133,8 +134,10 @@ export function MembersClient({
     router.refresh();
   }
   function openIssue() {
-    setIssueProduct(products[0]?.id ?? "");
-    setIssueAmt(String(products[0]?.price ?? ""));
+    // 담당(대표/강사)에 맞는 첫 상품을 기본 선택 — 숨겨진 상품이 조용히 발급되는 것 방지.
+    const first = products.find((p) => tierMatches(p.name, detail?.trainerIsOwner ?? true)) ?? products[0];
+    setIssueProduct(first?.id ?? "");
+    setIssueAmt(String(first?.price ?? ""));
     setIssueMethod("card");
     setModal("issue");
   }
@@ -365,10 +368,12 @@ export function MembersClient({
             </ModalField>
           </div>
           <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
+          {/* 콘솔 등록은 담당이 대표로 배정되므로 대표+공용 상품 기본 노출 */}
           <ProductPicker
             products={products}
             selected={f.productId}
             showPrice
+            trainerIsOwner={true}
             onPick={(id) => {
               const newId = f.productId === id ? "" : id;
               const p = products.find((pp) => pp.id === newId);
@@ -439,6 +444,7 @@ export function MembersClient({
           <ProductPicker
             products={products}
             selected={issueProduct}
+            trainerIsOwner={d.trainerIsOwner ?? true}
             onPick={(id) => {
               setIssueProduct(id);
               const p = products.find((pp) => pp.id === id);
@@ -543,19 +549,16 @@ const PRODUCT_FILTERS: { key: ProductFilter; label: string }[] = [
   { key: "1on1", label: "1:1" },
   { key: "2on1", label: "2:1" },
 ];
-/** 상품명에 박힌 "1:1"/"2:1" 표기로 분류 — 별도 type 컬럼 없이 기존 명명 규칙을 재사용. */
-function productType(name: string): "1on1" | "2on1" | null {
-  if (name.includes("2:1")) return "2on1";
-  if (name.includes("1:1")) return "1on1";
-  return null;
-}
-function ProductPicker({ products, selected, onPick, showPrice }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; showPrice?: boolean }) {
+function ProductPicker({ products, selected, onPick, showPrice, trainerIsOwner }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; showPrice?: boolean; trainerIsOwner?: boolean }) {
   const [filter, setFilter] = useState<ProductFilter>("all");
-  const shown = filter === "all" ? products : products.filter((p) => productType(p.name) === filter);
+  // 담당(대표/강사) 기반 자동 필터 — trainerIsOwner가 주어지면 해당 티어+공용만. "전체"로 예외 발급 가능.
+  const [allTiers, setAllTiers] = useState(false);
+  const tierVisible = trainerIsOwner == null || allTiers ? products : products.filter((p) => tierMatches(p.name, trainerIsOwner));
+  const shown = filter === "all" ? tierVisible : tierVisible.filter((p) => productType(p.name) === filter);
   return (
     <div>
       {products.length > 0 ? (
-        <div className="mb-2.5 flex gap-[6px]">
+        <div className="mb-2.5 flex items-center gap-[6px]">
           {PRODUCT_FILTERS.map((f) => {
             const on = filter === f.key;
             return (
@@ -564,6 +567,11 @@ function ProductPicker({ products, selected, onPick, showPrice }: { products: Me
               </button>
             );
           })}
+          {trainerIsOwner != null && (tierVisible.length !== products.length || allTiers) ? (
+            <button type="button" onClick={() => setAllTiers((v) => !v)} className="ml-auto text-[11.5px] font-semibold text-[#9A917F] underline underline-offset-2 hover:text-ink">
+              {allTiers ? `${trainerIsOwner ? "대표" : "강사"} 상품만` : "전체 상품 보기"}
+            </button>
+          ) : null}
         </div>
       ) : null}
       <div className="flex flex-col gap-2.5">

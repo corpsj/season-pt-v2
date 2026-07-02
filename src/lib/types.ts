@@ -244,6 +244,7 @@ export interface MemberDetailView {
   activeMembershipId: string | null;
   membershipPaused: boolean;
   memberStatus?: "active" | "rest" | "inactive"; // 회원 운영 상태(활성/휴면/비활성) — 대표 상태 전환 UI용
+  trainerIsOwner?: boolean; // 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용
   events: { type: string; note: string | null; createdAt: string }[];
 }
 

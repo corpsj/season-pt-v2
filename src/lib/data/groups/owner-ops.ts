@@ -483,8 +483,20 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     injury: member?.injury_note ?? undefined,
     activeMembershipId: null,
     membershipPaused: false,
+    trainerIsOwner: await memberTrainerIsOwner(id),
     events: [],
   };
+}
+
+/** 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용. */
+async function memberTrainerIsOwner(memberId: string): Promise<boolean> {
+  const { data } = await sb
+    .from("member_trainers")
+    .select("trainers(role)")
+    .eq("member_id", memberId)
+    .limit(1)
+    .maybeSingle();
+  return (data as unknown as { trainers?: { role?: string } } | null)?.trainers?.role === "owner";
 }
 
 /* --------------------------- payment summary --------------------------- */
