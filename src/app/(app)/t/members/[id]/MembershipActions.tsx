@@ -33,6 +33,7 @@ export function MembershipActions({
 
   async function onExtend() {
     if (busy) return;
+    if (!confirm("유효기간을 상품 기간만큼 연장할까요?")) return;
     setBusy(true);
     const r = await extendMembership(membershipId);
     setBusy(false);

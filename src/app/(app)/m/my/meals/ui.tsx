@@ -97,6 +97,7 @@ export function MemberMealsClient({ initial, initialHasMore }: { initial: MealLo
     }
   }
   async function remove(id: string) {
+    if (!confirm("이 식단 기록을 삭제할까요? 사진과 선생님 피드백도 함께 삭제되고 되돌릴 수 없어요.")) return;
     if (busy) return;
     setBusy(true);
     try {
