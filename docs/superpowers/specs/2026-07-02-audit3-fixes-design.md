@@ -25,12 +25,12 @@
    - `payments`에 `payer_member_id uuid references members(id)` 추가, 기존 행은 현 소유 회원권의 `member_id`로 백필(페이즈 4의 양도 문제 해결용).
 6. **협의 금액**: `refundMembership`(`membership-actions.ts:94+`)에 `amountOverride?: number`(0 이상 정수 서버 검증) + `note?: string` 추가. `previewRefund` 산식 결과는 기본값·참고치로 유지. 콘솔(`console/members/ui.tsx` 환불 모달)과 모바일(`MembershipActions.tsx`) 양쪽 확인 단계에 **금액 입력 필드**(기본값=산식 결과)와 **환불 수단 선택** 추가(모바일 `method:"account"` 하드코딩 제거).
 7. **이관 회원권 0원 확정 차단**: `previewRefund`가 `paidSum=0`(결제 기록 없는 이관 회원권)이면 `noBaseline: true` 플래그 반환 → UI가 금액 직접 입력을 필수화하고 자동 확정을 막는다.
-8. **환불 취소**: `refundMembership`이 refund 이벤트의 `meta`에 `{prev_status, prev_remaining, prev_end_date}` 저장. 대표 전용 `undoRefund(membershipId)` 액션 — 환불 음수 결제행 삭제 + `meta` 스냅샷으로 memberships 복원 + refund 이벤트에 취소 표시(또는 `undo_refund` 이벤트 추가). 정기 스케줄은 자동 재활성화하지 않음 — 성공 토스트에 "필요 시 스케줄을 다시 켜세요" 안내.
+8. **환불 취소**: `refundMembership`이 refund 이벤트의 `meta`에 `{prev_status, prev_remaining, prev_end_date}` 저장. 대표 전용 `undoRefund(membershipId)` 액션 — 환불 음수 결제행 삭제 + `meta` 스냅샷으로 memberships 복원 + refund 이벤트 `meta`에 `undone: true` 표시(신규 이벤트 타입은 `membership_events.type` CHECK 제약 변경이 필요해 쓰지 않음). 정기 스케줄은 자동 재활성화하지 않음 — 성공 토스트에 "필요 시 스케줄을 다시 켜세요" 안내.
 9. **콘솔 환불 미리보기 실패 분기**: `openRefund`(`console/members/ui.tsx:96-104`)에 `!p.ok` 분기 — "계산 중…" 대신 에러 메시지 + 직접 입력 유도.
 
 ## 페이즈 3 · 회원권 상태 표시 + 출석 가드
 
-10. **회원 화면에서 paused/expired 표시**: `member.ts`의 `activeMembership`(74-96)을 `status in ("active","paused")`로 확장(만료 임박 정렬 유지). active/paused가 없으면 가장 최근 `expired` 회원권을 폴백으로 반환. `/m` 홈 잔여 배지와 `/m/my` 카드에 '일시정지 중'/'만료됨' 배지 — "이용 중인 회원권이 없어요"는 회원권 이력이 정말 없을 때만.
+10. **회원 화면에서 paused/expired 표시**: `member.ts`의 표시용 `activeMembership`(74-96)만 `status in ("active","paused")`로 확장(만료 임박 정렬 유지). **차감용 `activeMembership`(`scheduling-actions.ts`, active + remaining>0 필터)은 절대 변경하지 않는다** — 감사 C2 수정 유지. active/paused가 없으면 가장 최근 `expired` 회원권을 폴백으로 반환. `/m` 홈 잔여 배지와 `/m/my` 카드에 '일시정지 중'/'만료됨' 배지 — "이용 중인 회원권이 없어요"는 회원권 이력이 정말 없을 때만.
 11. **무회원권 출석 가드**: `confirmAttendance`에서 attend/noshow인데 활성 회원권이 없으면(`ms=null`) 명시 에러 반환("활성 회원권이 없어요 — 재등록/재개를 먼저 확인하세요"). ledger `deducted`에는 정책값이 아닌 실제 차감 여부를 기록. cancel은 기존 동작 유지.
 
 ## 페이즈 4 · 나머지 medium/low
