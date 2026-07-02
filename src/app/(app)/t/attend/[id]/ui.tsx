@@ -11,6 +11,7 @@ import { Icon } from "@/components/ui/icon";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SignaturePad } from "@/components/ui/SignaturePad";
 import { useToast } from "@/components/ui/Toast";
 import { confirmAttendance } from "@/lib/data/groups/scheduling-actions";
 import { shouldDeduct } from "@/lib/data/deduction";
@@ -23,6 +24,8 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
   const toast = useToast();
   const [method, setMethod] = useState<Method>("attend");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
+  const needSign = method === "attend" && !signature;
 
   const deducted = shouldDeduct(method, t.scheduledAt, settings);
   // 라디오 옵션별 실제 차감 여부 — '취소 (미차감)' 고정 라벨이 컷오프 이내 취소의 실제 차감과 모순되던 문제(감사 medium).
@@ -120,14 +123,27 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
             </Banner>
           ) : null;
         })()}
+
+        {/* 수업 완료 회원 확인 서명 — 출석일 때만(노쇼·취소는 회원 부재) */}
+        {method === "attend" ? (
+          <>
+            <div className="mb-2.5 mt-5">
+              <Kicker>회원 확인 서명</Kicker>
+            </div>
+            <SignaturePad onChange={setSignature} />
+            <p className="mt-2 px-0.5 text-[12px] font-medium text-muted3">
+              수업 완료 확인을 위해 회원이 직접 서명해주세요{t.isTeam ? " (팀은 한 분이 대표로 서명)" : ""}.
+            </p>
+          </>
+        ) : null}
       </Body>
 
       <Footer>
-        <PrimaryButton icon="check-bold" onClick={() => setConfirmOpen(true)}>
+        <PrimaryButton icon="check-bold" disabled={needSign} onClick={() => setConfirmOpen(true)}>
           {cta}
         </PrimaryButton>
         <p className="mt-2.5 text-center text-[12px] font-medium text-muted3">
-          모든 차감·정정은 이력에 자동 기록돼요
+          {needSign ? "회원 서명을 받아야 출석 처리할 수 있어요" : "모든 차감·정정은 이력에 자동 기록돼요"}
         </p>
       </Footer>
 
@@ -138,7 +154,7 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
         confirmLabel="확인"
         onConfirm={async () => {
           setConfirmOpen(false);
-          const r = await confirmAttendance(t.sessionId, method);
+          const r = await confirmAttendance(t.sessionId, method, method === "attend" ? signature ?? undefined : undefined);
           if (!r.ok) {
             toast(r.error ?? "처리에 실패했어요");
             return;

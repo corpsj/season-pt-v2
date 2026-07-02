@@ -154,7 +154,7 @@ async function restoreProcessedSession(sessionId: string): Promise<ActionResult>
   }
   await sb
     .from("sessions")
-    .update({ status: "scheduled", pay_rate: null })
+    .update({ status: "scheduled", pay_rate: null, member_signature: null, signed_at: null })
     .eq("id", sessionId)
     .in("status", ["attended", "noshow", "cancelled"]);
   return { ok: true };
@@ -167,9 +167,15 @@ async function restoreProcessedSession(sessionId: string): Promise<ActionResult>
 export async function confirmAttendance(
   sessionId: string,
   action: AttendanceAction,
+  signature?: string,
 ): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
+
+  // 수업 완료 회원 확인 서명(신뢰 경계 검증): 작은 PNG data URL만 허용.
+  if (signature != null && (!signature.startsWith("data:image/png;base64,") || signature.length > 200_000)) {
+    return { ok: false, error: "서명 데이터가 올바르지 않아요. 다시 서명해주세요." };
+  }
 
   const statusMap: Record<AttendanceAction, "attended" | "noshow" | "cancelled"> = {
     attend: "attended",
@@ -182,7 +188,10 @@ export async function confirmAttendance(
   // 강사는 본인 담당 세션만(대표는 전체) — 무스코프 변이 차단.
   let claimQ = sb
     .from("sessions")
-    .update({ status: statusMap[action] })
+    .update({
+      status: statusMap[action],
+      ...(action === "attend" && signature ? { member_signature: signature, signed_at: new Date().toISOString() } : {}),
+    })
     .eq("id", sessionId)
     .eq("status", "scheduled");
   if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);
@@ -498,10 +507,10 @@ export async function revertAttendance(sessionId: string): Promise<ActionResult>
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
-  // 원자 클레임: 처리된(attended/noshow/cancelled) 세션만 scheduled로 되돌린다.
+  // 원자 클레임: 처리된(attended/noshow/cancelled) 세션만 scheduled로 되돌린다. 서명도 무효화.
   let claimQ = sb
     .from("sessions")
-    .update({ status: "scheduled", pay_rate: null })
+    .update({ status: "scheduled", pay_rate: null, member_signature: null, signed_at: null })
     .eq("id", sessionId)
     .in("status", ["attended", "noshow", "cancelled"]);
   if (t.role !== "owner") claimQ = claimQ.eq("trainer_id", t.id);

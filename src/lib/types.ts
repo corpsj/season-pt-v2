@@ -160,7 +160,9 @@ export interface BadgeView {
 export interface TrainerDayClass {
   sessionId: string;
   time: string; // "오후 7:00"
+  startMin: number; // KST 자정 기준 분 — 주간 그리드 세로 배치용
   name: string;
+  sub?: string; // 주간 블록 보조 라벨: "4/20회"(진행/전체) 또는 "2:1"
   type: SessionType;
   status: SessionStatus;
   barColor: string; // resolved hex
@@ -169,17 +171,34 @@ export interface TrainerDayClass {
   href: string; // navigation target
 }
 
-export interface TrainerCalendarView {
+/** 주간 뷰 상단 요일 헤더 한 칸. */
+export interface TrainerWeekDay {
+  dateISO: string;
+  day: number; // 15
+  wd: string; // "월"
+  isToday: boolean;
+  isSunday: boolean;
+  isSaturday: boolean;
+}
+
+/** 트레이너 홈 캘린더(월간/주간) 페이로드 — 헤더 카운트 + 기간 데이터 + 날짜별 수업. */
+export interface TrainerCalendarData {
   meName: string;
   meRole: string;
   todayLabel: string;
   expiringCount: number;
   inboxCount: number;
   hasInbox: boolean;
-  monthLabel: string;
-  calDays: CalendarDay[];
-  selDateLabel: string;
-  dayClasses: TrainerDayClass[];
+  view: "month" | "week";
+  periodLabel: string; // "2026년 7월" | "7월 6일 — 12일"
+  prevD: string; // 이전 기간 앵커(YYYY-MM-DD)
+  nextD: string;
+  todayISO: string;
+  initialSelected: string; // 월간: 최초 선택일(오늘 또는 1일)
+  calDays: CalendarDay[]; // 월간 전용
+  firstWeekday: number; // 월간 전용
+  weekDays: TrainerWeekDay[]; // 주간 전용
+  classesByDate: Record<string, TrainerDayClass[]>;
 }
 
 export interface MemberListItem {

@@ -3,8 +3,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
-import { Card, OBtn, GBtn, pill } from "@/components/console/ui";
+import { Card, OBtn, GBtn, ConsoleModal, pill } from "@/components/console/ui";
 import { confirmAttendance, revertAttendance } from "@/lib/data/groups/scheduling-actions";
+import { loadSessionSignature } from "@/lib/data/groups/console-actions";
 import type { StudioCalendarMonth, StudioClass } from "@/lib/data/groups/console";
 
 const WD = ["월", "화", "수", "목", "금", "토", "일"];
@@ -30,6 +31,13 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
   const [active, setActive] = useState<string>("all");
   const [day, setDay] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [sig, setSig] = useState<{ member: string; url: string } | null>(null);
+
+  async function openSignature(c: StudioClass) {
+    const url = await loadSessionSignature(c.sessionId);
+    if (!url) return toast("서명을 불러오지 못했어요");
+    setSig({ member: c.member, url });
+  }
 
   function go(off: number) {
     router.push(`/console/calendar?m=${off}`);
@@ -108,8 +116,9 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
                   className="min-h-[120px] border-l border-[rgba(75,59,46,0.05)] p-[7px] pb-[9px] text-left transition first:border-l-0 hover:brightness-[0.985]"
                   style={{ background: cell.isToday ? "#F3F7EC" : "transparent" }}
                 >
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-[7px] px-1.5 text-[12.5px] font-bold" style={cell.isToday ? { color: "#FAF8F4", background: "#768C6A" } : { color: cell.isSunday ? "#C0796A" : cell.isSaturday ? "#B89A5E" : "#5B5345" }}>{cell.date}</span>
+                  <div className="mb-1.5 flex items-start justify-between">
+                    {/* 날짜는 셀(박스) 왼쪽 상단 코너에 밀착 — 오늘만 pill 하이라이트 */}
+                    <span className={`inline-flex h-[22px] items-center text-[12.5px] font-bold ${cell.isToday ? "min-w-[22px] justify-center rounded-[7px] px-1.5" : ""}`} style={cell.isToday ? { color: "#FAF8F4", background: "#768C6A" } : { color: cell.isSunday ? "#C0796A" : cell.isSaturday ? "#B89A5E" : "#5B5345" }}>{cell.date}</span>
                     {live.length > 0 ? <span className="text-[10px] font-semibold text-[#B3AA9C]">{live.length}</span> : null}
                   </div>
                   <div className="flex flex-col gap-[3px]">
@@ -159,6 +168,15 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
                       </div>
                     ) : c.status === "attended" || c.status === "noshow" || c.status === "cancelled" ? (
                       <div className="flex flex-none items-center gap-2">
+                        {c.signed ? (
+                          <button
+                            type="button"
+                            onClick={() => openSignature(c)}
+                            className="text-[11.5px] font-semibold text-sage-deep underline underline-offset-2"
+                          >
+                            서명
+                          </button>
+                        ) : null}
                         {statusPill(c)}
                         <button
                           type="button"
@@ -183,6 +201,14 @@ export function CalendarClient({ month }: { month: StudioCalendarMonth }) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {/* 수업 완료 회원 확인 서명 뷰어 */}
+      {sig ? (
+        <ConsoleModal title={`${sig.member} · 수업 완료 서명`} onClose={() => setSig(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={sig.url} alt="회원 확인 서명" className="w-full rounded-[13px] border border-[rgba(75,59,46,0.1)]" />
+        </ConsoleModal>
       ) : null}
     </>
   );

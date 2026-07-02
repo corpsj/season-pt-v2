@@ -7,7 +7,6 @@ import {
   clockHM,
   todayISO,
   dayDiff,
-  nowKstParts,
 } from "@/lib/data/db";
 import { isExpiringWindow } from "@/lib/data/notify";
 import type {
@@ -19,8 +18,9 @@ import type {
   MemberFilter,
   MembersView,
   TeamAvatar,
-  TrainerCalendarView,
+  TrainerCalendarData,
   TrainerDayClass,
+  TrainerWeekDay,
 } from "@/lib/types";
 
 /* ---------------------------------------------------------------- shared */
@@ -100,36 +100,82 @@ function fullDateLabel(iso: string): string {
   const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   return `${m}월 ${d}일 ${WD[wd]}요일`;
 }
-function shortDateLabel(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return `${m}월 ${d}일 ${WD[wd]}`;
-}
-
 /* --------------------------- trainer calendar --------------------------- */
 
-export async function getTrainerCalendar(iso?: string): Promise<TrainerCalendarView> {
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const dateOf = (d: Date) => `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+/** KST 자정(YYYY-MM-DD) → 실제 UTC instant ISO. */
+const kstMidnightUtc = (dISO: string) => {
+  const [y, m, d] = dISO.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d, -9)).toISOString();
+};
+
+/**
+ * 트레이너 홈 캘린더 페이로드(월간/주간 공용): 헤더 카운트 + 기간 이동 앵커 + 날짜별 수업.
+ * anchor(YYYY-MM-DD)가 속한 달/주(월요일 시작)를 조회한다. 날짜 전환은 클라이언트에서 즉시.
+ */
+export async function getTrainerCalendarData(
+  view: "month" | "week",
+  anchorISO?: string,
+): Promise<TrainerCalendarData> {
   const me = await getMe();
   const trainerId = me.trainerId ?? "";
-
   const today = todayISO();
-  const now = nowKstParts();
-  const year = now.getUTCFullYear();
-  const month0 = now.getUTCMonth();
-  const selectedISO = iso ?? today;
+  const anchor = anchorISO && /^\d{4}-\d{2}-\d{2}$/.test(anchorISO) ? anchorISO : today;
+  const [ay, am, ad] = anchor.split("-").map(Number);
 
-  // month boundaries (KST) -> UTC range covering the whole month
-  const monthStartUtc = new Date(Date.UTC(year, month0, 1, -9, 0, 0)).toISOString();
-  const monthEndUtc = new Date(Date.UTC(year, month0 + 1, 1, -9, 0, 0)).toISOString();
+  let startDate: string;
+  let endExcl: string;
+  let periodLabel: string;
+  let prevD: string;
+  let nextD: string;
+  let firstWeekday = 0;
+  let initialSelected = today;
+  let weekDays: TrainerWeekDay[] = [];
 
-  // all of this trainer's sessions in the month (+ members)
-  const { data: sessRows } = await sb
-    .from("sessions")
-    .select("id, scheduled_at, type, status, session_members(member_id, members(name, avatar_tone))")
-    .eq("trainer_id", trainerId)
-    .gte("scheduled_at", monthStartUtc)
-    .lt("scheduled_at", monthEndUtc)
-    .order("scheduled_at", { ascending: true });
+  if (view === "week") {
+    // 월요일 시작 7일 (수업 주간의 관례) — 월간 그리드는 기존대로 일요일 시작.
+    const a = new Date(Date.UTC(ay, am - 1, ad));
+    const start = new Date(a.getTime() - ((a.getUTCDay() + 6) % 7) * 86400000);
+    const last = new Date(start.getTime() + 6 * 86400000);
+    startDate = dateOf(start);
+    endExcl = dateOf(new Date(start.getTime() + 7 * 86400000));
+    prevD = dateOf(new Date(start.getTime() - 7 * 86400000));
+    nextD = endExcl;
+    const sm = start.getUTCMonth() + 1;
+    const lm = last.getUTCMonth() + 1;
+    periodLabel =
+      sm === lm
+        ? `${sm}월 ${start.getUTCDate()}일 — ${last.getUTCDate()}일`
+        : `${sm}월 ${start.getUTCDate()}일 — ${lm}월 ${last.getUTCDate()}일`;
+    weekDays = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start.getTime() + i * 86400000);
+      const iso = dateOf(d);
+      const w = d.getUTCDay();
+      return { dateISO: iso, day: d.getUTCDate(), wd: WD[w], isToday: iso === today, isSunday: w === 0, isSaturday: w === 6 };
+    });
+  } else {
+    startDate = `${ay}-${pad2(am)}-01`;
+    endExcl = dateOf(new Date(Date.UTC(ay, am, 1)));
+    prevD = dateOf(new Date(Date.UTC(ay, am - 2, 1)));
+    nextD = endExcl;
+    periodLabel = `${ay}년 ${am}월`;
+    firstWeekday = new Date(Date.UTC(ay, am - 1, 1)).getUTCDay();
+    initialSelected = today >= startDate && today < endExcl ? today : startDate;
+  }
+
+  // 기간 세션(+회원) / 만료임박 / 인박스 — 독립 조회라 병렬.
+  const [{ data: sessRows }, expiringCount, inboxCount] = await Promise.all([
+    sb
+      .from("sessions")
+      .select("id, scheduled_at, type, status, session_members(member_id, members(name, avatar_tone))")
+      .eq("trainer_id", trainerId)
+      .gte("scheduled_at", kstMidnightUtc(startDate))
+      .lt("scheduled_at", kstMidnightUtc(endExcl))
+      .order("scheduled_at", { ascending: true }),
+    countExpiring(trainerId, today),
+    countInbox(trainerId),
+  ]);
 
   type Row = {
     id: string;
@@ -138,22 +184,23 @@ export async function getTrainerCalendar(iso?: string): Promise<TrainerCalendarV
     status: "scheduled" | "attended" | "noshow" | "cancelled";
     session_members: { member_id: string; members: { name: string; avatar_tone: string } | null }[];
   };
-  const sessions = (sessRows ?? []) as unknown as Row[];
+  // 멤버 없는 세션(일정 변경 시 원래 슬롯에 남긴 cancelled 표식 등)은 실제 수업이 아니라 렌더 제외.
+  const sessions = ((sessRows ?? []) as unknown as Row[]).filter((s) => (s.session_members?.length ?? 0) > 0);
 
-  const dots = new Set<string>();
-  for (const s of sessions) dots.add(kstDateISO(s.scheduled_at));
+  // 주간 블록의 "진행/전체회" 라벨 — 기간에 등장하는 회원들의 현재 회원권 스냅샷.
+  const memberIds = [...new Set(sessions.flatMap((s) => s.session_members.map((sm) => sm.member_id)))];
+  const countByMember = await membershipCountLabels(memberIds);
 
-  // expiring count: active memberships of this trainer's members with end_date <= today+14
-  const expiringCount = await countExpiring(trainerId, today);
+  const classesByDate: Record<string, TrainerDayClass[]> = {};
+  for (const s of sessions) {
+    (classesByDate[kstDateISO(s.scheduled_at)] ??= []).push(mapDayClass(s, today, countByMember));
+  }
+  for (const k of Object.keys(classesByDate)) {
+    classesByDate[k].sort((a, b) => a.startMin - b.startMin);
+  }
 
-  // inbox count: pending change requests on this trainer's sessions
-  const inboxCount = await countInbox(trainerId);
-
-  // selected day's classes
-  const dayClasses: TrainerDayClass[] = sessions
-    .filter((s) => kstDateISO(s.scheduled_at) === selectedISO)
-    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
-    .map((s) => mapDayClass(s, today));
+  const calDays =
+    view === "month" ? buildMonthGrid(ay, am - 1, new Set(Object.keys(classesByDate)), initialSelected) : [];
 
   return {
     meName: me.name,
@@ -162,73 +209,43 @@ export async function getTrainerCalendar(iso?: string): Promise<TrainerCalendarV
     expiringCount,
     inboxCount,
     hasInbox: inboxCount > 0,
-    monthLabel: `${year}년 ${month0 + 1}월`,
-    calDays: buildMonthGrid(year, month0, dots, selectedISO),
-    selDateLabel: shortDateLabel(selectedISO),
-    dayClasses,
+    view,
+    periodLabel,
+    prevD,
+    nextD,
+    todayISO: today,
+    initialSelected,
+    calDays,
+    firstWeekday,
+    weekDays,
+    classesByDate,
   };
 }
 
-/**
- * Month payload for the calendar client island: base view (selected = today) plus a
- * map of every date in the month -> that day's classes, so the island can switch the
- * selected day instantly without a round-trip while keeping identical formatting.
- */
-export async function getTrainerCalendarMonth(): Promise<{
-  base: TrainerCalendarView;
-  classesByDate: Record<string, TrainerDayClass[]>;
-  todayISO: string;
-}> {
-  const me = await getMe();
-  const trainerId = me.trainerId ?? "";
-  const today = todayISO();
-  const now = nowKstParts();
-  const year = now.getUTCFullYear();
-  const month0 = now.getUTCMonth();
-
-  const monthStartUtc = new Date(Date.UTC(year, month0, 1, -9, 0, 0)).toISOString();
-  const monthEndUtc = new Date(Date.UTC(year, month0 + 1, 1, -9, 0, 0)).toISOString();
-
-  const { data: sessRows } = await sb
-    .from("sessions")
-    .select("id, scheduled_at, type, status, session_members(member_id, members(name, avatar_tone))")
-    .eq("trainer_id", trainerId)
-    .gte("scheduled_at", monthStartUtc)
-    .lt("scheduled_at", monthEndUtc)
-    .order("scheduled_at", { ascending: true });
-
-  type Row = {
-    id: string;
-    scheduled_at: string;
-    type: "1on1" | "2on1";
-    status: "scheduled" | "attended" | "noshow" | "cancelled";
-    session_members: { member_id: string; members: { name: string; avatar_tone: string } | null }[];
-  };
-  const sessions = (sessRows ?? []) as unknown as Row[];
-
-  const classesByDate: Record<string, TrainerDayClass[]> = {};
-  for (const s of sessions) {
-    // 멤버 없는 세션(일정 변경 시 원래 슬롯에 남긴 cancelled 표식 등)은 실제 수업이 아니라 렌더 제외.
-    if ((s.session_members?.length ?? 0) === 0) continue;
-    const dateISO = kstDateISO(s.scheduled_at);
-    (classesByDate[dateISO] ??= []).push(mapDayClass(s, today));
+/** 회원별 "진행/전체회" 라벨 — 사용 가능(잔여>0, 만료 임박순) 회원권 우선, 없으면 최근 것. */
+async function membershipCountLabels(memberIds: string[]): Promise<Map<string, string>> {
+  const labels = new Map<string, string>();
+  if (memberIds.length === 0) return labels;
+  const { data } = await sb
+    .from("memberships")
+    .select("member_id, total_sessions, remaining_sessions, end_date, status")
+    .in("member_id", memberIds)
+    .in("status", ["active", "paused"]);
+  type R = { member_id: string; total_sessions: number | null; remaining_sessions: number | null; end_date: string };
+  const best = new Map<string, { total: number; remaining: number; end: string; usable: boolean }>();
+  for (const r of (data ?? []) as R[]) {
+    const cand = {
+      total: r.total_sessions ?? 0,
+      remaining: r.remaining_sessions ?? 0,
+      end: r.end_date,
+      usable: (r.remaining_sessions ?? 0) > 0,
+    };
+    const cur = best.get(r.member_id);
+    const better = !cur || (cand.usable !== cur.usable ? cand.usable : cand.usable ? cand.end < cur.end : cand.end > cur.end);
+    if (better) best.set(r.member_id, cand);
   }
-  for (const k of Object.keys(classesByDate)) {
-    classesByDate[k].sort((a, b) => timeOrder(a.time) - timeOrder(b.time));
-  }
-
-  const base = await getTrainerCalendar(today);
-  return { base, classesByDate, todayISO: today };
-}
-
-function timeOrder(label: string): number {
-  // "오전 9:00" / "오후 7:00" -> minutes since midnight (for stable client sort)
-  const isPm = label.startsWith("오후");
-  const hm = label.replace(/오전 |오후 /, "");
-  const [h, m] = hm.split(":").map(Number);
-  let hh = h % 12;
-  if (isPm) hh += 12;
-  return hh * 60 + (m || 0);
+  for (const [id, b] of best) labels.set(id, `${Math.max(0, b.total - b.remaining)}/${b.total}회`);
+  return labels;
 }
 
 function mapDayClass(
@@ -239,7 +256,8 @@ function mapDayClass(
     status: "scheduled" | "attended" | "noshow" | "cancelled";
     session_members: { member_id: string; members: { name: string; avatar_tone: string } | null }[];
   },
-  today: string
+  today: string,
+  countByMember?: Map<string, string>,
 ): TrainerDayClass {
   const isTeam = s.type === "2on1";
   const names = s.session_members.map((sm) => sm.members?.name ?? "").filter(Boolean);
@@ -258,10 +276,14 @@ function mapDayClass(
   else if (isTeam) badge = { text: "2:1", variant: "team" };
   else badge = { text: "예정", variant: "scheduled" };
   const href = isTeam ? `/t/attend/${s.id}` : `/t/class/${s.id}`;
+  const k = new Date(new Date(s.scheduled_at).getTime() + 9 * 3600 * 1000);
+  const startMin = k.getUTCHours() * 60 + k.getUTCMinutes();
   return {
     sessionId: s.id,
     time: clockHM(s.scheduled_at),
+    startMin,
     name,
+    sub: isTeam ? "2:1" : countByMember?.get(s.session_members[0]?.member_id ?? ""),
     type: s.type,
     status: s.status,
     barColor,

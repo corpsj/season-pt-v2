@@ -65,6 +65,7 @@ export interface StudioClass {
   isTeam: boolean;
   showAttend: boolean;
   scheduledAt: string;
+  signed: boolean; // 수업 완료 회원 확인 서명 존재 여부(이미지는 온디맨드 로드)
 }
 
 type SessRow = {
@@ -73,12 +74,13 @@ type SessRow = {
   type: "1on1" | "2on1";
   status: SessionStatus;
   trainer_id: string;
+  signed_at: string | null;
   trainers: { display_name: string } | null;
   session_members: { members: { name: string; avatar_tone: string } | null }[];
 };
 
 const SELECT =
-  "id, scheduled_at, type, status, trainer_id, trainers(display_name), session_members(members(name, avatar_tone))";
+  "id, scheduled_at, type, status, trainer_id, signed_at, trainers(display_name), session_members(members(name, avatar_tone))";
 
 function plusHour(iso: string): string {
   return new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString();
@@ -102,6 +104,7 @@ function mapClass(s: SessRow, colorByTrainer: Map<string, string>, today: string
     isTeam: s.type === "2on1",
     showAttend: s.status === "scheduled" && dayDiff(sessionISO, today) >= 0,
     scheduledAt: s.scheduled_at,
+    signed: !!s.signed_at,
   };
 }
 

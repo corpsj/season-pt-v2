@@ -1,14 +1,24 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
+/* 숫자 전용 가독 폰트(Inter 서브셋, 9.7KB 셀프호스팅). unicode-range로 숫자·₩·, 등
+   숫자 주변 글리프에만 적용 — 세리프(Cormorant) 표시 숫자·본문 숫자 모두 이 폰트로 렌더링. */
+@font-face {
+  font-family: "SPT Number";
+  src: url("/fonts/inter-number.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+  unicode-range: U+25, U+2B-3A, U+20A9;
+}
+
 /* ============================================================
    계절 PT v2 — design tokens (authority: DESIGN_SPEC.md §A)
    Warm / sage palette. Inline hex from the C-plan prototype.
    ============================================================ */
 @theme {
   /* fonts */
-  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-serif: var(--font-cormorant), "Cormorant Garamond", serif;
+  --font-sans: "SPT Number", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "SPT Number", var(--font-cormorant), "Cormorant Garamond", serif;
 
   /* surfaces */
   --color-canvas: #eae5db;
