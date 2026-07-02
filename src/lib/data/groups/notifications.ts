@@ -110,6 +110,34 @@ export async function notifyRequestResult(input: {
   });
 }
 
+/**
+ * 세션 일정이 이동/취소 확정됐을 때 세션의 다른 회원(2:1 팀 파트너)에게 알림. best-effort.
+ * "무조건 함께 듣는" 2:1에서 한 명이 조율하면 파트너는 결과를 알아야 한다 — exceptMemberId(조율 당사자)는 건너뛴다.
+ * 1:1 세션은 당사자를 빼면 수신자가 0이라 자연히 no-op.
+ */
+export async function notifyTeamOfScheduleChange(input: {
+  sessionId: string;
+  exceptMemberId?: string;
+  kind: "change" | "cancel";
+  detail?: string; // "→ 6/25 수 오후 8:00" 같은 결과 요약
+}): Promise<void> {
+  const { data: sm } = await sb.from("session_members").select("member_id").eq("session_id", input.sessionId);
+  const recipients = (sm ?? [])
+    .map((r) => r.member_id as string)
+    .filter((id) => id !== input.exceptMemberId);
+  if (recipients.length === 0) return;
+  const isCancel = input.kind === "cancel";
+  const title = isCancel ? "팀 수업 취소" : "팀 수업 일정 변경";
+  const base = isCancel ? "함께 듣는 팀 수업이 취소됐어요." : "함께 듣는 팀 수업 시간이 변경됐어요.";
+  const body = !isCancel && input.detail ? `${base} ${input.detail}` : base;
+  await sb.from("notifications").insert(
+    recipients.map((id) => ({
+      recipient_type: "member", recipient_id: id, type: "request",
+      title, body, channel: "in_app", status: "unread",
+    })),
+  );
+}
+
 export interface NotificationView { id: string; type: string; title: string; body: string | null; createdAt: string; status: string; }
 
 export async function getNotifications(recipientType: "member" | "trainer", recipientId: string): Promise<NotificationView[]> {

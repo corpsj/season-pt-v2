@@ -90,7 +90,7 @@ async function fetchSession(sessionId: string): Promise<SessionRow | null> {
 }
 
 /** "6/21 토 · 오후 7:00" */
-function slotLabel(iso: string): string {
+export function slotLabel(iso: string): string {
   const dISO = kstDateISO(iso);
   const [, mo, da] = dISO.split("-").map(Number);
   const wd = new Date(dISO + "T00:00:00Z").getUTCDay();
@@ -261,10 +261,21 @@ export async function getInbox(): Promise<InboxView> {
     }
   }
 
+  // 회원 발의 요청은 '요청자 본인'을 보여줘야 한다 — 세션 첫 회원을 쓰면 2:1에서 파트너가 요청해도
+  // 엉뚱한 이름이 뜬다(감사 후속). requester_id로 회원을 조회해 표시.
+  const requesterIds = Array.from(
+    new Set(requests.filter((r) => r.requester_type === "member").map((r) => r.requester_id)),
+  );
+  const memberById = new Map<string, MemberRow>();
+  if (requesterIds.length) {
+    const { data: mRows } = await sb.from("members").select("id, name, avatar_tone").in("id", requesterIds);
+    for (const m of (mRows ?? []) as MemberRow[]) memberById.set(m.id, m);
+  }
+
   const received = requests
     .filter((r) => r.requester_type === "member")
     .map((r) => {
-      const m = firstMemberBySession.get(r.session_id);
+      const m = memberById.get(r.requester_id) ?? firstMemberBySession.get(r.session_id);
       const name = m?.name ?? "";
       return {
         id: r.id,

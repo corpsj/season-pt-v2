@@ -19,10 +19,12 @@ export function MembershipActions({
   membershipId,
   canExtend,
   paused = false,
+  isTeam = false,
 }: {
   membershipId: string;
   canExtend: boolean;
   paused?: boolean;
+  isTeam?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -71,6 +73,9 @@ export function MembershipActions({
 
   async function onPause() {
     if (busy) return;
+    // 2:1 팀은 함께 수업하므로, 한 명만 정지하면 팀 수업은 계속 생성되나 출석 확정이 막힌다.
+    // 파트너 일정도 함께 조정하도록 정지 전에 알린다.
+    if (isTeam && !confirm("2:1 팀 수업 중인 회원이에요. 정지하면 팀 수업 진행이 막히니 파트너 일정도 함께 조정해주세요. 계속할까요?")) return;
     setBusy(true);
     const r = await pauseMembership(membershipId);
     setBusy(false);

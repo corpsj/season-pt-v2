@@ -92,10 +92,16 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
             <span className="text-[17px] font-bold leading-none text-sage-deep">{view.dateBox.day}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-bold text-ink">1:1 PT {view.time}</div>
+            <div className="text-[14px] font-bold text-ink">{view.isTeam ? "2:1 PT" : "1:1 PT"} {view.time}</div>
             <div className="mt-0.5 text-[12.5px] font-medium text-muted">{view.trainerName}</div>
           </div>
         </Card>
+
+        {view.isTeam ? (
+          <Banner tone="team" className="mb-5">
+            2:1 팀 수업이에요. 시간을 변경·취소하면 {view.partnerName ? `${view.partnerName}님` : "팀원"}의 수업도 함께 바뀌어요.
+          </Banner>
+        ) : null}
 
         <SegmentedToggle
           className="mb-5"

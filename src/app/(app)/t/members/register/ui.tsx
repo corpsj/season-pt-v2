@@ -88,9 +88,12 @@ export function MemberRegisterClient({
             paidAt: payDate || undefined,
           }
         : undefined;
-    const slots = Object.entries(dayTimes)
-      .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
-      .sort((a, b) => a.weekday - b.weekday);
+    // 2:1은 팀 만들기에서 시간을 정하므로 개인 정기 슬롯을 생성하지 않는다.
+    const slots = is2on1
+      ? []
+      : Object.entries(dayTimes)
+          .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
+          .sort((a, b) => a.weekday - b.weekday);
     const res = await createMember({
       name,
       phone,
@@ -123,6 +126,9 @@ export function MemberRegisterClient({
   const staffOptions = trainers.map((s) => ({ value: s.id, label: s.name }));
 
   const selectedProductData = products.find((p) => p.id === selectedProduct);
+  // 2:1 상품 선택 시 정기 슬롯 입력을 숨긴다 — 팀 시간은 회원 등록 후 [회원 관리 → 팀 만들기]에서
+  // 두 회원을 함께 묶어 정한다. 여기서 슬롯을 받으면 잘못된 1:1 스케줄이 생성된다.
+  const is2on1 = selectedProductData ? productType(selectedProductData.name) === "2on1" : false;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -178,6 +184,8 @@ export function MemberRegisterClient({
           </div>
         </div>
 
+        {!is2on1 ? (
+        <>
         <div className="mb-2.5 mt-6">
           <Kicker>정기 수업 요일</Kicker>
         </div>
@@ -240,6 +248,12 @@ export function MemberRegisterClient({
         )}
 
         <Banner tone="neutral">선택한 요일·시간에 매주 수업이 자동 생성돼요.</Banner>
+        </>
+        ) : (
+          <Banner tone="team" className="mt-6">
+            2:1 팀 수업은 회원 등록 후 [회원 관리 → 2:1 팀 만들기]에서 두 회원을 함께 묶어 시간을 정해요.
+          </Banner>
+        )}
 
         {/* 회원권 상품 선택 */}
         <div className="mb-2.5 mt-6">

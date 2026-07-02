@@ -1,5 +1,6 @@
 import "server-only";
 import { sb } from "@/lib/data/db";
+import { teamMembersError, normalizeTeamSlots, type Slot } from "@/lib/data/team-slots";
 
 /**
  * 세션 이동/취소의 원자적·유령방지 로직. 강사 인박스(scheduling-actions)와 회원 수신(member-actions)
@@ -104,6 +105,69 @@ export async function moveSessionWithTombstone(sessionId: string, newISO: string
     });
   }
   return true;
+}
+
+/**
+ * 2:1 팀 정기 스케줄 생성(server-only). 두 회원을 같은 강사의 2on1 스케줄에 묶는다.
+ * 회원 등록·콘솔 "팀 만들기" 양쪽이 재사용. 대표 가드는 호출 액션에서 이미 적용된다.
+ * 슬롯은 all-or-nothing으로 사전 검증(더블부킹) 후 생성 — 반쪽 팀을 남기지 않는다.
+ */
+export async function buildTeamSchedule(
+  trainerId: string,
+  memberIds: string[],
+  slots: Slot[],
+): Promise<{ ok: boolean; error?: string; warn?: string }> {
+  const memErr = teamMembersError(memberIds);
+  if (memErr) return { ok: false, error: memErr };
+  const norm = normalizeTeamSlots(slots);
+  if ("error" in norm) return { ok: false, error: norm.error };
+
+  // 두 회원 모두 이 강사에게 배정돼 있어야 팀 세션(강사 단위)이 성립한다.
+  const { data: mtRows } = await sb
+    .from("member_trainers")
+    .select("member_id")
+    .eq("trainer_id", trainerId)
+    .in("member_id", memberIds);
+  const linked = new Set((mtRows ?? []).map((r) => r.member_id as string));
+  if (!memberIds.every((id) => linked.has(id))) {
+    return { ok: false, error: "두 회원의 담당 강사가 같아야 팀으로 묶을 수 있어요. 담당 강사를 먼저 맞춰주세요." };
+  }
+
+  const WD = ["일", "월", "화", "수", "목", "금", "토"];
+  // 사전 더블부킹 가드: 강사가 같은 요일·시각에 이미 활성 스케줄을 가지면 거부(부분 생성 방지).
+  for (const s of norm.slots) {
+    const { data: clash } = await sb
+      .from("schedules")
+      .select("id")
+      .eq("trainer_id", trainerId)
+      .eq("active", true)
+      .eq("weekday", s.weekday)
+      .eq("hour", s.hour)
+      .eq("minute", s.minute)
+      .limit(1)
+      .maybeSingle();
+    if (clash) {
+      return { ok: false, error: `${WD[s.weekday]} ${s.hour}시${s.minute ? " " + s.minute + "분" : ""}에 이미 다른 수업이 있어요. 다른 시간을 선택해주세요.` };
+    }
+  }
+
+  let warn: string | undefined;
+  for (const s of norm.slots) {
+    const { data: sched, error: schedErr } = await sb
+      .from("schedules")
+      .insert({ trainer_id: trainerId, type: "2on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
+      .select("id")
+      .single();
+    if (schedErr || !sched) { warn = "일부 팀 일정 생성에 실패했어요. 다시 시도해주세요."; continue; }
+    const { error: linkErr } = await sb
+      .from("schedule_members")
+      .insert(memberIds.map((mid) => ({ schedule_id: sched.id, member_id: mid })));
+    if (linkErr) {
+      await sb.from("schedules").delete().eq("id", sched.id); // 회원 없는 스케줄 잔류 방지
+      warn = "일부 팀 일정 생성에 실패했어요. 다시 시도해주세요.";
+    }
+  }
+  return { ok: true, warn };
 }
 
 /** scheduled 세션을 원자적으로 cancelled로 클레임(차감은 호출부 정책). 이미 처리됐으면 false. */

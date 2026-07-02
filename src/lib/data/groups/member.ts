@@ -509,13 +509,14 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
   const me = await requireMember();
   const nowIso = new Date().toISOString(); // 실제 현재 UTC instant (scheduled_at도 UTC) — KST 보정 금지
 
+  type Cand = { id: string; scheduled_at: string; status: string; trainer_id: string; type: string };
   const { data: sm } = await sb
     .from("session_members")
-    .select("session_id, sessions(id, scheduled_at, status, trainer_id)")
+    .select("session_id, sessions(id, scheduled_at, status, trainer_id, type)")
     .eq("member_id", me.memberId);
   const candidates = (sm ?? [])
-    .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string; trainer_id: string } }).sessions)
-    .filter((s): s is { id: string; scheduled_at: string; status: string; trainer_id: string } => !!s)
+    .map((r) => (r as unknown as { sessions?: Cand }).sessions)
+    .filter((s): s is Cand => !!s)
     .filter((s) => s.status === "scheduled" && s.scheduled_at >= nowIso)
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
   // Prefer the explicitly requested session; else the nearest upcoming.
@@ -525,7 +526,21 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
   const trainerName = tr?.display_name ?? "";
 
   if (!target) {
-    return { sessionId: "", dateBox: { weekday: "", day: 0 }, time: "", trainerName };
+    return { sessionId: "", dateBox: { weekday: "", day: 0 }, time: "", trainerName, isTeam: false };
+  }
+
+  const isTeam = target.type === "2on1";
+  // 2:1이면 파트너 이름 — 요청 화면에 "함께 변경돼요"를 구체적으로 안내하기 위해.
+  let partnerName: string | undefined;
+  if (isTeam) {
+    const { data: parts } = await sb
+      .from("session_members")
+      .select("member_id, members(name)")
+      .eq("session_id", target.id);
+    partnerName = (parts ?? [])
+      .filter((p) => p.member_id !== me.memberId)
+      .map((p) => (p as unknown as { members: { name: string } | null }).members?.name)
+      .find(Boolean) as string | undefined;
   }
 
   const dISO = kstDateISO(target.scheduled_at);
@@ -537,6 +552,8 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
     dateBox: { weekday, day },
     time: clockLabel(target.scheduled_at),
     trainerName,
+    isTeam,
+    partnerName,
   };
 }
 

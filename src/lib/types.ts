@@ -431,6 +431,8 @@ export interface MemberRequestView {
   dateBox: { weekday: string; day: number };
   time: string;
   trainerName: string;
+  isTeam: boolean;
+  partnerName?: string; // 2:1 팀 파트너 이름
 }
 
 /* --------------------------- member · my page --------------------------- */

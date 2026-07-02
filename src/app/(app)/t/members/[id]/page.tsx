@@ -115,6 +115,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
                 membershipId={m.activeMembershipId}
                 canExtend={!m.membershipPaused && m.remaining > 0}
                 paused={m.membershipPaused}
+                isTeam={m.isTeam}
               />
             )}
             <MiniButton icon="refresh" href="/t/retention">

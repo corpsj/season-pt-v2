@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext } from "@/lib/data/db";
 import { getStudioSettings } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
-import { notifyLowSessions, notifyRequestResult } from "@/lib/data/groups/notifications";
+import { notifyLowSessions, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
+import { slotLabel } from "@/lib/data/groups/scheduling";
 import {
   hasSlotConflict,
   moveSessionWithTombstone,
@@ -349,6 +350,9 @@ export async function moveSessionDirect(sessionId: string, newISO: string): Prom
   const moved = await moveSessionWithTombstone(sessionId, target.toISOString());
   if (!moved) return { ok: false, error: "이동에 실패했어요. 다시 시도해주세요." };
 
+  // 대표가 직접 옮긴 경우 세션의 모든 회원에게 통지(2:1이면 두 명 다).
+  await notifyTeamOfScheduleChange({ sessionId, kind: "change", detail: `→ ${slotLabel(target.toISOString())}` }).catch(() => {});
+
   revalidatePath("/t");
   revalidatePath("/console");
   revalidatePath("/m");
@@ -416,9 +420,11 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
     .update({ status: "accepted", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
     .eq("status", "pending")
-    .select("id, session_id, requester_id, type, proposed_slots, created_at, original_at");
+    .select("id, session_id, requester_id, requester_type, type, proposed_slots, created_at, original_at");
   if (!claimedReq || claimedReq.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
   const req = claimedReq[0];
+  // 팀 파트너 통지 시 조율 당사자는 건너뛴다 — 회원 발의면 그 회원, 강사 발의면 없음(회원 전원에게).
+  const initiatorMemberId = req.requester_type === "member" ? (req.requester_id as string) : undefined;
 
   // 요청 대상 세션의 현재 상태·시각·트레이너(가드/표식용).
   const { data: session } = await sb
@@ -463,6 +469,8 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
       kind: "change",
       accepted: true,
     }).catch(() => {});
+    // 2:1 팀이면 파트너에게 변경 결과 통지(무조건 함께 움직이므로).
+    await notifyTeamOfScheduleChange({ sessionId: req.session_id, exceptMemberId: initiatorMemberId, kind: "change", detail: `→ ${slotLabel(target)}` }).catch(() => {});
   } else {
     // cancel request: atomic-claim the session, then apply deduction by REQUEST time (감사 C1·C4).
     const settings = await getStudioSettings();
@@ -501,6 +509,8 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
       kind: "cancel",
       accepted: true,
     }).catch(() => {});
+    // 2:1 팀이면 파트너에게 취소 통지.
+    await notifyTeamOfScheduleChange({ sessionId: req.session_id, exceptMemberId: initiatorMemberId, kind: "cancel" }).catch(() => {});
   }
 
   revalidatePath("/t");

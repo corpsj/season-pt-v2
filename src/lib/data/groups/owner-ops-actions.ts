@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext, todayISO, parseBirth6 } from "@/lib/data/db";
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
-import { deactivateSoloSchedules } from "@/lib/data/groups/session-mutations";
+import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
@@ -697,4 +697,31 @@ export async function setMemberSchedule(
   revalidatePath("/t/members");
   revalidatePath("/console");
   return { ok: true, warn };
+}
+
+/**
+ * 2:1 팀 구성(대표 전용): 같은 담당 강사의 두 회원을 2on1 정기 스케줄로 묶고 미래 세션을 즉시 생성.
+ * 회원권은 개인별로 유지하고(각자 2:1 상품), 출석·차감·조율은 세션 단위라 팀이 항상 함께 움직인다.
+ */
+export async function createTeamSchedule(input: {
+  memberIds: string[];
+  slots: { weekday: number; hour: number; minute: number }[];
+}): Promise<Result & { warn?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  // 팀 세션의 강사 = 첫 회원의 담당 강사. buildTeamSchedule이 두 번째 회원도 같은 강사인지 검증한다.
+  const { data: mt } = await sb.from("member_trainers").select("trainer_id").eq("member_id", input.memberIds[0]).maybeSingle();
+  const trainerId = (mt?.trainer_id as string | null) ?? null;
+  if (!trainerId) return { ok: false, error: "첫 번째 회원의 담당 강사가 지정되지 않았어요." };
+
+  const built = await buildTeamSchedule(trainerId, input.memberIds, input.slots);
+  if (!built.ok) return built;
+
+  await generateUpcomingSessions().catch(() => {});
+  revalidatePath("/t");
+  revalidatePath("/t/members");
+  revalidatePath("/console");
+  return { ok: true, warn: built.warn };
 }

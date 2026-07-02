@@ -2,8 +2,9 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { sb, getMemberContext } from "@/lib/data/db";
-import { notifyTrainersOfRequest, notifyRequestResult } from "@/lib/data/groups/notifications";
+import { notifyTrainersOfRequest, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
 import { hasSlotConflict, moveSessionWithTombstone, claimCancelSession } from "@/lib/data/groups/session-mutations";
+import { slotLabel } from "@/lib/data/groups/scheduling";
 import {
   NOTICE_READ_COOKIE,
   NOTIF_READY_KEYS,
@@ -78,6 +79,7 @@ export async function acceptMemberChange(requestId: string, slotIso?: string): P
     return { ok: false, error: "수업 시간이 이미 변경돼 이 제안은 만료됐어요" };
   }
 
+  let changeDetail: string | undefined;
   if (req.type === "cancel") {
     // 강사가 요청한 취소 — 회원 승인 시 실제로 세션을 취소한다(무차감: 스튜디오 발의).
     const cancelled = await claimCancelSession(req.session_id);
@@ -97,6 +99,7 @@ export async function acceptMemberChange(requestId: string, slotIso?: string): P
       await sb.from("schedule_change_requests").update({ status: "rejected", resolved_at: new Date().toISOString() }).eq("id", req.id);
       return { ok: false, error: "이미 처리된 수업이에요" };
     }
+    changeDetail = `→ ${slotLabel(chosen)}`;
   }
 
   await sb
@@ -108,6 +111,13 @@ export async function acceptMemberChange(requestId: string, slotIso?: string): P
     recipientId: req.requester_id as string,
     kind: (req.type as "change" | "cancel") ?? "change",
     accepted: true,
+  }).catch(() => {});
+  // 2:1 팀이면 수락한 본인 외 파트너에게 결과 통지(무조건 함께 움직이므로).
+  await notifyTeamOfScheduleChange({
+    sessionId: req.session_id,
+    exceptMemberId: me.memberId,
+    kind: (req.type as "change" | "cancel") ?? "change",
+    detail: changeDetail,
   }).catch(() => {});
 
   revalidatePath("/m");
@@ -162,16 +172,21 @@ export async function sendMemberRequest(input: {
     return { ok: false, error: "변경할 시간을 선택해주세요" };
   }
 
-  // 중복 방지: 같은 수업에 대기 중인 내 요청이 이미 있으면 막는다(인박스 중복 노출 방지).
+  // 중복 방지: 같은 수업에 대기 중인 '회원' 요청이 있으면 막는다. 2:1 팀은 한 세션을 공유하므로
+  // 내 요청뿐 아니라 파트너의 요청도 함께 막아야 서로 다른 시간으로 요청해 충돌하는 것을 방지한다.
   const { data: dupReq } = await sb
     .from("schedule_change_requests")
-    .select("id")
+    .select("requester_id")
     .eq("session_id", input.sessionId)
-    .eq("requester_id", me.memberId)
+    .eq("requester_type", "member")
     .eq("status", "pending")
     .limit(1)
     .maybeSingle();
-  if (dupReq) return { ok: false, error: "이미 보낸 요청이 대기 중이에요." };
+  if (dupReq) {
+    return dupReq.requester_id === me.memberId
+      ? { ok: false, error: "이미 보낸 요청이 대기 중이에요." }
+      : { ok: false, error: "팀원이 이미 일정 요청을 보냈어요. 처리된 뒤 다시 시도해주세요." };
+  }
 
   const { data: session } = await sb
     .from("sessions")
