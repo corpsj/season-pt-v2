@@ -7,7 +7,7 @@ import { getStudioCalendarWeek, type StudioCalendarWeek } from "@/lib/data/group
 import { getMemberDetail } from "@/lib/data/groups/trainer-home";
 import { getChatRoom } from "@/lib/data/groups/chat";
 import { issueMembership, recordPayment } from "@/lib/data/groups/owner-ops-actions";
-import { getMemberSchedule, type MemberScheduleView } from "@/lib/data/groups/owner-ops";
+import { getMemberSchedule, getTeamCandidates, type MemberScheduleView } from "@/lib/data/groups/owner-ops";
 import type { ChatRoomView, MemberDetailView, PaymentMethod } from "@/lib/types";
 
 /** Mark one of the owner's in-app notifications read (topbar bell). */
@@ -69,6 +69,12 @@ export async function loadSessionSignature(sessionId: string): Promise<string | 
 export async function loadMemberSchedule(memberId: string): Promise<MemberScheduleView | null> {
   if (!(await ensureOwner())) return null;
   return getMemberSchedule(memberId);
+}
+
+/** 콘솔 팀 만들기 파트너 후보(같은 강사·활성·미팀) 로드 — 대표만. 모바일과 동일 기준. */
+export async function loadTeamCandidates(memberId: string): Promise<{ id: string; name: string }[]> {
+  if (!(await ensureOwner())) return [];
+  return getTeamCandidates(memberId);
 }
 
 /** 콘솔 캘린더 주간 뷰 네비게이션 — 대표만. */

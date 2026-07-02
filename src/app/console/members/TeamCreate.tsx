@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { ConsoleModal, OBtn, PBtn } from "@/components/console/ui";
 import { createTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
+import { loadTeamCandidates } from "@/lib/data/groups/console-actions";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6); // 6~22시
@@ -20,13 +21,11 @@ type DayTimes = Record<number, { hour: number; minute: number }>;
 export function TeamCreateModal({
   memberId,
   memberName,
-  candidates,
   onClose,
   onDone,
 }: {
   memberId: string;
   memberName: string;
-  candidates: { id: string; name: string }[];
   onClose: () => void;
   onDone: () => void | Promise<void>;
 }) {
@@ -35,6 +34,16 @@ export function TeamCreateModal({
   const [partnerId, setPartnerId] = useState<string | null>(null);
   const [dayTimes, setDayTimes] = useState<DayTimes>({});
   const [busy, setBusy] = useState(false);
+  const [candidates, setCandidates] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    loadTeamCandidates(memberId).then((list) => {
+      if (alive) { setCandidates(list); setLoading(false); }
+    });
+    return () => { alive = false; };
+  }, [memberId]);
 
   const partner = candidates.find((c) => c.id === partnerId) ?? null;
   const filtered = q.trim()
@@ -86,11 +95,17 @@ export function TeamCreateModal({
 
       {/* 파트너 선택 */}
       <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">파트너 회원</div>
-      {partner ? (
+      {loading ? (
+        <div className="mb-3 rounded-[11px] border border-[rgba(75,59,46,0.1)] py-6 text-center text-[12.5px] font-medium text-[#A89F92]">불러오는 중…</div>
+      ) : partner ? (
         <div className="mb-3 flex items-center gap-2 rounded-[12px] border border-sage/40 bg-[#F3F6EF] px-3.5 py-2.5">
           <Icon name="person" size={15} className="flex-none text-sage-deep" />
           <span className="flex-1 text-[13.5px] font-semibold text-ink">{partner.name}</span>
           <button type="button" onClick={() => setPartnerId(null)} className="text-[12px] font-semibold text-[#9A917F] hover:text-ink">변경</button>
+        </div>
+      ) : candidates.length === 0 ? (
+        <div className="mb-3 rounded-[11px] bg-[#FBF7F1] px-3.5 py-4 text-center text-[12.5px] font-medium text-[#A89F92]">
+          같은 담당 강사의 묶을 수 있는 회원이 없어요
         </div>
       ) : (
         <>
@@ -114,7 +129,7 @@ export function TeamCreateModal({
                 </button>
               ))
             ) : (
-              <div className="px-3.5 py-4 text-center text-[12.5px] font-medium text-[#A89F92]">묶을 수 있는 회원이 없어요</div>
+              <div className="px-3.5 py-4 text-center text-[12.5px] font-medium text-[#A89F92]">검색 결과가 없어요</div>
             )}
           </div>
         </>

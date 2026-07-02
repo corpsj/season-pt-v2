@@ -416,7 +416,6 @@ export function MembersClient({
         <TeamCreateModal
           memberId={d.id}
           memberName={d.name}
-          candidates={items.filter((m) => m.id !== d.id && !m.isTeam).map((m) => ({ id: m.id, name: m.name }))}
           onClose={() => setModal(null)}
           onDone={async () => { await reload(); router.refresh(); }}
         />

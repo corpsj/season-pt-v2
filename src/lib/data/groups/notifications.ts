@@ -122,6 +122,9 @@ export async function notifyTeamOfScheduleChange(input: {
   detail?: string; // "→ 6/25 수 오후 8:00" 같은 결과 요약
 }): Promise<void> {
   const { data: sm } = await sb.from("session_members").select("member_id").eq("session_id", input.sessionId);
+  // 팀(2인+)만 통지 대상 — 1:1은 파트너가 없다. moveSessionDirect는 exceptMemberId 없이 호출하므로
+  // 이 가드가 없으면 1:1 회원에게 "팀 수업 변경"이 잘못 발송된다(회귀 방지).
+  if ((sm ?? []).length < 2) return;
   const recipients = (sm ?? [])
     .map((r) => r.member_id as string)
     .filter((id) => id !== input.exceptMemberId);
