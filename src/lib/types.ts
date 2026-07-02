@@ -354,6 +354,7 @@ export interface StaffMember {
   role: TrainerRole | "invited";
   sub: string;
   isMe: boolean;
+  hasLogin: boolean; // 로그인 계정 발급 여부(false = 명단만 등록된 강사)
 }
 
 export interface ChatThreadView {

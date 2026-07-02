@@ -13,7 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import type { Gender, PaymentMethod, MembershipProduct, StaffMember } from "@/lib/types";
+import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -40,11 +40,11 @@ const todayStr = () => {
 export function MemberRegisterClient({
   ownerId,
   products,
-  staff,
+  trainers,
 }: {
   ownerId: string;
   products: MembershipProduct[];
-  staff: StaffMember[];
+  trainers: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -120,9 +120,7 @@ export function MemberRegisterClient({
     });
   }
 
-  const staffOptions = staff
-    .filter((s) => s.role !== "invited")
-    .map((s) => ({ value: s.id, label: s.name }));
+  const staffOptions = trainers.map((s) => ({ value: s.id, label: s.name }));
 
   const selectedProductData = products.find((p) => p.id === selectedProduct);
 

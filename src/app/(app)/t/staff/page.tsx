@@ -25,14 +25,15 @@ export default async function StaffPage() {
         </div>
 
         <div className="mb-4">
-          <Banner tone="owner">대표는 강사를 초대하고 권한을 관리할 수 있어요.</Banner>
+          <Banner tone="owner">강사는 이름만으로 먼저 등록하고, 로그인 아이디는 준비되면 강사 상세에서 발급해요.</Banner>
         </div>
 
         <div className="flex flex-col gap-2.5">
           {staff.map((s) => {
             const variant: BadgeVariant =
               s.role === "owner" ? "owner" : s.role === "invited" ? "invited" : "instructor";
-            const text = s.role === "owner" ? "대표" : s.role === "invited" ? "초대 대기" : "강사";
+            const text =
+              s.role === "owner" ? "대표" : s.role === "invited" ? (s.hasLogin ? "초대 대기" : "계정 미발급") : "강사";
             return (
               <Link key={s.id} href={`/t/staff/${s.id}`}>
                 <Card className="tappable flex items-center gap-3 px-[15px] py-[13px]">
@@ -57,7 +58,7 @@ export default async function StaffPage() {
 
       <Footer>
         <PrimaryButton href="/t/staff/invite" icon="person-plus">
-          강사 초대
+          강사 추가
         </PrimaryButton>
       </Footer>
     </div>

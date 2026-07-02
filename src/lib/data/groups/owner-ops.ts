@@ -75,7 +75,7 @@ export async function getStaff(): Promise<StaffMember[]> {
   const t = await getTrainerContext();
   const { data: trainers } = await sb
     .from("trainers")
-    .select("id, display_name, role, status")
+    .select("id, display_name, role, status, auth_user_id")
     .order("created_at", { ascending: true });
 
   const rows = trainers ?? [];
@@ -96,13 +96,16 @@ export async function getStaff(): Promise<StaffMember[]> {
   return rows.map((s): StaffMember => {
     const isMe = !!t && s.id === t.id;
     const count = counts.get(s.id) ?? 0;
+    const hasLogin = !!s.auth_user_id;
     const role: StaffMember["role"] = s.status === "invited" ? "invited" : s.role;
     const sub =
       role === "owner"
         ? `대표 · 나 · 담당 ${count}명`
         : role === "instructor"
           ? `강사 · 담당 ${count}명`
-          : "초대 대기 · 계정 미설정";
+          : hasLogin
+            ? `초대 대기 · 첫 로그인 전 · 담당 ${count}명`
+            : `로그인 미발급 · 담당 ${count}명`;
     return {
       id: s.id,
       name: s.display_name,
@@ -111,6 +114,7 @@ export async function getStaff(): Promise<StaffMember[]> {
       role,
       sub,
       isMe,
+      hasLogin,
     };
   });
 }
@@ -125,6 +129,7 @@ export interface StaffMemberDetail {
   memberCount: number;
   isMe: boolean;
   isOwner: boolean;
+  hasLogin: boolean; // 로그인 계정 발급 여부(false = 명단만 등록된 강사)
 }
 
 /** Single staff member for the 강사 상세/관리 screen. */
@@ -132,7 +137,7 @@ export async function getStaffMember(id: string): Promise<StaffMemberDetail | nu
   const me = await getTrainerContext();
   const { data } = await sb
     .from("trainers")
-    .select("id, display_name, username, phone, role, status")
+    .select("id, display_name, username, phone, role, status, auth_user_id")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -150,6 +155,7 @@ export async function getStaffMember(id: string): Promise<StaffMemberDetail | nu
     memberCount: count ?? 0,
     isMe: !!me && me.id === data.id,
     isOwner: data.role === "owner",
+    hasLogin: !!data.auth_user_id,
   };
 }
 

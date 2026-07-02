@@ -5,11 +5,14 @@ import { Topbar } from "@/components/console/Topbar";
 import { Card, DPill, MicroLabel } from "@/components/console/ui";
 import { getStaff, getStaffMember } from "@/lib/data/groups/owner-ops";
 import { getTrainerConsoleDetail, getTrainerPerf } from "@/lib/data/groups/console";
-import { InviteTrainerButton, TrainerActions } from "./ui";
+import { AddTrainerButton, TrainerActions } from "./ui";
 
-function roleChip(role: string) {
+function roleChip(role: string, hasLogin = true) {
   if (role === "owner") return <span className="rounded-[7px] bg-[#F3EAD2] px-2 py-[3px] text-[10.5px] font-bold text-[#9A7B2E]">대표</span>;
-  if (role === "invited") return <span className="rounded-[7px] bg-[#FBF3E9] px-2 py-[3px] text-[10.5px] font-bold text-[#B5612F]">초대 대기</span>;
+  if (role === "invited")
+    return hasLogin
+      ? <span className="rounded-[7px] bg-[#FBF3E9] px-2 py-[3px] text-[10.5px] font-bold text-[#B5612F]">초대 대기</span>
+      : <span className="rounded-[7px] bg-[#EFEAE1] px-2 py-[3px] text-[10.5px] font-bold text-[#8C8475]">계정 미발급</span>;
   return <span className="rounded-[7px] bg-[#EDF4E3] px-2 py-[3px] text-[10.5px] font-bold text-[#5B6452]">강사</span>;
 }
 
@@ -28,7 +31,8 @@ export default async function ConsoleTrainersPage({
   const activeCount = staff.filter((s) => s.role !== "invited").length;
   const pendingCount = staff.filter((s) => s.role === "invited").length;
   const totalSessions = perf.reduce((s, p) => s + p.sessions, 0);
-  const pending = detail?.status === "invited";
+  // 초대 대기 배너는 "로그인 계정 발급됨 + 첫 로그인 전"에만. 명단만 등록된 강사는 상세/발급 UI를 그대로 보여준다.
+  const pending = detail?.status === "invited" && detail.hasLogin;
 
   return (
     <>
@@ -44,7 +48,7 @@ export default async function ConsoleTrainersPage({
             <div className="h-[34px] w-px bg-[rgba(75,59,46,0.08)]" />
             <Summary label="이번 달 총 수업" value={totalSessions} unit="회" />
           </Card>
-          <InviteTrainerButton />
+          <AddTrainerButton />
         </div>
 
         <div className="grid grid-cols-[340px_1fr] items-start gap-[18px]">
@@ -60,7 +64,7 @@ export default async function ConsoleTrainersPage({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[14.5px] font-bold text-ink">{s.name}</span>
-                        {roleChip(s.role)}
+                        {roleChip(s.role, s.hasLogin)}
                       </div>
                       <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">{s.sub}</div>
                     </div>
@@ -80,9 +84,9 @@ export default async function ConsoleTrainersPage({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[21px] font-bold tracking-[-0.01em] text-ink">{detail.name}</span>
-                      {roleChip(detail.status === "invited" ? "invited" : detail.role)}
+                      {roleChip(detail.status === "invited" ? "invited" : detail.role, detail.hasLogin)}
                     </div>
-                    <div className="mt-0.5 text-[13px] font-medium text-[#847A66]">{detail.phone || "연락처 미등록"} · @{detail.username}</div>
+                    <div className="mt-0.5 text-[13px] font-medium text-[#847A66]">{detail.phone || "연락처 미등록"} · {detail.hasLogin ? `@${detail.username}` : "로그인 미발급"}</div>
                   </div>
                 </div>
 
@@ -122,7 +126,7 @@ export default async function ConsoleTrainersPage({
                       <div className="mb-[18px] px-0.5 text-[12px] font-medium text-[#B3AA9C]">담당 회원이 없어요</div>
                     )}
 
-                    <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} />
+                    <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} />
                   </>
                 )}
               </>

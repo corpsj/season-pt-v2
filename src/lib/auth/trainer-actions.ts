@@ -8,6 +8,10 @@ import { ensureOwner, OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 const toEmail = (u: string) => `${u.trim().toLowerCase()}@${DOMAIN}`;
 
+// CSPRNG 8자리 임시비번 — 혼동 문자(l/1, o/0) 제외. 초대·재발급·계정 발급 공용.
+const ALPHANUM = "abcdefghjkmnpqrstuvwxyz23456789";
+const genTempPassword = () => Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
+
 type Result = { ok: boolean; error?: string; mustChangePassword?: boolean };
 
 export async function ownerSignup(username: string, password: string): Promise<Result> {
@@ -93,9 +97,7 @@ export async function inviteInstructor(
   const admin = createSupabaseAdmin();
   const { data: exists } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
   if (exists) return { ok: false, error: "이미 사용 중인 아이디예요" };
-  // CSPRNG 8자리 영문+숫자 — Math.random 6자리 숫자는 추측 가능(감사 #42). 첫 로그인 시 변경 강제는 유지.
-  const ALPHANUM = "abcdefghjkmnpqrstuvwxyz23456789"; // 혼동 문자(l/1, o/0) 제외
-  const tempPassword = Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
+  const tempPassword = genTempPassword();
   const { data: created, error } = await admin.auth.admin.createUser({
     email: toEmail(uname),
     password: tempPassword,
@@ -116,6 +118,84 @@ export async function inviteInstructor(
     await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
     return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
   }
+  return { ok: true, username: uname, tempPassword };
+}
+
+/**
+ * 강사를 "명단에만" 등록(로그인 계정 없이). 대표가 회원을 한꺼번에 등록하기 전에 강사 이름부터
+ * 올려두고 담당 배정을 할 수 있게 한다. 로그인 아이디·임시비번은 준비되면 issueInstructorLogin으로 발급.
+ * username은 not-null·unique 제약을 만족시키기 위한 임시 슬러그(로그인엔 미사용, 발급 시 실제 아이디로 교체).
+ */
+export async function addInstructor(name: string, phone?: string): Promise<Result & { id?: string }> {
+  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
+  const display = name.trim();
+  if (!display) return { ok: false, error: "강사 이름을 입력해주세요" };
+  const admin = createSupabaseAdmin();
+  const placeholderUsername = `pending_${genTempPassword()}`; // unique·미표시(발급 전까지)
+  const { data, error } = await admin
+    .from("trainers")
+    .insert({
+      auth_user_id: null,
+      username: placeholderUsername,
+      display_name: display,
+      role: "instructor",
+      status: "invited", // 로그인 전 상태(활성 강사 명단엔 아직 미포함, 담당 배정은 가능)
+      must_change_password: false,
+      phone: phone?.trim() || null,
+    })
+    .select("id")
+    .maybeSingle();
+  if (error || !data) return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
+  revalidatePath("/t/staff");
+  revalidatePath("/console/trainers");
+  return { ok: true, id: data.id as string };
+}
+
+/**
+ * 명단에만 있던 강사(로그인 계정 없음)에게 로그인 아이디·임시비번을 발급. inviteInstructor와 동일하게
+ * auth 계정을 만들되, INSERT 대신 기존 강사 행을 UPDATE한다. 첫 로그인 시 비번 변경이 강제된다.
+ */
+export async function issueInstructorLogin(
+  id: string,
+  username: string,
+): Promise<Result & { username?: string; tempPassword?: string }> {
+  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
+  const uname = username.trim().toLowerCase();
+  if (!/^[a-z0-9._-]{3,20}$/.test(uname))
+    return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
+  const admin = createSupabaseAdmin();
+  const { data: target } = await admin
+    .from("trainers")
+    .select("id, role, auth_user_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
+  if (target.role === "owner") return { ok: false, error: "대표 계정이에요" };
+  if (target.auth_user_id) return { ok: false, error: "이미 로그인 계정이 있는 강사예요" };
+  const { data: dup } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
+  if (dup) return { ok: false, error: "이미 사용 중인 아이디예요" };
+
+  const tempPassword = genTempPassword();
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email: toEmail(uname),
+    password: tempPassword,
+    email_confirm: true,
+  });
+  if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 발급에 실패했어요" };
+  const { data: updated, error: upErr } = await admin
+    .from("trainers")
+    .update({ auth_user_id: created.user.id, username: uname, must_change_password: true, status: "invited" })
+    .eq("id", id)
+    .is("auth_user_id", null) // 원자 클레임: 여전히 계정 없을 때만 — 동시/이중 발급 방지
+    .select("id");
+  if (upErr || !updated || updated.length === 0) {
+    // 클레임 실패(동시 발급으로 이미 링크됨) 또는 오류 → 방금 만든 auth 계정을 회수(고아 방지, 감사 #19).
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    return { ok: false, error: "계정 발급에 실패했어요. 다시 시도해주세요." };
+  }
+  revalidatePath("/t/staff");
+  revalidatePath(`/t/staff/${id}`);
+  revalidatePath("/console/trainers");
   return { ok: true, username: uname, tempPassword };
 }
 
@@ -219,10 +299,8 @@ export async function resetInstructorPassword(id: string): Promise<Result & { te
   const target = await fetchTrainer(admin, id);
   if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
   if (target.role === "owner") return { ok: false, error: "대표 계정은 초기화할 수 없어요. scripts/reset-trainer-password.ts를 사용하세요." };
-  if (!target.auth_user_id) return { ok: false, error: "로그인 계정이 없는 강사예요" };
-  // inviteInstructor와 동일한 CSPRNG 임시비번(혼동 문자 제외 8자리)
-  const ALPHANUM = "abcdefghjkmnpqrstuvwxyz23456789";
-  const tempPassword = Array.from({ length: 8 }, () => ALPHANUM[randomInt(ALPHANUM.length)]).join("");
+  if (!target.auth_user_id) return { ok: false, error: "로그인 계정이 아직 없어요. 먼저 로그인 계정을 발급하세요." };
+  const tempPassword = genTempPassword();
   const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password: tempPassword });
   if (error) return { ok: false, error: "초기화에 실패했어요. 다시 시도해주세요." };
   // 비번은 이미 바뀜 — 변경강제 플래그 실패를 삼키면 첫 로그인 변경강제가 안 걸린다. 재시도는 새 임시비번으로 안전하게 재발급됨.

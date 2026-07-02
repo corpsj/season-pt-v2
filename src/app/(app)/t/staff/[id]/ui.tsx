@@ -18,6 +18,7 @@ import {
   setInstructorActive,
   deleteInstructor,
   resetInstructorPassword,
+  issueInstructorLogin,
 } from "@/lib/auth/trainer-actions";
 import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import type { StaffMemberDetail } from "@/lib/data/groups/owner-ops";
@@ -37,6 +38,19 @@ export function StaffDetailClient({
   const [busy, setBusy] = useState(false);
   const [reassignTo, setReassignTo] = useState("");
   const [tempPw, setTempPw] = useState<string | null>(null);
+  const [issueUsername, setIssueUsername] = useState("");
+  const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
+
+  async function onIssueLogin() {
+    if (busy || !issueUsername.trim()) return;
+    setBusy(true);
+    const r = await issueInstructorLogin(member.id, issueUsername);
+    setBusy(false);
+    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요");
+    setIssued({ username: r.username, tempPassword: r.tempPassword });
+    toast("로그인 계정을 발급했어요");
+    router.refresh();
+  }
 
   async function onReassign() {
     if (busy || !reassignTo) return;
@@ -53,7 +67,11 @@ export function StaffDetailClient({
     }
   }
 
-  const roleText = member.isOwner ? "대표" : member.status === "invited" ? "초대 대기" : "강사";
+  const roleText = member.isOwner
+    ? "대표"
+    : member.status === "invited"
+      ? member.hasLogin ? "초대 대기" : "계정 미발급"
+      : "강사";
   const roleVariant = member.isOwner ? "owner" : member.status === "invited" ? "invited" : "instructor";
 
   async function onSave() {
@@ -125,7 +143,7 @@ export function StaffDetailClient({
               </Badge>
             </div>
             <div className="mt-0.5 text-[12.5px] font-medium text-muted">
-              {member.username} · 담당 {member.memberCount}명
+              {member.hasLogin ? member.username : "로그인 미발급"} · 담당 {member.memberCount}명
             </div>
           </div>
         </Card>
@@ -134,10 +152,17 @@ export function StaffDetailClient({
           <Banner tone="owner">대표 계정이에요. 강사 관리에서는 수정할 수 없어요.</Banner>
         ) : (
           <>
-            {member.status === "invited" ? (
+            {member.status === "invited" && member.hasLogin ? (
               <div className="mb-4">
                 <Banner tone="neutral">
                   아직 첫 로그인 전이에요. 강사가 임시 비밀번호로 접속하면 자동으로 활성화돼요.
+                </Banner>
+              </div>
+            ) : null}
+            {!member.hasLogin ? (
+              <div className="mb-4">
+                <Banner tone="neutral">
+                  명단에만 등록된 강사예요. 담당 배정은 지금도 가능하고, 앱 로그인은 아래에서 아이디를 발급하면 열려요.
                 </Banner>
               </div>
             ) : null}
@@ -185,21 +210,65 @@ export function StaffDetailClient({
               </>
             ) : null}
 
-            {/* password reset */}
-            <div className="mb-2.5 mt-7">
-              <Kicker>비밀번호</Kicker>
-            </div>
-            <OutlineButton icon="lock" onClick={onResetPassword} disabled={busy || member.isMe}>
-              비밀번호 초기화
-            </OutlineButton>
-            {member.isMe ? (
-              <div className="mt-2.5 text-[12px] font-medium text-muted">본인 계정은 여기서 초기화할 수 없어요</div>
-            ) : null}
-            {tempPw ? (
-              <Banner tone="warn" className="mt-2.5">
-                임시 비밀번호: <b className="select-all">{tempPw}</b> — 지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.
-              </Banner>
-            ) : null}
+            {/* login account: issue for placeholder, reset for existing */}
+            {member.hasLogin ? (
+              <>
+                <div className="mb-2.5 mt-7">
+                  <Kicker>비밀번호</Kicker>
+                </div>
+                <OutlineButton icon="lock" onClick={onResetPassword} disabled={busy || member.isMe}>
+                  비밀번호 초기화
+                </OutlineButton>
+                {member.isMe ? (
+                  <div className="mt-2.5 text-[12px] font-medium text-muted">본인 계정은 여기서 초기화할 수 없어요</div>
+                ) : null}
+                {tempPw ? (
+                  <Banner tone="warn" className="mt-2.5">
+                    임시 비밀번호: <b className="select-all">{tempPw}</b> — 지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.
+                  </Banner>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className="mb-2.5 mt-7">
+                  <Kicker>로그인 계정 발급</Kicker>
+                </div>
+                {issued ? (
+                  <Card className="overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-4 py-[14px]">
+                      <Icon name="person" size={18} className="flex-none text-sage" />
+                      <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
+                      <span className="text-[14px] font-bold text-ink">{issued.username}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
+                      <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
+                      <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
+                      <span className="select-all text-[14px] font-bold text-ink">{issued.tempPassword}</span>
+                    </div>
+                    <div className="border-t border-ink/[0.07] px-4 py-3 text-[12px] font-medium leading-[1.5] text-muted">
+                      지금 강사에게 전달하세요. 첫 로그인 시 비밀번호 변경이 강제돼요.
+                    </div>
+                  </Card>
+                ) : (
+                  <>
+                    <Field icon="person-fill" label="아이디 (로그인 ID)" hint="영문·숫자">
+                      <TextInput
+                        placeholder="instructor01"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        value={issueUsername}
+                        onChange={(e) => setIssueUsername(e.target.value)}
+                      />
+                    </Field>
+                    <div className="mt-3.5">
+                      <PrimaryButton icon="lock-fill" onClick={onIssueLogin} disabled={busy || !issueUsername.trim()}>
+                        로그인 계정 발급
+                      </PrimaryButton>
+                    </div>
+                  </>
+                )}
+              </>
+            )}
 
             {/* reassign members (퇴사 인수인계) */}
             {member.memberCount > 0 && reassignTargets.length > 0 ? (
