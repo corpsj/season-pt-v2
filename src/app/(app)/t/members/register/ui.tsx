@@ -143,15 +143,22 @@ export function MemberRegisterClient({
   // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
   const is2on1 = classType === "2on1";
 
-  /** 칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
+  /** 상품 필터 변경. 1:1/2:1은 등록 형태(듀엣)와 직결 — 함께 전환해 파트너 입력이 열리게 한다(특별할인은 형태 무관).
+   *  칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
   function onFilterChange(next: PickerFilter) {
     setProductFilter(next);
+    if (next === "1on1" || next === "2on1") setClassType(next);
     if (selectedProduct === "later") return;
     const p = products.find((pp) => pp.id === selectedProduct);
     if (p && !matchesPickerFilter(p.name, next)) {
       setSelectedProduct("later");
       setPayAmount("");
     }
+  }
+
+  /** 수업 형태 토글. 상품 필터도 맞춰(듀엣이면 2:1 상품이 보이게) 안 맞는 선택 상품은 해제한다. */
+  function onClassTypeChange(next: "1on1" | "2on1") {
+    onFilterChange(next);
   }
 
   return (
@@ -210,7 +217,7 @@ export function MemberRegisterClient({
                 { value: "2on1", label: "2:1 (듀엣)" },
               ]}
               value={classType}
-              onChange={setClassType}
+              onChange={onClassTypeChange}
             />
           </div>
         </div>
