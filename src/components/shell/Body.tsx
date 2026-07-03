@@ -78,10 +78,7 @@ export function Body({
       {indicator > 0 ? (
         <div
           style={{ height: indicator }}
-          className={cn(
-            "flex flex-none items-center justify-center overflow-hidden text-sage",
-            refreshing && "transition-[height] duration-150"
-          )}
+          className="flex flex-none items-center justify-center overflow-hidden text-sage transition-[height] duration-150"
         >
           <span className={cn(!refreshing && pull < PULL_TRIGGER && "opacity-40")}>
             <Spinner size={18} />

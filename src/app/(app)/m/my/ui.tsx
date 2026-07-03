@@ -99,7 +99,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
               </div>
               <button
                 type="button"
-                onClick={() => toast("재등록은 선생님에게 메시지로 문의해 주세요", "error")}
+                onClick={() => toast("재등록은 선생님에게 메시지로 문의해 주세요")}
                 className="tappable flex items-center gap-0.5 whitespace-nowrap text-[13px] font-bold text-terracotta"
               >
                 재등록
@@ -178,7 +178,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         <div className="px-0 pb-[22px] pt-1 text-center">
           <button
             type="button"
-            onClick={() => toast("회원 탈퇴는 선생님에게 문의해 주세요", "error")}
+            onClick={() => toast("회원 탈퇴는 선생님에게 문의해 주세요")}
             className="tappable text-[12.5px] font-medium text-placeholder underline underline-offset-[3px]"
           >
             회원 탈퇴

@@ -336,10 +336,10 @@ export function ProductsClient({ products, discounts }: { products: MembershipPr
               <Field icon="refresh" label="회차">
                 <TextInput inputMode="numeric" placeholder="10" value={form.sessions} onChange={num("sessions")} />
               </Field>
-              <Field icon="coins" label="가격 (원)">
+              <Field icon="coins" label="가격" hint="원">
                 <MoneyInput placeholder="750,000" value={form.price} onValueChange={(d) => patchForm({ price: d })} />
               </Field>
-              <Field icon="coins" label="1회 정상가 (환불 기준, 원)">
+              <Field icon="coins" label="1회 정상가 (환불 기준)" hint="원">
                 <MoneyInput placeholder="100,000" value={form.unitListPrice} onValueChange={(d) => patchForm({ unitListPrice: d })} />
               </Field>
               <Field icon="calendar" label="유효기간 (일)">

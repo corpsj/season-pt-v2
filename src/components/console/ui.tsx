@@ -54,7 +54,7 @@ type BtnBase = {
 };
 
 function Btn({ base, icon, children, href, onClick, type = "button", disabled, pending, className = "", title, ...rest }: BtnBase & { base: string }) {
-  const cls = `${base} ${className}`;
+  const cls = `${base} ${disabled ? "opacity-50" : pending ? "opacity-80" : ""} ${className}`;
   const inner = (
     <>
       {pending ? <Spinner size={16} /> : icon ? <Icon name={icon} size={16} /> : null}
@@ -78,11 +78,11 @@ function Btn({ base, icon, children, href, onClick, type = "button", disabled, p
 // 모바일 버튼과 동일한 디자인 축: radius 15/13(--radius-btn/field), .tappable 모션, sage 포커스 링.
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sage/40";
 const PBTN =
-  `inline-flex items-center justify-center gap-[7px] rounded-[15px] bg-sage px-4 py-[11px] text-[14px] font-semibold tracking-[-0.01em] text-white transition-[filter,transform] duration-[130ms] hover:brightness-[1.06] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
+  `inline-flex items-center justify-center gap-[7px] rounded-[15px] bg-sage px-4 py-[11px] text-[14px] font-semibold tracking-[-0.01em] text-white transition-[filter,transform] duration-[130ms] hover:brightness-[1.06] active:scale-[.975] ${FOCUS}`;
 const OBTN =
-  `inline-flex items-center justify-center gap-[6px] rounded-[15px] border-[1.4px] border-sage-deep/40 bg-white px-4 py-[11px] text-[13.5px] font-semibold text-[#5B6452] transition-[background-color,transform] duration-[130ms] hover:bg-[#F4F0E8] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
+  `inline-flex items-center justify-center gap-[6px] rounded-[15px] border-[1.4px] border-sage-deep/40 bg-white px-4 py-[11px] text-[13.5px] font-semibold text-[#5B6452] transition-[background-color,transform] duration-[130ms] hover:bg-[#F4F0E8] active:scale-[.975] ${FOCUS}`;
 const GBTN =
-  `inline-flex items-center justify-center gap-[6px] rounded-[13px] border border-ink/[0.12] bg-white px-[13px] py-[8px] text-[13px] font-semibold text-[#766D60] transition-[background-color,transform] duration-[150ms] hover:bg-[#F4F0E8] active:scale-[.975] disabled:opacity-50 ${FOCUS}`;
+  `inline-flex items-center justify-center gap-[6px] rounded-[13px] border border-ink/[0.12] bg-white px-[13px] py-[8px] text-[13px] font-semibold text-[#766D60] transition-[background-color,transform] duration-[150ms] hover:bg-[#F4F0E8] active:scale-[.975] ${FOCUS}`;
 
 export function PBtn(p: BtnBase) {
   return <Btn base={PBTN} {...p} />;
