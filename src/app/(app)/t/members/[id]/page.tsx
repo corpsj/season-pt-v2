@@ -11,7 +11,10 @@ import { PrimaryButton, MiniButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
+import { getBodyHistory } from "@/lib/data/groups/body";
 import { getMemberMeals } from "@/lib/data/groups/meals";
+import { todayISO } from "@/lib/data/db";
+import { BodyEntryButton } from "./BodyEntryButton";
 import { MemberFilesSection } from "./MemberFilesSection";
 import { MemberMealsSection } from "./MemberMealsSection";
 import { MessageMemberButton } from "./MessageMemberButton";
@@ -24,13 +27,14 @@ const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", t
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me, photos, inbodies, mealsPage] = await Promise.all([
+  const [m, recordHref, me, photos, inbodies, mealsPage, bodyHistory] = await Promise.all([
     getMemberDetail(id),
     getMemberRecordHref(id),
     getMe(),
     getMemberFiles(id, "photo"),
     getMemberFiles(id, "inbody"),
     getMemberMeals(id),
+    getBodyHistory(id, 5),
   ]);
   const meals = mealsPage.meals;
 
@@ -145,12 +149,30 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
         ) : null}
 
         {/* body composition */}
-        <Card className="mb-3.5 flex px-[15px] py-3.5">
-          <Stat value={m.body.weight} label="체중 (kg)" className="flex-1" />
-          <div className="h-7 w-px self-center bg-ink/[0.08]" />
-          <Stat value={m.body.skeletalMuscle} label="골격근 (kg)" className="flex-1" />
-          <div className="h-7 w-px self-center bg-ink/[0.08]" />
-          <Stat value={m.body.bodyFat} label="체지방 (%)" className="flex-1" />
+        <Card className="mb-3.5 px-[15px] py-3.5">
+          <div className="mb-3 flex items-center justify-between px-0.5">
+            <span className="text-[12.5px] font-semibold text-muted5">체성분</span>
+            <BodyEntryButton memberId={id} today={todayISO()} />
+          </div>
+          <div className="flex">
+            <Stat value={m.body.weight} label="체중 (kg)" className="flex-1" />
+            <div className="h-7 w-px self-center bg-ink/[0.08]" />
+            <Stat value={m.body.skeletalMuscle} label="골격근 (kg)" className="flex-1" />
+            <div className="h-7 w-px self-center bg-ink/[0.08]" />
+            <Stat value={m.body.bodyFat} label="체지방 (%)" className="flex-1" />
+          </div>
+          {bodyHistory.length > 0 && (
+            <div className="mt-3 divide-y divide-ink/[0.06] border-t border-ink/[0.06] pt-1">
+              {bodyHistory.map((b) => (
+                <div key={b.id} className="flex items-center gap-2 py-2 text-[12.5px]">
+                  <span className="w-[52px] flex-none font-medium text-muted">{b.measuredAt.slice(5).replace("-", ".")}</span>
+                  <span className="flex-1 font-semibold text-ink">
+                    {[b.weight != null ? `${b.weight}kg` : null, b.skeletalMuscle != null ? `골격근 ${b.skeletalMuscle}` : null, b.bodyFat != null ? `체지방 ${b.bodyFat}%` : null].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <MemberFilesSection kind="photo" memberId={id} initial={photos} />

@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { sb } from "@/lib/data/db";
+import { sb, getMemberContext } from "@/lib/data/db";
 import { validateUpload, type FileKind } from "@/lib/media/upload-guard";
 import { FILES_BUCKET, getMemberFiles, trainerCanAccess } from "./member-files";
 
@@ -76,6 +76,63 @@ export async function deleteMemberFile(fileId: string): Promise<Result> {
   revalidatePath(`/t/members/${row.member_id as string}`);
   revalidatePath("/m/my/body");
   revalidatePath("/m"); // 캘린더 날짜별 체형 기록도 갱신
+  return { ok: true };
+}
+
+/** 회원 본인이 진행 사진을 업로드. photo만 허용(인바디는 강사 전용). created_by는 null. */
+export async function uploadMyFile(formData: FormData): Promise<Result> {
+  const me = await getMemberContext();
+  if (!me) return { ok: false, error: "권한이 없어요" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "파일이 없어요" };
+
+  const kind: FileKind = "photo"; // 회원 셀프 업로드는 진행 사진만
+  const v = validateUpload(kind, file.type, file.size);
+  if (!v.ok) return { ok: false, error: v.error };
+
+  const ext = EXT[file.type] ?? "jpg";
+  const path = `${me.memberId}/${kind}/${crypto.randomUUID()}.${ext}`;
+
+  const { error: upErr } = await sb.storage
+    .from(FILES_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (upErr) return { ok: false, error: "업로드에 실패했어요" };
+
+  const { error: insErr } = await sb
+    .from("member_files")
+    .insert({ member_id: me.memberId, kind, storage_path: path, created_by: null });
+  if (insErr) {
+    await sb.storage.from(FILES_BUCKET).remove([path]); // 고아 객체 롤백
+    return { ok: false, error: "저장에 실패했어요" };
+  }
+
+  revalidatePath("/m/my/body");
+  revalidatePath("/m");
+  revalidatePath(`/t/members/${me.memberId}`);
+  return { ok: true };
+}
+
+/** 회원 본인이 올린 진행 사진 삭제 — 본인 소유 + photo만. */
+export async function deleteMyFile(fileId: string): Promise<Result> {
+  const me = await getMemberContext();
+  if (!me) return { ok: false, error: "권한이 없어요" };
+
+  const { data: row } = await sb
+    .from("member_files")
+    .select("member_id, kind, storage_path")
+    .eq("id", fileId)
+    .maybeSingle();
+  if (!row) return { ok: false, error: "파일을 찾을 수 없어요" };
+  if (row.member_id !== me.memberId || row.kind !== "photo") return { ok: false, error: "권한이 없어요" };
+
+  const { error: storErr } = await sb.storage.from(FILES_BUCKET).remove([row.storage_path as string]);
+  const { error: delErr } = await sb.from("member_files").delete().eq("id", fileId);
+  if (storErr || delErr) return { ok: false, error: "삭제에 실패했어요" };
+
+  revalidatePath("/m/my/body");
+  revalidatePath("/m");
+  revalidatePath(`/t/members/${me.memberId}`);
   return { ok: true };
 }
 

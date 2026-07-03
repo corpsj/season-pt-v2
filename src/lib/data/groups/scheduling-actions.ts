@@ -6,7 +6,7 @@ import { ensureOwner } from "@/lib/auth/guard";
 import { getStudioSettings, getExercises } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
 import { notifyLowSessions, notifyMemberOfCounterProposal, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
-import { getProposeSlots, slotLabel, getRecordTarget } from "@/lib/data/groups/scheduling";
+import { getProposeSlots, slotLabel, getRecordTarget, parseExercises } from "@/lib/data/groups/scheduling";
 import {
   hasSlotConflict,
   moveSessionWithTombstone,
@@ -295,6 +295,58 @@ export async function saveRecord(
   revalidatePath("/t");
   revalidatePath(`/t/class/${sessionId}`); // 허브 복귀 시 최신 기록 반영
   revalidatePath("/m"); // 회원 캘린더 날짜별 운동 기록
+  revalidatePath("/m/my/records");
+  return { ok: true };
+}
+
+/**
+ * 이 세션 회원의 '직전 다른 세션' 운동 기록을 불러온다(프리필용). comment는 제외 — 종목·kg·sets·reps만.
+ * 트레이너 컨텍스트 + 담당 세션 가드(saveRecord와 동일). 이전 기록이 없으면 exercises=[].
+ */
+export async function loadPrevRecord(
+  sessionId: string,
+): Promise<{ ok: boolean; exercises?: WorkoutExercise[]; error?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "권한이 없어요." };
+
+  const { data: session } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+  if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+
+  const memberId = (await memberIdsForSession(sessionId))[0];
+  if (!memberId) return { ok: false, error: "회원을 찾을 수 없어요." };
+
+  const { data } = await sb
+    .from("workout_records")
+    .select("exercises")
+    .eq("member_id", memberId)
+    .neq("session_id", sessionId) // 직전 '다른' 세션
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return { ok: true, exercises: data ? parseExercises(data.exercises) : [] };
+}
+
+/** 세션의 운동 기록 삭제(세션 전 회원). 담당 가드 후 (session_id, member_id들) 행 제거. */
+export async function deleteRecord(sessionId: string): Promise<ActionResult> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "권한이 없어요." };
+
+  const { data: target } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+  if (!target) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && target.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+
+  const memberIds = await memberIdsForSession(sessionId);
+  const { error } = await sb
+    .from("workout_records")
+    .delete()
+    .eq("session_id", sessionId)
+    .in("member_id", memberIds);
+  if (error) return { ok: false, error: "기록 삭제에 실패했어요. 다시 시도해주세요." };
+
+  revalidatePath("/t");
+  revalidatePath(`/t/class/${sessionId}`);
+  revalidatePath("/m");
   revalidatePath("/m/my/records");
   return { ok: true };
 }

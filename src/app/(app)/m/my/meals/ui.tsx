@@ -9,10 +9,11 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
-import { logMeal, deleteMeal, loadMoreMeals } from "@/lib/data/groups/meals-actions";
+import { logMeal, updateMeal, deleteMeal, loadMoreMeals } from "@/lib/data/groups/meals-actions";
 import type { MealLog } from "@/lib/data/groups/meals";
 
 const TYPES = ["아침", "점심", "저녁", "간식"] as const;
+const todayKstDate = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // YYYY-MM-DD
 
 const kst = (iso: string, opts: Intl.DateTimeFormatOptions) =>
   new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", ...opts });
@@ -30,10 +31,12 @@ export function MemberMealsClient({
   initial,
   initialHasMore,
   initialOpen = false,
+  initialDate,
 }: {
   initial: MealLog[];
   initialHasMore: boolean;
   initialOpen?: boolean;
+  initialDate?: string;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -44,8 +47,13 @@ export function MemberMealsClient({
   const [busy, setBusy] = useState(false);
   const [mealType, setMealType] = useState<string>("");
   const [memo, setMemo] = useState("");
+  const [date, setDate] = useState<string>(initialDate ?? todayKstDate());
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  // 수정 모드(카드별): editingId 있으면 해당 카드가 인라인 편집 상태.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editMemo, setEditMemo] = useState("");
+  const [editType, setEditType] = useState<string>("");
   const [extra, setExtra] = useState<MealLog[]>([]);
   const [offset, setOffset] = useState(60);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -81,6 +89,7 @@ export function MemberMealsClient({
     setOpen(false);
     setMealType("");
     setMemo("");
+    setDate(todayKstDate());
     setPhoto(null);
     if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
@@ -93,6 +102,8 @@ export function MemberMealsClient({
       const fd = new FormData();
       if (mealType) fd.set("mealType", mealType);
       if (memo.trim()) fd.set("memo", memo.trim());
+      // 오늘이면 서버가 now()로 기록(실제 시각 보존), 지난 날짜만 eatenAt 전달(정오 KST).
+      if (date && date !== todayKstDate()) fd.set("eatenAt", date);
       if (photo) fd.set("photo", await downscaleImage(photo), "meal.jpg");
       const r = await logMeal(fd);
       if (!r.ok) return toast(r.error ?? "기록에 실패했어요", "error");
@@ -102,6 +113,27 @@ export function MemberMealsClient({
       refresh(() => router.refresh());
     } catch {
       toast("기록에 실패했어요", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+  function startEdit(m: MealLog) {
+    setEditingId(m.id);
+    setEditMemo(m.memo ?? "");
+    setEditType(m.mealType ?? "");
+  }
+  async function saveEdit(id: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await updateMeal(id, { memo: editMemo, mealType: editType });
+      if (!r.ok) return toast(r.error ?? "수정에 실패했어요", "error");
+      toast("수정했어요");
+      setEditingId(null);
+      resetPaging();
+      refresh(() => router.refresh());
+    } catch {
+      toast("수정에 실패했어요", "error");
     } finally {
       setBusy(false);
     }
@@ -190,6 +222,18 @@ export function MemberMealsClient({
               className="mb-3 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
             />
 
+            <div className="mb-3 flex items-center gap-2">
+              <Icon name="calendar" size={16} className="flex-none text-muted" />
+              <span className="text-[13px] font-semibold text-muted">날짜</span>
+              <input
+                type="date"
+                value={date}
+                max={todayKstDate()}
+                onChange={(e) => setDate(e.target.value)}
+                className="ml-auto rounded-[11px] border border-ink/[0.12] bg-[#FBF9F5] px-3 py-2 text-[13.5px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+              />
+            </div>
+
             <div className="flex gap-2">
               <button onClick={reset} disabled={busy} className="flex-1 rounded-[13px] border border-ink/[0.12] bg-white py-3 text-[14px] font-semibold text-muted disabled:opacity-50">취소</button>
               <button onClick={submit} disabled={busy} className="flex-[1.6] rounded-[13px] bg-sage py-3 text-[14px] font-semibold text-surface disabled:opacity-50">{busy ? "기록 중…" : "기록하기"}</button>
@@ -214,10 +258,49 @@ export function MemberMealsClient({
                       <div className="mb-1 flex items-center gap-2">
                         {m.mealType ? <span className="rounded-md bg-[#EDF4E3] px-2 py-0.5 text-[11.5px] font-bold text-sage-deep">{m.mealType}</span> : null}
                         <span className="text-[12px] font-medium text-muted">{timeLabel(m.eatenAt)}</span>
-                        <button onClick={() => remove(m.id)} disabled={busy} className="ml-auto text-[#C2BAAD] disabled:opacity-50" aria-label="삭제">
-                          <Icon name="close" size={16} />
-                        </button>
+                        {editingId !== m.id ? (
+                          <>
+                            <button onClick={() => startEdit(m)} disabled={busy} className="ml-auto text-[#C2BAAD] disabled:opacity-50" aria-label="수정">
+                              <Icon name="pencil" size={16} />
+                            </button>
+                            <button onClick={() => remove(m.id)} disabled={busy} className="text-[#C2BAAD] disabled:opacity-50" aria-label="삭제">
+                              <Icon name="close" size={16} />
+                            </button>
+                          </>
+                        ) : null}
                       </div>
+                      {editingId === m.id ? (
+                        <div className="mt-2">
+                          <div className="mb-2.5 flex gap-1.5">
+                            {TYPES.map((t) => (
+                              <button
+                                key={t}
+                                onClick={() => setEditType(editType === t ? "" : t)}
+                                className={`flex-1 rounded-[11px] py-1.5 text-[12.5px] font-semibold transition ${editType === t ? "bg-sage text-surface" : "bg-[#F4F0E8] text-muted"}`}
+                              >
+                                {t}
+                              </button>
+                            ))}
+                          </div>
+                          <textarea
+                            value={editMemo}
+                            onChange={(e) => setEditMemo(e.target.value)}
+                            placeholder="무엇을 드셨나요?"
+                            rows={2}
+                            className="mb-2.5 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+                          />
+                          {m.feedback ? (
+                            <div className="mb-2.5 rounded-[11px] bg-[#FBF6EC] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#8A7A55]">
+                              선생님 피드백이 달린 기록이에요 — 내용을 바꾸면 피드백과 어긋날 수 있어요.
+                            </div>
+                          ) : null}
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditingId(null)} disabled={busy} className="flex-1 rounded-[12px] border border-ink/[0.12] bg-white py-2.5 text-[13.5px] font-semibold text-muted disabled:opacity-50">취소</button>
+                            <button onClick={() => saveEdit(m.id)} disabled={busy} className="flex-[1.6] rounded-[12px] bg-sage py-2.5 text-[13.5px] font-semibold text-surface disabled:opacity-50">{busy ? "저장 중…" : "저장"}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
                       {m.memo ? <div className="text-[14px] leading-relaxed text-ink">{m.memo}</div> : null}
                       {m.feedback ? (
                         <div className="mt-3 flex items-start gap-2 rounded-[12px] bg-[#EDF4E3] px-3.5 py-3">
@@ -228,6 +311,8 @@ export function MemberMealsClient({
                           </div>
                         </div>
                       ) : null}
+                        </>
+                      )}
                     </div>
                   </Card>
                 ))}

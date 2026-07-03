@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
+import { exerciseLine } from "@/lib/data/workout-format";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
@@ -110,8 +111,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
                           {e.name}
                         </span>
                         <span className="whitespace-nowrap text-[12.5px] font-medium text-muted">
-                          {e.kg > 0 ? `${e.kg}kg · ` : ""}
-                          {e.sets}세트
+                          {exerciseLine(e)}
                         </span>
                       </div>
                     ))}

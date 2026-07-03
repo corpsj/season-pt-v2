@@ -20,6 +20,15 @@ export async function listMemberMeals(memberId: string): Promise<MealsPage> {
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const MEAL_TYPES = ["아침", "점심", "저녁", "간식"];
 
+/** YYYY-MM-DD(선택) → 해당 날짜 정오 KST의 ISO. 없으면 null(=now()). 미래 날짜면 "future". */
+function resolveEatenAt(raw: string | null): string | null | "future" {
+  const date = raw?.trim();
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" }); // YYYY-MM-DD
+  if (date > todayKst) return "future";
+  return new Date(`${date}T12:00:00+09:00`).toISOString(); // 정오 KST
+}
+
 /** 회원 본인이 식단(사진 선택 + 메모)을 기록. */
 export async function logMeal(formData: FormData): Promise<Result> {
   const me = await getMemberContext();
@@ -28,6 +37,8 @@ export async function logMeal(formData: FormData): Promise<Result> {
   const memo = (formData.get("memo") as string | null)?.trim() || null;
   const mealTypeRaw = (formData.get("mealType") as string | null)?.trim() || null;
   const mealType = mealTypeRaw && MEAL_TYPES.includes(mealTypeRaw) ? mealTypeRaw : null;
+  const eatenAt = resolveEatenAt(formData.get("eatenAt") as string | null);
+  if (eatenAt === "future") return { ok: false, error: "미래 날짜는 기록할 수 없어요" };
   const file = formData.get("photo");
   if (!memo && !(file instanceof File)) return { ok: false, error: "사진이나 메모를 입력해주세요" };
 
@@ -46,6 +57,7 @@ export async function logMeal(formData: FormData): Promise<Result> {
     photo_path: photoPath,
     memo,
     meal_type: mealType,
+    ...(eatenAt ? { eaten_at: eatenAt } : {}), // 지난 날짜 기록(미지정 시 DB default now())
   });
   if (insErr) {
     if (photoPath) await sb.storage.from(FILES_BUCKET).remove([photoPath]); // 고아 롤백
@@ -67,6 +79,25 @@ export async function deleteMeal(mealId: string): Promise<Result> {
   if (row.photo_path) await sb.storage.from(FILES_BUCKET).remove([row.photo_path as string]);
   const { error } = await sb.from("meal_logs").delete().eq("id", mealId);
   if (error) return { ok: false, error: "삭제에 실패했어요" };
+
+  revalidatePath("/m/my/meals");
+  revalidatePath("/m"); // 캘린더 날짜별 식단도 갱신
+  return { ok: true };
+}
+
+/** 회원 본인이 식단 기록의 메모·식사구분 수정(사진·날짜는 수정 대상 아님). */
+export async function updateMeal(mealId: string, patch: { memo?: string | null; mealType?: string | null }): Promise<Result> {
+  const me = await getMemberContext();
+  if (!me) return { ok: false, error: "로그인이 필요해요" };
+  const { data: row } = await sb.from("meal_logs").select("member_id").eq("id", mealId).maybeSingle();
+  if (!row || row.member_id !== me.memberId) return { ok: false, error: "기록을 찾을 수 없어요" };
+
+  const memo = patch.memo?.trim() || null;
+  const mealTypeRaw = patch.mealType?.trim() || null;
+  const mealType = mealTypeRaw && MEAL_TYPES.includes(mealTypeRaw) ? mealTypeRaw : null;
+
+  const { error } = await sb.from("meal_logs").update({ memo, meal_type: mealType }).eq("id", mealId);
+  if (error) return { ok: false, error: "수정에 실패했어요" };
 
   revalidatePath("/m/my/meals");
   revalidatePath("/m"); // 캘린더 날짜별 식단도 갱신

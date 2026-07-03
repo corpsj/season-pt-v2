@@ -33,6 +33,7 @@ import type {
   SessionFileItem,
   SessionMealItem,
   SessionStatus,
+  WorkoutExercise,
 } from "@/lib/types";
 
 /* ------------------------------- helpers ------------------------------- */
@@ -223,7 +224,7 @@ export async function getMemberCalendar(
 export type MemberDayWorkout = {
   id: string;
   time: string; // "오후 7:00" (수업 시각)
-  exercises: { name: string; kg: number; sets: number }[];
+  exercises: WorkoutExercise[];
   comment: string | null;
 };
 export type MemberDayMeal = {
@@ -257,12 +258,15 @@ export type MemberCalendarDayMap = {
   >;
 };
 
-/** workout_records.exercises(jsonb) → 안전 파싱. 기록 목록·캘린더 공용. */
-function parseExercises(raw: unknown): { name: string; kg: number; sets: number }[] {
+/** workout_records.exercises(jsonb) → 안전 파싱. 기록 목록·캘린더 공용. reps는 있을 때만(하위호환). */
+function parseExercises(raw: unknown): WorkoutExercise[] {
   return (Array.isArray(raw) ? raw : [])
-    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
+    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown; reps?: unknown })
     .filter((e) => typeof e?.name === "string")
-    .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+    .map((e) => {
+      const reps = Number(e.reps);
+      return { name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0, ...(reps > 0 ? { reps } : {}) };
+    });
 }
 
 export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalendarDayMap> {
