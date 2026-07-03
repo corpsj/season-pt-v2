@@ -12,7 +12,7 @@ import { listMemberMeals } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership, pauseMembership, resumeMembership, transferMembership } from "@/lib/data/groups/membership-actions";
-import { createMember, deleteMember, updateMember, setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
+import { createMember, createDuetMembers, deleteMember, updateMember, setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
 import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
@@ -39,6 +39,13 @@ const STATUS_OPTS: { v: "active" | "rest" | "inactive"; l: string }[] = [
   { v: "rest", l: "휴면" },
   { v: "inactive", l: "탈퇴" },
 ];
+const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
+function hourLabel(h: number) {
+  if (h < 12) return `오전 ${h}시`;
+  if (h === 12) return "오후 12시";
+  return `오후 ${h - 12}시`;
+}
+const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => ({ value: String(i + 6), label: hourLabel(i + 6) }));
 
 export function MembersClient({
   items,
@@ -80,6 +87,10 @@ export function MembersClient({
 
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, trainerId: ownerId, productId: "", method: "card" as PaymentMethod, amount: "" });
+  // 등록: 수업 형태(듀엣) + 파트너 + 선택적 정기 일정
+  const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
+  const [p2, setP2] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender });
+  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
   const [issueAmt, setIssueAmt] = useState("");
@@ -168,29 +179,62 @@ export function MembersClient({
     await reload();
     router.refresh();
   }
+  function resetAddForm() {
+    setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
+    setClassType("1on1");
+    setP2({ name: "", phone: "", birth: "", gender: "female" });
+    setDayTimes({});
+  }
+  function openAdd() {
+    resetAddForm();
+    setModal("add");
+  }
+  function toggleDay(i: number) {
+    setDayTimes((prev) => {
+      const next = { ...prev };
+      if (next[i] != null) delete next[i];
+      else next[i] = { hour: 19, minute: 0 };
+      return next;
+    });
+  }
+  /** 수업 형태 변경 — 형태가 바뀌면 안 맞는 선택 상품은 해제(상품 픽커는 key로 재마운트되어 필터도 맞춰짐). */
+  function onAddClassType(v: "1on1" | "2on1") {
+    setClassType(v);
+    setF((prev) => ({ ...prev, productId: "", amount: "" }));
+  }
   async function doAdd() {
     if (busy) return;
     if (!f.name.trim() || !f.phone.trim() || f.birth.replace(/\D/g, "").length !== 6) return toast("이름·연락처·생년월일(6자리)을 입력해주세요", "error");
+    if (classType === "2on1" && (!p2.name.trim() || !p2.phone.trim() || p2.birth.replace(/\D/g, "").length !== 6))
+      return toast("듀엣 파트너의 이름·연락처·생년월일(6자리)을 입력해주세요", "error");
     if (f.productId) {
       const amt = Number(f.amount);
       if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요", "error");
     }
+    const slots = Object.entries(dayTimes)
+      .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
+      .sort((a, b) => a.weekday - b.weekday);
+    const product = f.productId ? { productId: f.productId } : undefined;
+    const payment = f.productId ? { method: f.method, amount: Number(f.amount) } : undefined;
     setBusy(true);
-    const r = await createMember({
-      name: f.name,
-      phone: f.phone,
-      birth: f.birth,
-      gender: f.gender,
-      slots: [],
-      trainerId: f.trainerId,
-      product: f.productId ? { productId: f.productId } : undefined,
-      payment: f.productId ? { method: f.method, amount: Number(f.amount) } : undefined,
-    });
+    const r =
+      classType === "2on1"
+        ? await createDuetMembers({
+            members: [
+              { name: f.name, phone: f.phone, birth: f.birth, gender: f.gender },
+              { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
+            ],
+            trainerId: f.trainerId,
+            slots,
+            product,
+            payment,
+          })
+        : await createMember({ name: f.name, phone: f.phone, birth: f.birth, gender: f.gender, slots, trainerId: f.trainerId, product, payment });
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
-    toast("회원을 등록했어요");
+    toast(r.warn ?? (classType === "2on1" ? "듀엣 회원 두 명을 등록했어요" : "회원을 등록했어요"));
     setModal(null);
-    setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
+    resetAddForm();
     router.refresh();
     if (r.memberId) select(r.memberId);
   }
@@ -305,7 +349,7 @@ export function MembersClient({
           })}
         </div>
         <OBtn icon="persons" className="ml-auto" onClick={() => setModal("bulk")}>한꺼번에 입력</OBtn>
-        <PBtn icon="person-plus" onClick={() => setModal("add")}>회원 등록</PBtn>
+        <PBtn icon="person-plus" onClick={openAdd}>회원 등록</PBtn>
       </div>
 
       <div className="grid grid-cols-[1.25fr_1fr] items-start gap-[18px]">
@@ -537,8 +581,68 @@ export function MembersClient({
               ))}
             </select>
           </ModalField>
-          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
+
+          {/* 수업 형태 — 2:1(듀엣)은 파트너 정보를 함께 받아 두 명을 동시에 등록 */}
+          <ModalField label="수업 형태">
+            <div className="flex gap-2">
+              {([["1on1", "1:1"], ["2on1", "2:1 (듀엣)"]] as const).map(([v, l]) => (
+                <button key={v} onClick={() => onAddClassType(v)} className={`flex-1 rounded-[12px] py-[11px] text-[13.5px] font-semibold transition ${classType === v ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>{l}</button>
+              ))}
+            </div>
+          </ModalField>
+
+          {/* 듀엣 파트너 */}
+          {classType === "2on1" ? (
+            <div className="mb-3.5 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
+              <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">듀엣 파트너</div>
+              <ModalField label="이름"><Input value={p2.name} onChange={(v) => setP2({ ...p2, name: v })} placeholder="파트너 이름" /></ModalField>
+              <ModalField label="연락처"><Input value={formatPhone(p2.phone)} onChange={(v) => setP2({ ...p2, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
+              <div className="grid grid-cols-2 gap-2.5">
+                <ModalField label="생년월일 (6자리)"><Input value={p2.birth} onChange={(v) => setP2({ ...p2, birth: v.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" /></ModalField>
+                <ModalField label="성별">
+                  <div className="flex gap-2">
+                    {([["female", "여성"], ["male", "남성"]] as const).map(([g, l]) => (
+                      <button key={g} onClick={() => setP2({ ...p2, gender: g })} className={`flex-1 rounded-[12px] py-[11px] text-[13.5px] font-semibold transition ${p2.gender === g ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>{l}</button>
+                    ))}
+                  </div>
+                </ModalField>
+              </div>
+              <div className="text-[11px] font-medium text-[#9A8772]">회원권을 고르면 두 회원에게 각각 발급·결제돼요.</div>
+            </div>
+          ) : null}
+
+          {/* 정기 수업 요일 (선택) — 고르면 매주 자동 생성. 2:1은 팀 일정으로 묶인다. */}
+          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{classType === "2on1" ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</div>
+          <div className="mb-2 flex gap-1.5">
+            {DAYS.map((d, i) => {
+              const on = dayTimes[i] != null;
+              return (
+                <button key={d} type="button" onClick={() => toggleDay(i)} className={`flex-1 rounded-[10px] py-2 text-[13px] font-bold transition ${on ? "bg-sage text-white" : `border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] ${i === 0 ? "text-terracotta" : "text-[#847A66]"}`}`}>{d}</button>
+              );
+            })}
+          </div>
+          {Object.keys(dayTimes).length > 0 ? (
+            <div className="mb-3.5 flex flex-col gap-2">
+              {Object.keys(dayTimes).map(Number).sort((a, b) => a - b).map((i) => (
+                <div key={i} className="flex items-center gap-2 rounded-[12px] border border-[rgba(75,59,46,0.12)] bg-white px-3 py-2">
+                  <span className={`w-6 text-center text-[13px] font-bold ${i === 0 ? "text-terracotta" : "text-ink"}`}>{DAYS[i]}</span>
+                  <select value={String(dayTimes[i].hour)} onChange={(e) => setDayTimes((prev) => ({ ...prev, [i]: { ...prev[i], hour: Number(e.target.value) } }))} className="flex-1 rounded-[10px] border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] px-2 py-1.5 text-[13px] font-medium text-ink outline-none">
+                    {HOUR_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <div className="flex gap-1">
+                    {([[0, "정각"], [30, "30분"]] as const).map(([m, l]) => (
+                      <button key={m} type="button" onClick={() => setDayTimes((prev) => ({ ...prev, [i]: { ...prev[i], minute: m } }))} className={`rounded-[9px] px-2.5 py-1.5 text-[12.5px] font-semibold transition ${dayTimes[i].minute === m ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] text-[#847A66]"}`}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){classType === "2on1" ? " · 두 회원에게 각각 발급" : ""}</div>
           <ProductPicker
+            key={classType}
+            initialFilter={classType === "2on1" ? "2on1" : "1on1"}
             products={products}
             selected={f.productId}
             showPrice
@@ -764,8 +868,8 @@ const PRODUCT_FILTERS: { key: PickerFilter; label: string }[] = [
   { key: "2on1", label: "2:1" },
   { key: "discount", label: "특별할인" },
 ];
-function ProductPicker({ products, selected, onPick, onClear, showPrice }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; onClear: () => void; showPrice?: boolean }) {
-  const [filter, setFilter] = useState<PickerFilter>("1on1");
+function ProductPicker({ products, selected, onPick, onClear, showPrice, initialFilter }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; onClear: () => void; showPrice?: boolean; initialFilter?: PickerFilter }) {
+  const [filter, setFilter] = useState<PickerFilter>(initialFilter ?? "1on1");
   const shown = products.filter((p) => matchesPickerFilter(p.name, filter));
   // 칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 숨은 상품이 조용히 발급되는 것 방지.
   function pickFilter(next: PickerFilter) {
