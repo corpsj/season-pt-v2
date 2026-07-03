@@ -432,6 +432,7 @@ export interface MemberRequestView {
   sessionId: string;
   dateBox: { weekday: string; day: number };
   time: string;
+  timeHM: string; // 원래 수업 시간 "HH:mm" — 변경 화면 시간 입력 기본값(날짜만 바꾸는 경우 그대로 제안)
   trainerName: string;
   isTeam: boolean;
   partnerName?: string; // 2:1 팀 파트너 이름

@@ -14,35 +14,53 @@ import type { MemberRequestView } from "@/lib/types";
 import { sendMemberRequest } from "@/lib/data/groups/member-actions";
 
 type Mode = "change" | "cancel";
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
-/** datetime-local 값("YYYY-MM-DDTHH:mm")을 KST 벽시계로 해석 → 실제 UTC ISO. (디바이스 tz 무관) */
-function kstLocalToISO(v: string): string {
-  const [date, time] = v.split("T");
+/** "YYYY-MM-DD"(KST 날짜) + "HH:mm"(KST 시각)을 KST 벽시계로 해석 → 실제 UTC ISO. (디바이스 tz 무관) */
+function kstLocalToISO(date: string, time: string): string {
   const [Y, M, D] = date.split("-").map(Number);
-  const [H, Min] = (time ?? "0:0").split(":").map(Number);
+  const [H, Min] = (time || "0:0").split(":").map(Number);
   return new Date(Date.UTC(Y, M - 1, D, H - 9, Min || 0)).toISOString();
 }
 
-/** 현재 KST를 datetime-local min 값으로(과거 선택 방지). */
-function kstNowLocal(): string {
-  return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 16);
+/** 오늘부터 KST 기준 n일치 날짜 칩. UTC 필드가 곧 KST 벽시계(=+9h 시프트). */
+function kstDays(n: number): { value: string; weekday: string; day: number; rel: string }[] {
+  const base = Date.now() + 9 * 3600000;
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(base + i * 86400000);
+    return {
+      value: d.toISOString().slice(0, 10),
+      weekday: WD[d.getUTCDay()],
+      day: d.getUTCDate(),
+      rel: i === 0 ? "오늘" : i === 1 ? "내일" : "",
+    };
+  });
 }
 
 export function MemberRequestClient({ view }: { view: MemberRequestView }) {
   const router = useRouter();
   const toast = useToast();
   const [mode, setMode] = useState<Mode>("change");
-  const [desired, setDesired] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState(view.timeHM); // 기본값 = 원래 수업 시간(날짜만 바꾸는 흔한 경우 그대로 제안)
   const [pending, setPending] = useState(false);
+  const days = kstDays(14);
 
   async function submit() {
     if (pending) return;
-    if (mode === "change" && !desired) {
-      toast("원하는 시간을 선택해주세요");
+    if (mode === "change" && (!date || !time)) {
+      toast("원하는 날짜와 시간을 선택해주세요");
       return;
     }
+    if (mode === "change") {
+      const iso = kstLocalToISO(date, time);
+      if (iso <= new Date().toISOString()) {
+        toast("지난 시간은 선택할 수 없어요");
+        return;
+      }
+    }
     setPending(true);
-    const proposedSlots = mode === "change" ? [kstLocalToISO(desired)] : undefined;
+    const proposedSlots = mode === "change" ? [kstLocalToISO(date, time)] : undefined;
     const res = await sendMemberRequest({ sessionId: view.sessionId, type: mode, proposedSlots });
     if (!res.ok) {
       toast(res.error ?? "요청을 보내지 못했어요");
@@ -116,14 +134,36 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
         {mode === "change" ? (
           <>
             <div className="mb-2.5">
+              <Kicker>원하는 날짜</Kicker>
+            </div>
+            <div className="-mx-5 mb-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {days.map((d) => {
+                const on = date === d.value;
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() => setDate(d.value)}
+                    className={`tappable flex w-[52px] flex-none flex-col items-center gap-0.5 rounded-[14px] py-2.5 ${
+                      on ? "bg-sage text-surface" : "border border-ink/10 bg-card text-muted5"
+                    }`}
+                  >
+                    <span className="text-[11px] font-semibold">{d.rel || d.weekday}</span>
+                    <span className="text-[17px] font-bold leading-none">{d.day}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mb-2.5">
               <Kicker>원하는 시간</Kicker>
             </div>
             <Card className="mb-5 px-[15px] py-[14px]">
               <input
-                type="datetime-local"
-                value={desired}
-                min={kstNowLocal()}
-                onChange={(e) => setDesired(e.target.value)}
+                type="time"
+                value={time}
+                step={1800}
+                onChange={(e) => setTime(e.target.value)}
                 className="w-full bg-transparent text-[15px] font-medium text-ink outline-none"
               />
             </Card>

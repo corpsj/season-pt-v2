@@ -526,7 +526,7 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
   const trainerName = tr?.display_name ?? "";
 
   if (!target) {
-    return { sessionId: "", dateBox: { weekday: "", day: 0 }, time: "", trainerName, isTeam: false };
+    return { sessionId: "", dateBox: { weekday: "", day: 0 }, time: "", timeHM: "", trainerName, isTeam: false };
   }
 
   const isTeam = target.type === "2on1";
@@ -546,11 +546,14 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
   const dISO = kstDateISO(target.scheduled_at);
   const day = Number(dISO.slice(8, 10));
   const weekday = weekdayKo(kstWeekday(target.scheduled_at));
+  const kst = new Date(new Date(target.scheduled_at).getTime() + 9 * 3600000);
+  const timeHM = `${String(kst.getUTCHours()).padStart(2, "0")}:${String(kst.getUTCMinutes()).padStart(2, "0")}`;
 
   return {
     sessionId: target.id,
     dateBox: { weekday, day },
     time: clockLabel(target.scheduled_at),
+    timeHM,
     trainerName,
     isTeam,
     partnerName,
