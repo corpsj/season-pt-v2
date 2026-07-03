@@ -6,6 +6,7 @@ import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import { normalizeTeamSlots } from "@/lib/data/team-slots";
+import { FILES_BUCKET } from "@/lib/data/groups/member-files";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -402,6 +403,54 @@ export async function setMemberStatus(memberId: string, status: "active" | "rest
   if (status === "inactive") await deactivateSoloSchedules(memberId);
   revalidatePath("/t/members");
   revalidatePath(`/t/members/${memberId}`);
+  return { ok: true };
+}
+
+/** 회원 완전 삭제(대표 전용). 되돌릴 수 없음 — 회원권·결제·출석·기록·사진·식단이 cascade로 함께 제거된다.
+ *  이력을 남기려면 삭제가 아니라 '탈퇴'(setMemberStatus inactive)를 쓴다. */
+export async function deleteMember(memberId: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+
+  const { data: member } = await sb.from("members").select("id").eq("id", memberId).maybeSingle();
+  if (!member) return { ok: false, error: "회원을 찾을 수 없어요" };
+
+  // 삭제 후 참여자가 0명이 되는 세션·스케줄을 정리하려고 대상 id를 먼저 수집(2:1은 파트너가 남으면 보존).
+  const [{ data: sm }, { data: schm }, { data: files }] = await Promise.all([
+    sb.from("session_members").select("session_id").eq("member_id", memberId),
+    sb.from("schedule_members").select("schedule_id").eq("member_id", memberId),
+    sb.from("member_files").select("storage_path").eq("member_id", memberId),
+  ]);
+  const sessionIds = [...new Set((sm ?? []).map((r) => r.session_id as string))];
+  const scheduleIds = [...new Set((schm ?? []).map((r) => r.schedule_id as string))];
+
+  // member_files 행은 cascade로 지워지지만 Storage 객체는 수동 제거해야 고아가 안 남는다.
+  const paths = (files ?? []).map((f) => f.storage_path as string);
+  if (paths.length) await sb.storage.from(FILES_BUCKET).remove(paths);
+
+  // 회원 행 삭제 → memberships/payments/session_members/schedule_members/member_trainers/
+  //                 body_compositions/meal_logs/member_files/workout_records/chat_participants/attendance_ledger cascade.
+  const { error } = await sb.from("members").delete().eq("id", memberId);
+  if (error) return { ok: false, error: "삭제에 실패했어요" };
+
+  // 참여자가 0명이 된 세션·스케줄 제거(1:1, 또는 파트너까지 없는 2:1). 파트너가 남은 팀 세션은 그대로 둔다.
+  if (sessionIds.length) {
+    const { data: kept } = await sb.from("session_members").select("session_id").in("session_id", sessionIds);
+    const keptSet = new Set((kept ?? []).map((r) => r.session_id as string));
+    const orphans = sessionIds.filter((s) => !keptSet.has(s));
+    if (orphans.length) await sb.from("sessions").delete().in("id", orphans);
+  }
+  if (scheduleIds.length) {
+    const { data: kept } = await sb.from("schedule_members").select("schedule_id").in("schedule_id", scheduleIds);
+    const keptSet = new Set((kept ?? []).map((r) => r.schedule_id as string));
+    const orphans = scheduleIds.filter((s) => !keptSet.has(s));
+    if (orphans.length) await sb.from("schedules").delete().in("id", orphans);
+  }
+
+  revalidatePath("/t/members");
+  revalidatePath("/console/members");
+  revalidatePath("/console");
   return { ok: true };
 }
 

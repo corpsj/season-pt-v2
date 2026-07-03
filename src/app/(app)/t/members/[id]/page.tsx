@@ -18,6 +18,7 @@ import { MessageMemberButton } from "./MessageMemberButton";
 import { MembershipActions } from "./MembershipActions";
 import { EditMemberButton } from "./EditMemberButton";
 import { MemberStatusControl } from "./MemberStatusControl";
+import { DeleteMemberButton } from "./DeleteMemberButton";
 
 const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급", pause: "일시정지", resume: "재개" };
 
@@ -165,6 +166,13 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           <Banner tone="warn" icon="triangle-exclamation">
             {m.injury}
           </Banner>
+        ) : null}
+
+        {/* 회원 완전 삭제 (대표 전용) — 탈퇴와 별도의 영구 삭제 */}
+        {me.isOwner ? (
+          <div className="mt-3.5">
+            <DeleteMemberButton memberId={id} name={m.name} />
+          </div>
         ) : null}
         <div className="h-2" />
       </Body>
