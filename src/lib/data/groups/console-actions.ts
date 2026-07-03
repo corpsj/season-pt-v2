@@ -186,7 +186,7 @@ export async function searchAll(q: string): Promise<SearchHit[]> {
   const [byName, byPhone, trainerRows] = await Promise.all([
     sb.from("members").select("id, name, phone").ilike("name", pat).limit(5),
     sb.from("members").select("id, name, phone").ilike("phone", pat).limit(5),
-    sb.from("trainers").select("id, display_name, role").ilike("display_name", pat).limit(5),
+    sb.from("trainers").select("id, display_name, role").eq("bootstrap_admin", false).ilike("display_name", pat).limit(5),
   ]);
 
   const memberMap = new Map<string, { id: string; name: string; phone: string | null }>();

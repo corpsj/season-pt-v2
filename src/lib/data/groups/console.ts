@@ -113,6 +113,7 @@ async function colorMap(): Promise<{ map: Map<string, string>; trainers: { id: s
   const { data } = await sb
     .from("trainers")
     .select("id, display_name, status")
+    .eq("bootstrap_admin", false) // 테스트 대표 제외
     .order("created_at", { ascending: true });
   const map = new Map<string, string>();
   const trainers: { id: string; name: string; color: string }[] = [];

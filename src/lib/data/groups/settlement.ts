@@ -38,7 +38,7 @@ export async function getSettlement(monthOffset = 0): Promise<Settlement> {
   const { startISO, endISO } = monthBoundsFromKst(target);
 
   const [{ data: trainers }, { data: sessions }, { data: settleRows }] = await Promise.all([
-    sb.from("trainers").select("id, display_name, role, status, rate_1on1, rate_2on1").order("role", { ascending: false }),
+    sb.from("trainers").select("id, display_name, role, status, rate_1on1, rate_2on1").eq("bootstrap_admin", false).order("role", { ascending: false }),
     sb.from("sessions").select("trainer_id, type, pay_rate").eq("status", "attended").gte("scheduled_at", startISO).lt("scheduled_at", endISO),
     sb.from("expenses").select("amount").eq("source", "settlement").eq("settle_month", monthKey),
   ]);

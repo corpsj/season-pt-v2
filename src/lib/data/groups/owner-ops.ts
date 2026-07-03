@@ -76,6 +76,7 @@ export async function getStaff(): Promise<StaffMember[]> {
   const { data: trainers } = await sb
     .from("trainers")
     .select("id, display_name, role, status, auth_user_id")
+    .eq("bootstrap_admin", false) // 개발자 관리용 테스트 대표는 화면에서 숨김
     .order("created_at", { ascending: true });
 
   const rows = trainers ?? [];
@@ -264,6 +265,7 @@ export async function getAssignableTrainers(): Promise<{ id: string; name: strin
     .from("trainers")
     .select("id, display_name")
     .neq("status", "inactive")
+    .eq("bootstrap_admin", false)
     .order("created_at", { ascending: true });
   return (data ?? []).map((t) => ({ id: t.id as string, name: t.display_name as string }));
 }
@@ -626,7 +628,8 @@ export async function getStudioOverview(): Promise<StudioOverview> {
   const { count: tCount } = await sb
     .from("trainers")
     .select("id", { count: "exact", head: true })
-    .eq("status", "active");
+    .eq("status", "active")
+    .eq("bootstrap_admin", false);
   const trainerCount = tCount ?? 0;
 
   return {
