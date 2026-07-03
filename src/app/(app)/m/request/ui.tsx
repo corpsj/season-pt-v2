@@ -171,7 +171,7 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
         ) : null}
 
         <Banner tone="neutral">
-          {mode === "change" ? "원하는 날짜·시간을 직접 선택해 선생님께 제안해요." : "선생님이 확인 후 처리해요."} 취소 차감은 스튜디오 정책을 따라요.
+          {mode === "change" ? "원하는 날짜·시간을 직접 선택해 선생님께 제안해요." : "선생님이 확인 후 처리해요."} 취소 차감은 매장 정책을 따라요.
         </Banner>
         <div className="h-3.5" />
       </Body>

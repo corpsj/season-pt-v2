@@ -75,7 +75,7 @@ export default async function ConsoleDashboard() {
 
   return (
     <>
-      <Topbar title="운영 현황" sub={`${ops.monthLabel} · 스튜디오 한눈에 보기`} />
+      <Topbar title="운영 현황" sub={`${ops.monthLabel} · 한눈에 보기`} />
       <div className="flex-1 overflow-y-auto px-[34px] pb-11 pt-[30px]">
         <div className="mx-auto max-w-[1200px]">
         {/* KPI */}

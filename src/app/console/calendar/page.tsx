@@ -13,7 +13,7 @@ export default async function ConsoleCalendarPage({
 
   return (
     <>
-      <Topbar title="수업 캘린더" sub="스튜디오 전체 수업" />
+      <Topbar title="수업 캘린더" sub="전체 수업" />
       <div className="flex-1 overflow-y-auto px-[34px] pb-10 pt-6">
         <div className="mx-auto max-w-[1200px]">
           <CalendarClient month={month} initialWeek={week} />

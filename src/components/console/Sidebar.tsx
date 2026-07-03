@@ -53,7 +53,7 @@ export function Sidebar({
         <img src="/brand/icon-192.png" alt="계절 PT" width={40} height={40} className="block flex-none rounded-[9px]" />
         <div className="min-w-0">
           <div className="whitespace-nowrap text-[15px] font-bold tracking-[-0.01em] text-surface">계절 PT &amp; 필라테스</div>
-          <div className="mt-0.5 text-[12px] font-medium leading-tight text-[#9B8F7C]">대표 운영 콘솔</div>
+          <div className="mt-0.5 text-[12px] font-medium leading-tight text-[#9B8F7C]">운영 콘솔</div>
         </div>
       </div>
 

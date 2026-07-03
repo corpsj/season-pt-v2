@@ -46,7 +46,7 @@ export function ConsoleLogin({ notOwner, showOwnerSignup }: { notOwner: boolean;
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/icon-192.png" alt="계절 PT" width={56} height={56} className="mb-4 rounded-[14px]" />
           <div className="text-[20px] font-bold tracking-[-0.01em] text-surface">계절 PT &amp; 필라테스</div>
-          <div className="mt-1 text-[13px] font-medium text-[#9B8F7C]">대표 운영 콘솔</div>
+          <div className="mt-1 text-[13px] font-medium text-[#9B8F7C]">운영 콘솔</div>
         </div>
 
         <div className="rounded-[20px] bg-white p-7" style={{ boxShadow: "0 24px 60px -20px rgba(0,0,0,0.5)" }}>
@@ -101,7 +101,7 @@ export function ConsoleLogin({ notOwner, showOwnerSignup }: { notOwner: boolean;
           )}
         </div>
 
-        <div className="mt-5 text-center text-[12px] font-medium text-[#6F6655]">계절 PT 운영 콘솔 · 대표 전용</div>
+        <div className="mt-5 text-center text-[12px] font-medium text-[#6F6655]">계절 PT 운영 콘솔</div>
       </div>
     </div>
   );

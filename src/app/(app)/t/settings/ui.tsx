@@ -69,7 +69,7 @@ export function SettingsClient({ me }: { me: Me }) {
         {me.isOwner ? (
           <>
             <div className="mb-2.5">
-              <Kicker>환경 설정 · 대표 전용</Kicker>
+              <Kicker>환경 설정</Kicker>
             </div>
             <Card className="mb-6 shrink-0 overflow-hidden">
               {rows.map((r, i) => (

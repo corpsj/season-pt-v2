@@ -231,7 +231,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
             </Card>
 
             <Banner tone="neutral" className="mt-3.5">
-              변경·취소 요청은 수업 시작 전에 미리 보내주세요. 취소 차감은 스튜디오 정책을 따라요.
+              변경·취소 요청은 수업 시작 전에 미리 보내주세요. 취소 차감은 매장 정책을 따라요.
             </Banner>
           </>
         ) : null}
