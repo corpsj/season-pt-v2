@@ -250,7 +250,8 @@ export async function updateInstructor(id: string, name: string, phone: string):
   const admin = createSupabaseAdmin();
   const target = await fetchTrainer(admin, id);
   if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
-  if (target.role === "owner") return { ok: false, error: "대표 계정은 여기서 수정할 수 없어요" };
+  // 대표는 본인 계정만 수정 가능(이름·연락처). 다른 대표는 여기서 못 건드림 — 삭제·비활성화는 별도 액션에서 여전히 차단.
+  if (target.role === "owner" && target.id !== me.id) return { ok: false, error: "다른 대표 계정은 여기서 수정할 수 없어요" };
   const { error } = await admin
     .from("trainers")
     .update({ display_name: display, phone: phone.trim() || null })
@@ -258,6 +259,8 @@ export async function updateInstructor(id: string, name: string, phone: string):
   if (error) return { ok: false, error: "수정에 실패했어요" };
   revalidatePath("/t/staff");
   revalidatePath(`/t/staff/${id}`);
+  revalidatePath("/console/trainers");
+  revalidatePath("/console");
   return { ok: true };
 }
 

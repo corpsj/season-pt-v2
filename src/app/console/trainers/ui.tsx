@@ -89,8 +89,9 @@ export function TrainerActions({
   const [issueUsername, setIssueUsername] = useState("");
   const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
 
-  if (isOwner) {
-    return <div className="rounded-[13px] bg-[#FBF7F1] px-4 py-3.5 text-center text-[12.5px] font-medium text-[#9A917F]">대표 계정은 콘솔에서 수정·삭제할 수 없어요</div>;
+  // 다른 대표 계정은 손대지 않음(잠금·권한 사고 방지). 본인 대표 계정은 정보 수정만 허용(삭제·비활성화는 아래에서 숨김).
+  if (isOwner && !isMe) {
+    return <div className="rounded-[13px] bg-[#FBF7F1] px-4 py-3.5 text-center text-[12.5px] font-medium text-[#9A917F]">다른 대표 계정은 콘솔에서 수정할 수 없어요</div>;
   }
 
   async function issueLogin() {
@@ -144,15 +145,20 @@ export function TrainerActions({
     <>
       <div className="flex gap-2.5">
         <OBtn icon="pencil" className="flex-1" onClick={() => { setEName(name); setEPhone(phone); setModal("edit"); }}>정보 수정</OBtn>
-        {hasLogin ? (
+        {/* 대표 본인 계정은 정보 수정만 — 비활성화·비번 초기화·삭제는 잠금 방지로 숨김 */}
+        {!isOwner ? (
           <>
-            <OBtn icon={active ? "pause" : "play"} className="flex-1" disabled={busy || isMe} onClick={toggle}>{active ? "비활성화" : "활성화"}</OBtn>
-            <OBtn icon="lock" className="flex-1" disabled={busy || isMe} onClick={resetPassword}>비번 초기화</OBtn>
+            {hasLogin ? (
+              <>
+                <OBtn icon={active ? "pause" : "play"} className="flex-1" disabled={busy || isMe} onClick={toggle}>{active ? "비활성화" : "활성화"}</OBtn>
+                <OBtn icon="lock" className="flex-1" disabled={busy || isMe} onClick={resetPassword}>비번 초기화</OBtn>
+              </>
+            ) : (
+              <OBtn icon="lock" className="flex-[2]" disabled={busy} onClick={() => { setIssued(null); setIssueUsername(""); setModal("issue"); }}>로그인 계정 발급</OBtn>
+            )}
+            <button onClick={() => setModal("delete")} disabled={busy || isMe} className="flex-none rounded-[12px] border-[1.4px] border-[rgba(198,115,82,0.4)] bg-white px-4 text-[13.5px] font-semibold text-terracotta transition hover:bg-[#FBF3E9] disabled:opacity-40">삭제</button>
           </>
-        ) : (
-          <OBtn icon="lock" className="flex-[2]" disabled={busy} onClick={() => { setIssued(null); setIssueUsername(""); setModal("issue"); }}>로그인 계정 발급</OBtn>
-        )}
-        <button onClick={() => setModal("delete")} disabled={busy || isMe} className="flex-none rounded-[12px] border-[1.4px] border-[rgba(198,115,82,0.4)] bg-white px-4 text-[13.5px] font-semibold text-terracotta transition hover:bg-[#FBF3E9] disabled:opacity-40">삭제</button>
+        ) : null}
       </div>
 
       {!hasLogin ? (
