@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code worktrees (세션 격리용 — 커밋 금지)
+.claude/worktrees/
