@@ -14,7 +14,7 @@ import { WeekGrid } from "./WeekGrid";
 
 type ProposeView = NonNullable<Awaited<ReturnType<typeof loadProposeSlots>>>;
 type RecordView = NonNullable<Awaited<ReturnType<typeof loadRecordTarget>>>;
-type RecExercise = { name: string; kg: number; sets: number };
+type RecExercise = { name: string; kg: number; sets: number; reps?: number };
 
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -541,6 +541,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Stepper value={ex.kg} unit="kg" onDec={() => updateEx(i, { kg: Math.max(0, ex.kg - 5) })} onInc={() => updateEx(i, { kg: ex.kg + 5 })} />
+                  <Stepper value={ex.reps ?? 10} unit="회" onDec={() => updateEx(i, { reps: Math.max(0, (ex.reps ?? 10) - 1) })} onInc={() => updateEx(i, { reps: (ex.reps ?? 10) + 1 })} />
                   <Stepper value={ex.sets} unit="세트" onDec={() => updateEx(i, { sets: Math.max(0, ex.sets - 1) })} onInc={() => updateEx(i, { sets: ex.sets + 1 })} />
                 </div>
               </div>
@@ -548,7 +549,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
           </div>
           <button
             type="button"
-            onClick={() => setRecExercises((prev) => [...prev, { name: "", kg: 0, sets: 0 }])}
+            onClick={() => setRecExercises((prev) => [...prev, { name: "", kg: 0, sets: 0, reps: 10 }])}
             className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[12px] border-[1.5px] border-dashed border-sage-deep/40 py-2.5 text-[13px] font-bold text-sage-deep transition hover:bg-[#F3F7EC]"
           >
             <Icon name="plus-bold" size={15} />

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -6,9 +6,13 @@ import { MicroLabel } from "@/components/console/ui";
 import { downscaleImage } from "@/lib/media/downscale";
 import { validateUpload } from "@/lib/media/upload-guard";
 import { uploadMemberFile, deleteMemberFile } from "@/lib/data/groups/member-files-actions";
+import { saveBodyComposition, deleteBodyComposition, listBodyHistory } from "@/lib/data/groups/body-actions";
 import { addMealFeedback } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
+import type { BodyMeasurement } from "@/lib/data/groups/body";
 import type { MealLog } from "@/lib/data/groups/meals";
+
+const todayKst = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 
 const mealTime = (iso: string) =>
   new Date(iso).toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -31,6 +35,41 @@ export function BodyRecordSection({
   const toast = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
+
+  // 체성분 이력 — 콘솔에서 자체 로드(선택 회원 바뀌면 갱신). 저장/삭제 후 재조회.
+  const [history, setHistory] = useState<BodyMeasurement[]>([]);
+  const [entry, setEntry] = useState<{ weight: string; skeletalMuscle: string; bodyFat: string; measuredAt: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    listBodyHistory(memberId).then((h) => { if (alive) setHistory(h); });
+    return () => { alive = false; };
+  }, [memberId]);
+
+  const latest = history[0];
+  const bw = latest?.weight ?? (body.weight > 0 ? body.weight : null);
+  const bsm = latest?.skeletalMuscle ?? (body.skeletalMuscle > 0 ? body.skeletalMuscle : null);
+  const bbf = latest?.bodyFat ?? (body.bodyFat > 0 ? body.bodyFat : null);
+
+  async function saveBody() {
+    if (!entry) return;
+    if (!entry.weight && !entry.skeletalMuscle && !entry.bodyFat) return toast("한 가지 이상 입력해 주세요", "error");
+    setBusy(true);
+    const r = await saveBodyComposition(memberId, entry);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "저장에 실패했어요", "error");
+    toast("체성분을 기록했어요");
+    setEntry(null);
+    setHistory(await listBodyHistory(memberId));
+  }
+  async function removeBody(id: string) {
+    if (busy) return;
+    if (!(await confirm({ title: "이 기록을 삭제할까요?", description: "삭제하면 되돌릴 수 없어요.", confirmLabel: "삭제", tone: "warn" }))) return;
+    setBusy(true);
+    const r = await deleteBodyComposition(id);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
+    setHistory(await listBodyHistory(memberId));
+  }
 
   async function upload(kind: "photo" | "inbody", file: File) {
     if (kind === "inbody") {
@@ -68,19 +107,79 @@ export function BodyRecordSection({
   return (
     <>
       {/* 체성분 */}
-      {body.weight > 0 ? (
-        <>
-          <MicroLabel className="mb-2.5">체성분</MicroLabel>
-          <div className="mb-[18px] grid grid-cols-3 gap-2.5">
-            {[{ l: "체중", v: body.weight, u: "kg" }, { l: "골격근", v: body.skeletalMuscle, u: "kg" }, { l: "체지방", v: body.bodyFat, u: "%" }].map((b) => (
-              <div key={b.l} className="rounded-[14px] bg-[#FBF7F1] p-3.5">
-                <div className="mb-1 text-[11px] font-medium text-[#9A917F]">{b.l}</div>
-                <div><span className="serif text-[21px] font-semibold text-ink">{b.v}</span><span className="ml-0.5 text-[11px] font-medium text-[#9A917F]">{b.u}</span></div>
+      <div className="mb-2.5 flex items-center justify-between">
+        <MicroLabel>체성분</MicroLabel>
+        <button
+          type="button"
+          onClick={() => setEntry({ weight: "", skeletalMuscle: "", bodyFat: "", measuredAt: todayKst() })}
+          disabled={busy || !!entry}
+          className="inline-flex items-center gap-1 rounded-[9px] bg-sage px-2.5 py-[6px] text-[12px] font-semibold text-white transition hover:brightness-105 disabled:opacity-50"
+        >
+          <Icon name="plus" size={13} />기록
+        </button>
+      </div>
+
+      {bw != null || bsm != null || bbf != null ? (
+        <div className="mb-2.5 grid grid-cols-3 gap-2.5">
+          {[{ l: "체중", v: bw, u: "kg" }, { l: "골격근", v: bsm, u: "kg" }, { l: "체지방", v: bbf, u: "%" }].map((b) => (
+            <div key={b.l} className="rounded-[14px] bg-[#FBF7F1] p-3.5">
+              <div className="mb-1 text-[11px] font-medium text-[#9A917F]">{b.l}</div>
+              <div><span className="serif text-[21px] font-semibold text-ink">{b.v ?? "–"}</span>{b.v != null ? <span className="ml-0.5 text-[11px] font-medium text-[#9A917F]">{b.u}</span> : null}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {entry ? (
+        <div className="mb-2.5 rounded-[14px] border border-ink/[0.1] bg-white p-3.5">
+          <div className="mb-2.5 grid grid-cols-3 gap-2.5">
+            {([["weight", "체중 (kg)"], ["skeletalMuscle", "골격근 (kg)"], ["bodyFat", "체지방 (%)"]] as const).map(([k, label]) => (
+              <div key={k}>
+                <div className="mb-1 text-[11px] font-medium text-[#9A917F]">{label}</div>
+                <input
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={entry[k]}
+                  onChange={(e) => setEntry({ ...entry, [k]: e.target.value })}
+                  className="w-full rounded-[10px] border border-ink/[0.12] bg-white px-2.5 py-2 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+                />
               </div>
             ))}
           </div>
-        </>
+          <div className="mb-2.5">
+            <div className="mb-1 text-[11px] font-medium text-[#9A917F]">측정일</div>
+            <input
+              type="date"
+              value={entry.measuredAt}
+              max={todayKst()}
+              onChange={(e) => setEntry({ ...entry, measuredAt: e.target.value })}
+              className="w-full rounded-[10px] border border-ink/[0.12] bg-white px-2.5 py-2 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+            />
+          </div>
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => setEntry(null)} disabled={busy} className="flex-1 rounded-[10px] border border-ink/[0.12] bg-white py-2 text-[12.5px] font-semibold text-[#766D60] disabled:opacity-50">취소</button>
+            <button type="button" onClick={saveBody} disabled={busy} className="flex-[1.6] rounded-[10px] bg-sage py-2 text-[12.5px] font-semibold text-white disabled:opacity-50">저장</button>
+          </div>
+        </div>
       ) : null}
+
+      {history.length > 0 ? (
+        <div className="mb-[18px] flex flex-col divide-y divide-ink/[0.06] rounded-[13px] bg-[#FBF7F1] px-3.5">
+          {history.map((b) => (
+            <div key={b.id} className="flex items-center gap-2 py-2.5 text-[12.5px]">
+              <span className="w-[58px] flex-none font-medium text-[#9A917F]">{b.measuredAt.replace(/-/g, ".").slice(2)}</span>
+              <span className="flex-1 font-semibold text-ink">
+                {[b.weight != null ? `${b.weight}kg` : null, b.skeletalMuscle != null ? `골격근 ${b.skeletalMuscle}` : null, b.bodyFat != null ? `체지방 ${b.bodyFat}%` : null].filter(Boolean).join(" · ")}
+              </span>
+              <button type="button" onClick={() => removeBody(b.id)} disabled={busy} aria-label="삭제" className="flex-none text-[#A89F92] disabled:opacity-50">
+                <Icon name="close" size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mb-[18px] rounded-[13px] bg-[#FBF7F1] py-4 text-center text-[12.5px] font-medium text-[#A89F92]">아직 체성분 기록이 없어요</div>
+      )}
 
       {/* 진행 사진 */}
       <div className="mb-2.5 flex items-center justify-between">

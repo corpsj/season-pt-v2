@@ -87,6 +87,7 @@ export interface WorkoutExercise {
   name: string;
   kg: number;
   sets: number;
+  reps?: number; // 회(반복). 하위호환 — 기존 데이터는 없음.
 }
 export interface WorkoutRecord {
   id: string;
@@ -577,7 +578,7 @@ export interface MemberWorkoutRecord {
   id: string;
   dateLabel: string; // "6월 24일 화"
   timeLabel: string; // "오후 9:00"
-  exercises: { name: string; kg: number; sets: number }[];
+  exercises: WorkoutExercise[];
   comment?: string;
 }
 export interface MemberWorkoutView {

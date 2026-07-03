@@ -42,12 +42,15 @@ type MemberRow = {
 const tone = (t: string | null | undefined): AvatarTone => (t ?? "sage") as AvatarTone;
 const initialOf = (name: string): string => name.slice(0, 1);
 
-/** workout_records.exercises(jsonb) → 안전 파싱. */
-function parseExercises(raw: unknown): WorkoutExercise[] {
+/** workout_records.exercises(jsonb) → 안전 파싱. reps는 있을 때만(하위호환). */
+export function parseExercises(raw: unknown): WorkoutExercise[] {
   return (Array.isArray(raw) ? raw : [])
-    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
+    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown; reps?: unknown })
     .filter((e) => typeof e?.name === "string")
-    .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+    .map((e) => {
+      const reps = Number(e.reps);
+      return { name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0, ...(reps > 0 ? { reps } : {}) };
+    });
 }
 
 /** Members attached to a session, ordered for stable team rendering. */

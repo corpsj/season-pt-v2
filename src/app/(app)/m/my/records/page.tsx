@@ -3,6 +3,7 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { getMemberWorkoutRecords } from "@/lib/data/groups/member";
+import { exerciseLine } from "@/lib/data/workout-format";
 
 export default async function MemberRecordsPage() {
   const view = await getMemberWorkoutRecords();
@@ -34,8 +35,7 @@ export default async function MemberRecordsPage() {
                     <div key={i} className="flex items-center justify-between gap-3">
                       <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-ink">{e.name}</span>
                       <span className="whitespace-nowrap text-[12.5px] font-medium text-muted">
-                        {e.kg > 0 ? `${e.kg}kg · ` : ""}
-                        {e.sets}세트
+                        {exerciseLine(e)}
                       </span>
                     </div>
                   ))}
