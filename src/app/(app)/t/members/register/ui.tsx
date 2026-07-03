@@ -392,6 +392,12 @@ export function MemberRegisterClient({
                 onValueChange={setPayAmount}
               />
             </Field>
+            {is2on1 && Number(payAmount.replace(/[^\d]/g, "")) > 0 ? (
+              <div className="-mt-1 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
+                2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 →{" "}
+                <span className="font-bold">2명 합계 {(Number(payAmount.replace(/[^\d]/g, "")) * 2).toLocaleString("ko-KR")}원</span>
+              </div>
+            ) : null}
             <Field icon="calendar" label="결제일">
               <TextInput
                 type="date"

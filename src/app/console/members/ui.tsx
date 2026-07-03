@@ -655,14 +655,21 @@ export function MembersClient({
           />
           {f.productId ? (
             <div className="mt-3">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{classType === "2on1" ? "결제 금액 (1인당)" : "결제 금액"}</div>
               <input
                 value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
                 onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
                 inputMode="numeric"
                 placeholder="₩ 금액"
-                className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+                className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
               />
+              {classType === "2on1" && Number(f.amount) > 0 ? (
+                <div className="mb-3.5 mt-2 rounded-[11px] bg-[#EDF4E3] px-3.5 py-2.5 text-[12.5px] font-medium text-[#5B6452]">
+                  2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 → <span className="font-bold">2명 합계 {(Number(f.amount) * 2).toLocaleString("ko-KR")}원</span>
+                </div>
+              ) : (
+                <div className="mb-3.5" />
+              )}
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
               <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
             </div>
