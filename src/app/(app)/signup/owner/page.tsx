@@ -11,6 +11,7 @@ import { ownerSignup } from "@/lib/auth/trainer-actions";
 
 export default function OwnerSignupPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -20,12 +21,16 @@ export default function OwnerSignupPage() {
 
   function submit() {
     setError(null);
+    if (!name.trim()) {
+      setError("이름을 입력해주세요");
+      return;
+    }
     if (!matched) {
       setError("비밀번호가 일치하지 않아요");
       return;
     }
     startTransition(async () => {
-      const res = await ownerSignup(id, pw);
+      const res = await ownerSignup(id, pw, name);
       if (res.ok) {
         router.push("/t");
         router.refresh();
@@ -48,6 +53,13 @@ export default function OwnerSignupPage() {
         </Banner>
 
         <div className="mt-5 flex flex-col gap-3.5">
+          <Field icon="person" label="이름">
+            <TextInput
+              placeholder="홍길동"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
           <Field icon="person" label="아이디">
             <TextInput
               placeholder="season.master"

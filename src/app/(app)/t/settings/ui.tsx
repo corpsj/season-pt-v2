@@ -11,7 +11,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { trainerLogout } from "@/lib/auth/trainer-actions";
+import { TextInput } from "@/components/ui/Field";
+import { Spinner } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
+import { trainerLogout, updateMyName } from "@/lib/auth/trainer-actions";
 import type { Me } from "@/lib/types";
 
 type Row = {
@@ -24,7 +27,25 @@ type Row = {
 
 export function SettingsClient({ me }: { me: Me }) {
   const router = useRouter();
+  const toast = useToast();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [nameEditing, setNameEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(me.name);
+  const [nameBusy, setNameBusy] = useState(false);
+
+  async function onSaveName() {
+    if (nameBusy) return;
+    setNameBusy(true);
+    const res = await updateMyName(nameDraft);
+    setNameBusy(false);
+    if (!res.ok) {
+      toast(res.error ?? "이름 변경에 실패했어요", "error");
+      return;
+    }
+    toast("이름을 바꿨어요");
+    setNameEditing(false);
+    router.refresh();
+  }
 
   // 운영성 메뉴(강사 관리·회원 등록·회원권 상품·공지사항)는 운영 탭(/t/perf)으로 이동 — 여긴 환경 설정만.
   const rows: Row[] = [
@@ -51,18 +72,56 @@ export function SettingsClient({ me }: { me: Me }) {
           <span className="text-[19px] font-bold text-ink">설정</span>
         </div>
 
-        {/* profile card */}
+        {/* profile card — 이름 인라인 수정(가입 때 이름을 못 받은 계정 구제 + 오타 수정) */}
         <Card className="mb-6 flex items-center gap-3 p-4">
           <Avatar initial={initial} tone="sage" size={48} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[15px] font-bold text-ink">{me.name}</span>
-              <Badge variant={me.isOwner ? "owner" : "instructor"} icon={me.isOwner ? "crown-fill" : undefined}>
-                {me.isOwner ? "대표" : "강사"}
-              </Badge>
+          {nameEditing ? (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <TextInput
+                placeholder="이름"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                maxLength={20}
+              />
+              <button
+                type="button"
+                onClick={onSaveName}
+                className="tappable flex h-10 flex-none items-center rounded-[11px] bg-sage px-3.5 text-[13px] font-bold text-surface"
+              >
+                {nameBusy ? <Spinner size={16} /> : "저장"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setNameEditing(false)}
+                className="tappable flex h-10 flex-none items-center rounded-[11px] border border-ink/[0.1] bg-card px-3 text-[13px] font-semibold text-muted"
+              >
+                취소
+              </button>
             </div>
-            <div className="mt-0.5 text-[12.5px] font-medium text-muted">계절 PT & 필라테스</div>
-          </div>
+          ) : (
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[15px] font-bold text-ink">{me.name}</span>
+                  <Badge variant={me.isOwner ? "owner" : "instructor"} icon={me.isOwner ? "crown-fill" : undefined}>
+                    {me.isOwner ? "대표" : "강사"}
+                  </Badge>
+                </div>
+                <div className="mt-0.5 text-[12.5px] font-medium text-muted">계절 PT & 필라테스</div>
+              </div>
+              <button
+                type="button"
+                aria-label="이름 수정"
+                onClick={() => {
+                  setNameDraft(me.name);
+                  setNameEditing(true);
+                }}
+                className="tappable flex h-9 w-9 flex-none items-center justify-center rounded-full bg-chip-soft text-muted"
+              >
+                <Icon name="pencil" size={16} />
+              </button>
+            </>
+          )}
         </Card>
 
         {/* owner settings */}
