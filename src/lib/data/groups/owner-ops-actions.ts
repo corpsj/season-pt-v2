@@ -129,6 +129,45 @@ export async function createMember(input: {
   return { ok: true, memberId: member.id, warn };
 }
 
+/** 듀엣(2:1) 동시 등록: 신규 회원 2명 + (선택) 팀 정기 일정 + (선택) 회원권 각자 발급·결제(1인당 동일 조건). */
+export async function createDuetMembers(input: {
+  members: { name: string; phone: string; birth: string; gender: Gender }[]; // 정확히 2명
+  trainerId?: string;
+  slots?: { weekday: number; hour: number; minute: number }[]; // 팀 슬롯(선택 — 비우면 나중에 묶기)
+  product?: { productId: string };
+  payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
+}): Promise<Result & { memberId?: string; warn?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  if (input.members.length !== 2) return { ok: false, error: "듀엣은 두 명의 회원 정보가 필요해요" };
+
+  const warns: string[] = [];
+  // 개인 슬롯 없이 두 명 등록 — 정기 일정은 아래에서 팀(2:1) 스케줄로 한 번에 만든다.
+  const a = await createMember({ ...input.members[0], slots: [], trainerId: input.trainerId, product: input.product, payment: input.payment });
+  if (!a.ok || !a.memberId) return { ok: false, error: a.error ?? "첫 번째 회원 등록에 실패했어요" };
+  if (a.warn) warns.push(`${input.members[0].name}: ${a.warn}`);
+
+  const b = await createMember({ ...input.members[1], slots: [], trainerId: input.trainerId, product: input.product, payment: input.payment });
+  if (!b.ok || !b.memberId) {
+    // 반쪽 등록 잔류 방지 — 방금 만든 첫 회원 롤백(파일·이력 없음, cascade 안전).
+    await sb.from("members").delete().eq("id", a.memberId);
+    return { ok: false, error: b.error ? `두 번째 회원: ${b.error}` : "두 번째 회원 등록에 실패했어요" };
+  }
+  if (b.warn) warns.push(`${input.members[1].name}: ${b.warn}`);
+
+  if (input.slots && input.slots.length > 0) {
+    const team = await createTeamSchedule({ memberIds: [a.memberId, b.memberId], slots: input.slots });
+    if (!team.ok) warns.push(`팀 일정 등록에 실패했어요(${team.error ?? "알 수 없는 오류"}) — 회원 상세 [2:1 팀으로 묶기]에서 다시 설정해주세요.`);
+    else if (team.warn) warns.push(team.warn);
+  }
+
+  revalidatePath("/t");
+  revalidatePath("/t/members");
+  revalidatePath("/console/members");
+  return { ok: true, memberId: a.memberId, warn: warns.length ? warns.join(" / ") : undefined };
+}
+
 /** 회원 정보 수정(이름·연락처·성별·부상메모·생년월일). 대표 전용. 연락처는 정규화 후 중복 시 거부.
  *  생년월일을 바꾸면 비밀번호(=생년월일 6자리)도 재설정하고 로그인 잠금을 해제한다 — 비번 분실 복구 수단 겸용. */
 export async function updateMember(
