@@ -368,7 +368,7 @@ export function MembersClient({
         <ConsoleModal
           title="회원 등록"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" onClick={doAdd}>등록</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={doAdd}>등록</PBtn></>}
         >
           <ModalField label="이름"><Input value={f.name} onChange={(v) => setF({ ...f, name: v })} placeholder="회원 이름" /></ModalField>
           <ModalField label="연락처"><Input value={formatPhone(f.phone)} onChange={(v) => setF({ ...f, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
@@ -415,8 +415,8 @@ export function MembersClient({
             <div className="mt-3">
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
               <input
-                value={f.amount}
-                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "") })}
+                value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
+                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
                 inputMode="numeric"
                 placeholder="₩ 금액"
                 className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
@@ -468,7 +468,7 @@ export function MembersClient({
         <ConsoleModal
           title="회원권 발급"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !issueProduct} onClick={doIssue}>발급</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={!issueProduct} onClick={doIssue}>발급</PBtn></>}
         >
           <MemberStripe d={d} />
           <div className="mb-2.5 text-[11.5px] font-semibold text-[#9A917F]">회원권 상품</div>
@@ -505,8 +505,8 @@ export function MembersClient({
           ) : null}
           <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
           <input
-            value={issueAmt}
-            onChange={(e) => setIssueAmt(e.target.value.replace(/\D/g, ""))}
+            value={issueAmt ? Number(issueAmt).toLocaleString("ko-KR") : ""}
+            onChange={(e) => setIssueAmt(e.target.value.replace(/\D/g, "").slice(0, 12))}
             inputMode="numeric"
             placeholder="₩ 금액"
             className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
@@ -520,7 +520,7 @@ export function MembersClient({
         <ConsoleModal
           title="기간 연장"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={doExtend}>연장</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={doExtend}>연장</PBtn></>}
         >
           <MemberStripe d={d} />
           <div className="flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3.5">
@@ -534,7 +534,7 @@ export function MembersClient({
         <ConsoleModal
           title="환불"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || refundAmt === ""} onClick={doRefund}>환불 처리</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={refundAmt === ""} onClick={doRefund}>환불 처리</PBtn></>}
         >
           <MemberStripe d={d} />
           <div className="mb-[18px] rounded-[14px] bg-[#FBF3E9] px-[18px] py-4">
@@ -543,8 +543,8 @@ export function MembersClient({
               {refund ? `산식 기준 ${won(refund.refund)} · 사용 ${refund.used}회${refund.noBaseline ? " · 결제 기록 없음(이관)" : ""}` : refundErr ? "" : "계산 중…"}
             </div>
             <input
-              value={refundAmt}
-              onChange={(e) => setRefundAmt(e.target.value.replace(/\D/g, ""))}
+              value={refundAmt ? Number(refundAmt).toLocaleString("ko-KR") : ""}
+              onChange={(e) => setRefundAmt(e.target.value.replace(/\D/g, "").slice(0, 12))}
               inputMode="numeric"
               placeholder="실제 환불 금액(원)"
               className="w-full rounded-[10px] border border-ink/10 bg-white px-3.5 py-2.5 text-[20px] font-bold text-terracotta"

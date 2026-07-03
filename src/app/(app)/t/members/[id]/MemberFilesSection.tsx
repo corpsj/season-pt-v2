@@ -41,7 +41,7 @@ export function MemberFilesSection({
     if (!file || busy) return;
     if (kind === "inbody") {
       const v = validateUpload("inbody", file.type, file.size);
-      if (!v.ok) return toast(v.error);
+      if (!v.ok) return toast(v.error, "error");
     }
     setBusy(true);
     try {

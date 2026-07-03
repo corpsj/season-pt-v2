@@ -79,7 +79,7 @@ export function TeamCreateClient({
       : await createTeamSchedule({ memberIds: [memberId, partnerId!], slots });
     if (!res.ok) {
       setPending(false);
-      return toast(res.error ?? (isEdit ? "일정 변경에 실패했어요" : "팀 만들기에 실패했어요"));
+      return toast(res.error ?? (isEdit ? "일정 변경에 실패했어요" : "팀 만들기에 실패했어요"), "error");
     }
     toast(res.warn ?? (isEdit ? "팀 일정을 변경했어요" : "2:1 팀을 만들었어요"));
     router.push(`/t/members/${memberId}`);

@@ -41,7 +41,7 @@ export function MemberReceiveClient({
       }
     } else {
       setPending(false);
-      toast(res.error ?? (isCancel ? "처리하지 못했어요" : "변경하지 못했어요"));
+      toast(res.error ?? (isCancel ? "처리하지 못했어요" : "변경하지 못했어요"), "error");
       router.refresh(); // 이미 처리·만료된 요청이면 화면을 최신 상태로(죽은 버튼 방지, 감사 #39)
     }
   }

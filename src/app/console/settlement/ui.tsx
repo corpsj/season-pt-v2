@@ -144,7 +144,7 @@ function ConfirmControl({
     setBusy(false);
     if (!res.ok) {
       setModal(null);
-      return toast(res.error ?? (kind === "confirm" ? "확정에 실패했어요" : "취소에 실패했어요"));
+      return toast(res.error ?? (kind === "confirm" ? "확정에 실패했어요" : "취소에 실패했어요"), "error");
     }
     toast(kind === "confirm" ? "지급을 확정했어요" : "확정을 취소했어요");
     setModal(null);
