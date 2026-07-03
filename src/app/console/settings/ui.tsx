@@ -91,6 +91,11 @@ export function SettingsClient({ products, settings }: { products: MembershipPro
    ============================================================ */
 
 const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
+const TIER_HEAD: Record<ProductTier, string> = {
+  owner: "bg-[#F4EEE3] text-[#8A6F3E]",
+  staff: "bg-[#E4EFE3] text-[#5C9166]",
+  common: "bg-[#F0ECE3] text-[#847A66]",
+};
 const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: "기타" };
 
 type FormState = {
@@ -158,12 +163,12 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
     [active, typeFilter],
   );
 
-  // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
+  // 담당 섹션: 대표 → 강사 → 공용, 비어있는 섹션은 생략(유형은 필터+카드 뱃지로 구분).
   const sections = useMemo(() => {
-    const g: Record<string, MembershipProduct[]> = { "1on1": [], "2on1": [], etc: [] };
-    for (const p of visible) g[productType(p.name) ?? "etc"].push(p);
-    return (["1on1", "2on1", "etc"] as const)
-      .map((k) => ({ key: k, label: TYPE_LABEL[k], items: g[k].sort(bySessionsAsc) }))
+    const g: Record<ProductTier, MembershipProduct[]> = { owner: [], staff: [], common: [] };
+    for (const p of visible) g[productTier(p.name)].push(p);
+    return (["owner", "staff", "common"] as ProductTier[])
+      .map((k) => ({ key: k, label: TIER_LABEL[k], items: g[k].sort(bySessionsAsc) }))
       .filter((s) => s.items.length > 0);
   }, [visible]);
 
@@ -270,11 +275,13 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
       ) : (
         sections.map((sec) => (
           <div key={sec.key} className="mb-4 last:mb-0">
-            <div className="mb-2 text-[11.5px] font-bold tracking-[0.02em] text-[#8A6F3E]">{sec.label}</div>
+            <div className="mb-2 flex items-center gap-2">
+              <span className={`rounded-[6px] px-2 py-0.5 text-[11.5px] font-bold ${TIER_HEAD[sec.key]}`}>{sec.label}</span>
+              <span className="text-[11.5px] font-medium text-[#9A917F]">{sec.items.length}개</span>
+            </div>
             <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
               {sec.items.map((p) => {
-                const tier = productTier(p.name);
-                const typed = productType(p.name) !== null;
+                const type = productType(p.name);
                 return (
                   <button
                     key={p.id}
@@ -284,11 +291,11 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
                   >
                     <div className="flex flex-wrap items-baseline gap-1.5">
                       <span className="min-w-0 truncate text-[15px] font-bold text-ink">
-                        {typed ? `${p.sessions}회` : p.name}
+                        {type ? `${p.sessions}회` : p.name}
                       </span>
-                      {tier !== "common" ? (
-                        <span className="flex-none rounded-[6px] bg-[#EDF4E3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#5B6452]">
-                          {TIER_LABEL[tier]}
+                      {type ? (
+                        <span className="flex-none rounded-[6px] bg-[#EFEBE2] px-1.5 py-0.5 text-[10.5px] font-bold text-[#847A66]">
+                          {TYPE_LABEL[type]}
                         </span>
                       ) : null}
                       {isDiscountProduct(p.name) ? (
@@ -299,7 +306,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
                     </div>
                     <div className="mt-1 text-[13px] font-semibold text-ink">{won(p.price)}</div>
                     <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">
-                      {typed ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
+                      {type ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
                     </div>
                   </button>
                 );

@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
-import { Kicker } from "@/components/ui/Kicker";
 import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
 import { Switch } from "@/components/ui/Switch";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
@@ -36,6 +35,11 @@ import type { MembershipProduct } from "@/lib/types";
  */
 
 const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
+const TIER_HEAD: Record<ProductTier, string> = {
+  owner: "bg-gold-bg text-gold",
+  staff: "bg-green-active-bg text-green-active",
+  common: "bg-chip-soft text-muted2",
+};
 const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: "기타" };
 
 type FormState = {
@@ -93,12 +97,12 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     [active, typeFilter],
   );
 
-  // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
+  // 담당 섹션: 대표 → 강사 → 공용, 비어있는 섹션은 생략(유형은 필터+카드 뱃지로 구분).
   const sections = useMemo(() => {
-    const g: Record<string, MembershipProduct[]> = { "1on1": [], "2on1": [], etc: [] };
-    for (const p of visible) g[productType(p.name) ?? "etc"].push(p);
-    return (["1on1", "2on1", "etc"] as const)
-      .map((k) => ({ key: k, label: TYPE_LABEL[k], items: g[k].sort(bySessionsAsc) }))
+    const g: Record<ProductTier, MembershipProduct[]> = { owner: [], staff: [], common: [] };
+    for (const p of visible) g[productTier(p.name)].push(p);
+    return (["owner", "staff", "common"] as ProductTier[])
+      .map((k) => ({ key: k, label: TIER_LABEL[k], items: g[k].sort(bySessionsAsc) }))
       .filter((s) => s.items.length > 0);
   }, [visible]);
 
@@ -196,13 +200,13 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
         ) : (
           sections.map((sec) => (
             <div key={sec.key} className="mb-4">
-              <div className="mb-2">
-                <Kicker>{sec.label}</Kicker>
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-[11.5px] font-bold ${TIER_HEAD[sec.key]}`}>{sec.label}</span>
+                <span className="text-[11.5px] font-medium text-muted">{sec.items.length}개</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {sec.items.map((p) => {
-                  const tier = productTier(p.name);
-                  const typed = productType(p.name) !== null;
+                  const type = productType(p.name);
                   return (
                     <button
                       key={p.id}
@@ -212,11 +216,11 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                     >
                       <div className="flex flex-wrap items-baseline gap-1.5">
                         <span className="truncate text-[15px] font-bold text-ink">
-                          {typed ? `${p.sessions}회` : p.name}
+                          {type ? `${p.sessions}회` : p.name}
                         </span>
-                        {tier !== "common" ? (
-                          <span className="flex-none rounded-md bg-sage-banner px-1.5 py-0.5 text-[10.5px] font-bold text-sage-deep">
-                            {TIER_LABEL[tier]}
+                        {type ? (
+                          <span className="flex-none rounded-md bg-chip-soft px-1.5 py-0.5 text-[10.5px] font-bold text-muted2">
+                            {TYPE_LABEL[type]}
                           </span>
                         ) : null}
                         {isDiscountProduct(p.name) ? (
@@ -227,7 +231,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                       </div>
                       <div className="mt-1 text-[13px] font-semibold text-ink">₩{p.price.toLocaleString()}</div>
                       <div className="mt-0.5 text-[11.5px] font-medium text-muted">
-                        {typed ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
+                        {type ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
                       </div>
                     </button>
                   );
