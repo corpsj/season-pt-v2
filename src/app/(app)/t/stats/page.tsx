@@ -70,8 +70,10 @@ export default async function TrainerStatsPage() {
                   1:1 {preview.count1on1}회 · 2:1 {preview.count2on1}회 · 노쇼·취소 미포함
                 </div>
               </>
-            ) : (
+            ) : preview.count1on1 + preview.count2on1 > 0 ? (
               <div className="mt-1.5 text-[13px] font-medium text-muted2">단가는 대표가 설정해요</div>
+            ) : (
+              <div className="mt-1.5 text-[13px] font-medium text-muted2">이번 달 진행한 수업이 없어요</div>
             )}
           </div>
         ) : null}

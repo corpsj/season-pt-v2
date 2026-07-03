@@ -6,6 +6,7 @@ import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { Kicker } from "@/components/ui/Kicker";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton } from "@/components/ui/Button";
@@ -135,13 +136,9 @@ function ReceiveCard({
         <Avatar initial={item.trainerName.charAt(0) || "선"} tone="sage" size={32} />
         <span className="text-[13.5px] font-bold text-ink">{item.trainerName} 선생님</span>
         <span className="text-[11.5px] font-medium text-muted">{item.ago}</span>
-        <span
-          className={`ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold ${
-            isCancel ? "bg-warm-banner text-terracotta" : "bg-sage-banner2 text-sage-deep"
-          }`}
-        >
+        <Badge variant={isCancel ? "cancelReq" : "changeReq"} className="ml-auto">
           {isCancel ? "취소 요청" : "변경 요청"}
-        </span>
+        </Badge>
       </div>
 
       {/* target session */}

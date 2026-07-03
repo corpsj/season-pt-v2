@@ -11,6 +11,7 @@ import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RadioOption } from "@/components/ui/RadioOption";
+import { Kicker } from "@/components/ui/Kicker";
 import { Spinner } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
@@ -120,9 +121,7 @@ function CounterPropose({
             </div>
           ) : (
             <>
-              <div className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
-                새 시간 · 최대 3개
-              </div>
+              <Kicker className="mb-2">새 시간 · 최대 3개</Kicker>
               <div className="flex flex-col gap-2">
                 {slots.map((s) => (
                   <RadioOption

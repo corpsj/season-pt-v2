@@ -12,7 +12,7 @@ export function trainerTabs({
     { label: "회원", href: "/t/members", icon: "persons", activeIcon: "persons-fill" },
     { label: "채팅", href: "/t/chat", icon: "message", activeIcon: "message-fill", badge: chatUnread || undefined },
   ];
-  tabs.push({ label: "현황", href: isOwner ? "/t/perf" : "/t/stats", icon: "chart", activeIcon: "chart" });
+  tabs.push({ label: "현황", href: isOwner ? "/t/perf" : "/t/stats", icon: "chart", activeIcon: "chart-fill" });
   return tabs;
 }
 

@@ -1,14 +1,15 @@
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/icon";
-import { cn } from "@/lib/cn";
+import type { BadgeVariant } from "@/lib/types";
 import type { MemberSentRequest, MemberSentStatus } from "@/lib/data/groups/member";
 
-const STATUS_STYLE: Record<MemberSentStatus, string> = {
-  pending: "bg-chip-soft text-muted",
-  seen: "bg-sage-banner2 text-sage-deep",
-  accepted: "bg-sage text-surface",
-  rejected: "bg-warm-banner text-terracotta",
-  expired: "bg-chip-soft text-placeholder",
+const STATUS_BADGE: Record<MemberSentStatus, BadgeVariant> = {
+  pending: "awaiting",
+  seen: "changeReq",
+  accepted: "active",
+  rejected: "cancelReq",
+  expired: "cancelled",
 };
 
 export function MemberSentRequestsList({ requests }: { requests: MemberSentRequest[] }) {
@@ -19,14 +20,9 @@ export function MemberSentRequestsList({ requests }: { requests: MemberSentReque
           <div className="mb-2.5 flex items-center gap-2">
             <span className="text-[14px] font-bold text-ink">{r.title}</span>
             <span className="text-[11.5px] font-medium text-muted">{r.ago}</span>
-            <span
-              className={cn(
-                "ml-auto rounded-md px-2 py-0.5 text-[11px] font-bold",
-                STATUS_STYLE[r.status],
-              )}
-            >
+            <Badge variant={STATUS_BADGE[r.status]} className="ml-auto">
               {r.statusLabel}
-            </span>
+            </Badge>
           </div>
           {r.originalLabel ? (
             <div className="flex items-center gap-1.5 text-[13px] font-medium text-muted2">
