@@ -23,6 +23,7 @@ type RecordTarget = {
   avatarTone: AvatarTone;
   dateLabel: string;
   exercises: Exercise[];
+  comment?: string;
 };
 
 export default function RecordClient({
@@ -35,8 +36,9 @@ export default function RecordClient({
   const router = useRouter();
   const toast = useToast();
   const [exercises, setExercises] = useState<Exercise[]>(t.exercises);
-  const [comment, setComment] = useState("");
+  const [comment, setComment] = useState(t.comment ?? "");
   const [saving, setSaving] = useState(false);
+  const isEdit = t.exercises.length > 0 || !!t.comment;
 
   const update = (i: number, patch: Partial<Exercise>) =>
     setExercises((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
@@ -53,7 +55,7 @@ export default function RecordClient({
         return;
       }
       toast("기록이 저장되었어요");
-      router.push("/t");
+      router.push(`/t/class/${t.sessionId}`);
     } catch {
       toast("저장에 실패했어요. 다시 시도해주세요.");
       setSaving(false);
@@ -153,7 +155,7 @@ export default function RecordClient({
 
       <Footer>
         <PrimaryButton icon="check-bold" onClick={save} disabled={saving}>
-          {saving ? "저장 중…" : "기록 저장"}
+          {saving ? "저장 중…" : isEdit ? "수정 저장" : "기록 저장"}
         </PrimaryButton>
       </Footer>
     </div>

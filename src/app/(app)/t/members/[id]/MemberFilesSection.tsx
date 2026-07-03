@@ -19,10 +19,12 @@ export function MemberFilesSection({
   kind,
   memberId,
   initial,
+  takenAt,
 }: {
   kind: "photo" | "inbody";
   memberId: string;
   initial: MemberFileView[];
+  takenAt?: string; // 지정 시 업로드를 이 날짜로 태깅(수업 상세에서 세션 날짜로). 미지정=서버가 오늘로.
 }) {
   const cfg = CFG[kind];
   const router = useRouter();
@@ -45,6 +47,7 @@ export function MemberFilesSection({
       const fd = new FormData();
       fd.set("memberId", memberId);
       fd.set("kind", kind);
+      if (takenAt) fd.set("takenAt", takenAt);
       fd.set("file", blob, kind === "photo" ? "photo.jpg" : file.name);
       const r = await uploadMemberFile(fd);
       if (!r.ok) toast(r.error ?? "업로드에 실패했어요");

@@ -113,26 +113,20 @@ export function MemberCalendarClient({
         {dayClasses.length ? (
           <div className="flex flex-col gap-2.5">
             {dayClasses.map((dayClass) => (
-              <Card key={dayClass.sessionId} className="flex items-center gap-3 px-[15px] py-[13px]">
-                <div className="h-9 w-1 flex-none rounded-[3px] bg-sage" />
-                <div className="flex-1">
-                  <div className="text-[13.5px] font-bold text-ink">1:1 PT · {dayClass.time}</div>
-                  <div className="mt-0.5 text-[12px] font-medium text-muted">{dayClass.trainerName}</div>
-                </div>
-                {dayClass.isPast ? (
-                  <span className="flex-none rounded-[9px] bg-chip-soft px-[11px] py-[7px] text-[11.5px] font-bold text-placeholder">
-                    지난 수업
-                  </span>
-                ) : (
-                  <Link
-                    href={`/m/request?s=${dayClass.sessionId}`}
-                    className="tappable flex flex-none items-center gap-1 rounded-[9px] bg-sage-banner2 px-[11px] py-[7px] text-[11.5px] font-bold text-sage-deep"
-                  >
-                    <Icon name="clock" size={13} />
-                    변경
-                  </Link>
-                )}
-              </Card>
+              <Link
+                key={dayClass.sessionId}
+                href={`/m/class/${dayClass.sessionId}`}
+                className="tappable"
+              >
+                <Card className="flex items-center gap-3 px-[15px] py-[13px]">
+                  <div className="h-9 w-1 flex-none rounded-[3px] bg-sage" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13.5px] font-bold text-ink">1:1 PT · {dayClass.time}</div>
+                    <div className="mt-0.5 text-[12px] font-medium text-muted">{dayClass.trainerName}</div>
+                  </div>
+                  <Icon name="chevron-right" size={16} className="flex-none text-muted" />
+                </Card>
+              </Link>
             ))}
           </div>
         ) : !hasRecords ? (
