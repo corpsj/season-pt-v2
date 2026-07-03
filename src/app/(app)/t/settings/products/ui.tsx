@@ -22,7 +22,9 @@ import {
   productType,
   composeProductName,
   isDiscountProduct,
+  matchesPickerFilter,
   type ProductTier,
+  type PickerFilter,
 } from "@/lib/data/product-class";
 import type { MembershipProduct } from "@/lib/types";
 
@@ -75,7 +77,7 @@ function bySessionsAsc(a: MembershipProduct, b: MembershipProduct) {
 export function ProductsClient({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [tierFilter, setTierFilter] = useState<"all" | ProductTier>("all");
+  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 시트 안 판매 상태 표시용
@@ -85,18 +87,10 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
   const active = useMemo(() => products.filter((p) => p.active), [products]);
   const archived = useMemo(() => products.filter((p) => !p.active), [products]);
 
-  // 존재하는 담당 티어만 토글로 노출(마이그레이션 전 — 전부 공용이면 토글 자체가 안 보임).
-  const presentTiers = useMemo(() => {
-    const s = new Set(active.map((p) => productTier(p.name)));
-    return (["owner", "staff", "common"] as ProductTier[]).filter((t) => s.has(t));
-  }, [active]);
-  const showTierToggle = presentTiers.length > 1;
-  // 필터 중인 티어의 마지막 상품이 보관되면 그 티어가 presentTiers에서 사라진다 — 무효 필터는 "전체"로 간주.
-  const effTier = tierFilter === "all" || presentTiers.includes(tierFilter) ? tierFilter : "all";
-
+  // 발급 픽커와 동일한 1:1/2:1/특별할인 3분류(matchesPickerFilter 단일 소스) — 담당(대표/강사)은 카드 뱃지로 구분.
   const visible = useMemo(
-    () => (effTier === "all" ? active : active.filter((p) => productTier(p.name) === effTier)),
-    [active, effTier],
+    () => active.filter((p) => matchesPickerFilter(p.name, typeFilter)),
+    [active, typeFilter],
   );
 
   // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
@@ -182,20 +176,22 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           </PrimaryButton>
         </div>
 
-        {/* 담당 필터 — 대표/강사 상품이 함께 있을 때만 */}
-        {showTierToggle ? (
-          <SegmentedToggle
-            className="mb-4"
-            options={[{ value: "all", label: "전체" }, ...presentTiers.map((t) => ({ value: t, label: TIER_LABEL[t] }))]}
-            value={effTier}
-            onChange={(v) => setTierFilter(v as "all" | ProductTier)}
-          />
-        ) : null}
+        {/* 분류 필터 — 발급 픽커와 동일한 3칩 */}
+        <SegmentedToggle
+          className="mb-4"
+          options={[
+            { value: "1on1", label: "1:1" },
+            { value: "2on1", label: "2:1" },
+            { value: "discount", label: "특별할인" },
+          ]}
+          value={typeFilter}
+          onChange={(v) => setTypeFilter(v as PickerFilter)}
+        />
 
         {/* 판매 중 — 유형 섹션 × 회차 칩 그리드 */}
         {sections.length === 0 ? (
           <Card className="p-6 text-center text-[13.5px] text-muted">
-            등록된 상품이 없어요. &lsquo;추가&rsquo;로 시작하세요.
+            {active.length > 0 ? "이 분류에 상품이 없어요." : "등록된 상품이 없어요. ‘추가’로 시작하세요."}
           </Card>
         ) : (
           sections.map((sec) => (
@@ -218,7 +214,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                         <span className="truncate text-[15px] font-bold text-ink">
                           {typed ? `${p.sessions}회` : p.name}
                         </span>
-                        {effTier === "all" && tier !== "common" ? (
+                        {tier !== "common" ? (
                           <span className="flex-none rounded-md bg-sage-banner px-1.5 py-0.5 text-[10.5px] font-bold text-sage-deep">
                             {TIER_LABEL[tier]}
                           </span>
