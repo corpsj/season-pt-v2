@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, PBtn, OBtn, GBtn, ConsoleModal, won, pill } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
-import { recordPayment, addRevenue, deletePayment } from "@/lib/data/groups/owner-ops-actions";
+import { recordPayment, recordPayments, addRevenue, deletePayment } from "@/lib/data/groups/owner-ops-actions";
 import { undoRefund } from "@/lib/data/groups/membership-actions";
 import type { RevenueEntry } from "@/lib/data/groups/owner-ops";
 import type { AvatarTone, PaymentMethod } from "@/lib/types";
@@ -160,22 +160,30 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<PaymentMethod>("card");
   const [note, setNote] = useState("");
+  // 분할 결제(카드+현금 등) — 회원 결제 모드에서 여러 줄로 기록(모바일 결제 화면과 동일).
+  const [lines, setLines] = useState<{ method: PaymentMethod; amount: string }[]>([{ method: "card", amount: "" }]);
 
   const list = members.filter((m) => q.trim() === "" || m.name.includes(q.trim())).slice(0, 40);
 
   function reset() {
     setMode("member"); setQ(""); setMemberId(""); setAmount(""); setMethod("card"); setNote("");
+    setLines([{ method: "card", amount: "" }]);
   }
   async function submit() {
     if (busy) return;
-    const amt = amount.replace(/[^\d]/g, "");
     if (mode === "member") {
       if (!memberId) return toast("회원을 선택해주세요", "error");
+      const parsed = lines.map((l) => ({ method: l.method, amount: Number(l.amount.replace(/[^\d]/g, "") || "0") }));
       setBusy(true);
-      const r = await recordPayment({ memberId, method, amount: amt ? Number(amt) : undefined });
+      // 한 줄이고 금액을 비웠으면 기존 동작(회원권 정가) 유지, 그 외엔 다건 일괄 기록.
+      const r =
+        parsed.length === 1 && parsed[0].amount === 0
+          ? await recordPayment({ memberId, method: parsed[0].method })
+          : await recordPayments({ memberId, lines: parsed });
       setBusy(false);
       if (!r.ok) return toast(r.error ?? "결제 기록에 실패했어요", "error");
     } else {
+      const amt = amount.replace(/[^\d]/g, "");
       if (!amt) return toast("금액을 입력해주세요", "error");
       setBusy(true);
       const r = await addRevenue({ amount: Number(amt), method, note: note.trim() || undefined });
@@ -229,15 +237,47 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
             </>
           )}
 
-          <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">금액 {mode === "member" ? "(비우면 회원권 정가)" : ""}</div>
-          <input value={amount ? Number(amount.replace(/[^\d]/g, "")).toLocaleString("ko-KR") : ""} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, "").slice(0, 12))} inputMode="numeric" placeholder="₩ 금액" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
-
-          <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
-          <div className="flex gap-2">
-            {METHODS.map((m) => (
-              <button key={m.v} onClick={() => setMethod(m.v)} className={`flex-1 rounded-[11px] py-[11px] text-[13px] font-semibold transition ${method === m.v ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.12)] bg-white text-[#766D60]"}`}>{m.l}</button>
-            ))}
-          </div>
+          {mode === "member" ? (
+            <>
+              {/* 분할 결제 줄 — 수단+금액을 여러 줄로(카드+현금 등) */}
+              {lines.map((line, i) => (
+                <div key={i} className="mb-2.5 rounded-[13px] border border-[rgba(75,59,46,0.1)] bg-[#FBFAF7] p-3">
+                  {lines.length > 1 ? (
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[11.5px] font-semibold text-[#9A917F]">{i + 1}번 결제</span>
+                      <button type="button" onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} className="text-[12px] font-semibold text-terracotta">삭제</button>
+                    </div>
+                  ) : null}
+                  <div className="mb-2 flex gap-2">
+                    {METHODS.map((m) => (
+                      <button key={m.v} onClick={() => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, method: m.v } : l)))} className={`flex-1 rounded-[11px] py-[9px] text-[12.5px] font-semibold transition ${line.method === m.v ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.12)] bg-white text-[#766D60]"}`}>{m.l}</button>
+                    ))}
+                  </div>
+                  <input
+                    value={line.amount ? Number(line.amount.replace(/[^\d]/g, "")).toLocaleString("ko-KR") : ""}
+                    onChange={(e) => { const d = e.target.value.replace(/[^\d]/g, "").slice(0, 12); setLines((ls) => ls.map((l, j) => (j === i ? { ...l, amount: d } : l))); }}
+                    inputMode="numeric"
+                    placeholder={lines.length === 1 ? "₩ 금액 (비우면 회원권 정가)" : "₩ 금액"}
+                    className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-white px-[15px] py-[11px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+                  />
+                </div>
+              ))}
+              <button type="button" onClick={() => setLines((ls) => [...ls, { method: "cash", amount: "" }])} className="w-full rounded-[12px] border border-dashed border-[rgba(75,59,46,0.2)] bg-white py-[10px] text-[12.5px] font-semibold text-[#766D60] transition hover:bg-[#FBF9F5]">
+                + 분할 결제 추가
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">금액</div>
+              <input value={amount ? Number(amount.replace(/[^\d]/g, "")).toLocaleString("ko-KR") : ""} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, "").slice(0, 12))} inputMode="numeric" placeholder="₩ 금액" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+              <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
+              <div className="flex gap-2">
+                {METHODS.map((m) => (
+                  <button key={m.v} onClick={() => setMethod(m.v)} className={`flex-1 rounded-[11px] py-[11px] text-[13px] font-semibold transition ${method === m.v ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.12)] bg-white text-[#766D60]"}`}>{m.l}</button>
+                ))}
+              </div>
+            </>
+          )}
         </ConsoleModal>
       ) : null}
     </>

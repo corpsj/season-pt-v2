@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext } from "@/lib/data/db";
-import { getStudioSettings } from "@/lib/data/groups/owner-ops";
+import { ensureOwner } from "@/lib/auth/guard";
+import { getStudioSettings, getExercises } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
 import { notifyLowSessions, notifyMemberOfCounterProposal, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
-import { getProposeSlots, slotLabel } from "@/lib/data/groups/scheduling";
+import { getProposeSlots, slotLabel, getRecordTarget } from "@/lib/data/groups/scheduling";
 import {
   hasSlotConflict,
   moveSessionWithTombstone,
@@ -237,6 +238,13 @@ export async function confirmAttendance(
 
   revalidatePath("/t");
   return { ok: true };
+}
+
+/** 콘솔 캘린더 수업 기록 모달용: 기존 기록 프리로드 + 종목 옵션을 함께 로드(대표 전용 래퍼). */
+export async function loadRecordTarget(sessionId: string) {
+  if (!(await ensureOwner())) return null;
+  const [target, exercises] = await Promise.all([getRecordTarget(sessionId), getExercises()]);
+  return { target, exerciseOptions: exercises.map((e) => e.name) };
 }
 
 /** Save a workout record for the session's (first) member. */
