@@ -7,7 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
 import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications } from "@/lib/data/groups/owner-ops-actions";
-import { productTier, productType, composeProductName, isDiscountProduct, type ProductTier } from "@/lib/data/product-class";
+import { productTier, productType, composeProductName, isDiscountProduct, matchesPickerFilter, type ProductTier, type PickerFilter } from "@/lib/data/product-class";
 import type { MembershipProduct, StudioSettings } from "@/lib/types";
 
 export function SettingsClient({ products, settings }: { products: MembershipProduct[]; settings: StudioSettings }) {
@@ -142,7 +142,7 @@ const FLABEL = "mb-1.5 text-[12px] font-semibold text-[#9A917F]";
 function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [tierFilter, setTierFilter] = useState<"all" | ProductTier>("all");
+  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 모달 안 판매 상태 표시용
@@ -152,18 +152,10 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const active = useMemo(() => products.filter((p) => p.active), [products]);
   const archived = useMemo(() => products.filter((p) => !p.active), [products]);
 
-  // 존재하는 담당 티어만 필터로 노출(전부 공용이면 필터 행 자체가 안 보임).
-  const presentTiers = useMemo(() => {
-    const s = new Set(active.map((p) => productTier(p.name)));
-    return (["owner", "staff", "common"] as ProductTier[]).filter((t) => s.has(t));
-  }, [active]);
-  const showTierFilter = presentTiers.length > 1;
-  // 필터 중인 티어의 마지막 상품이 보관되면 그 티어가 presentTiers에서 사라진다 — 무효 필터는 "전체"로 간주.
-  const effTier = tierFilter === "all" || presentTiers.includes(tierFilter) ? tierFilter : "all";
-
+  // 발급 픽커와 동일한 1:1/2:1/특별할인 3분류(matchesPickerFilter 단일 소스) — 담당(대표/강사)은 카드 뱃지로 구분.
   const visible = useMemo(
-    () => (effTier === "all" ? active : active.filter((p) => productTier(p.name) === effTier)),
-    [active, effTier],
+    () => active.filter((p) => matchesPickerFilter(p.name, typeFilter)),
+    [active, typeFilter],
   );
 
   // 유형 섹션: 1:1 → 2:1 → 기타(이름 규칙 밖), 비어있는 섹션은 생략.
@@ -259,20 +251,21 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
         <PBtn icon="plus-bold" onClick={openNew}>상품 추가</PBtn>
       </div>
 
-      {/* 담당 필터 — 대표/강사 상품이 함께 있을 때만 */}
-      {showTierFilter ? (
-        <div className="mb-4 flex items-center gap-[6px]">
-          <button type="button" onClick={() => setTierFilter("all")} className={pillCls(effTier === "all")}>전체</button>
-          {presentTiers.map((t) => (
-            <button key={t} type="button" onClick={() => setTierFilter(t)} className={pillCls(effTier === t)}>{TIER_LABEL[t]}</button>
-          ))}
-        </div>
-      ) : null}
+      {/* 분류 필터 — 발급 픽커와 동일한 3칩 */}
+      <div className="mb-4 flex items-center gap-[6px]">
+        {([
+          { key: "1on1", label: "1:1" },
+          { key: "2on1", label: "2:1" },
+          { key: "discount", label: "특별할인" },
+        ] as { key: PickerFilter; label: string }[]).map((f) => (
+          <button key={f.key} type="button" onClick={() => setTypeFilter(f.key)} className={pillCls(typeFilter === f.key)}>{f.label}</button>
+        ))}
+      </div>
 
       {/* 판매 중 — 유형 섹션 × 회차 칩 그리드 */}
       {sections.length === 0 ? (
         <div className="rounded-[13px] bg-[#FBF7F1] py-8 text-center text-[13px] font-medium text-[#A89F92]">
-          등록된 상품이 없어요 — &lsquo;상품 추가&rsquo;로 시작하세요
+          {active.length > 0 ? "이 분류에 상품이 없어요" : "등록된 상품이 없어요 — ‘상품 추가’로 시작하세요"}
         </div>
       ) : (
         sections.map((sec) => (
@@ -293,7 +286,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
                       <span className="min-w-0 truncate text-[15px] font-bold text-ink">
                         {typed ? `${p.sessions}회` : p.name}
                       </span>
-                      {effTier === "all" && tier !== "common" ? (
+                      {tier !== "common" ? (
                         <span className="flex-none rounded-[6px] bg-[#EDF4E3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#5B6452]">
                           {TIER_LABEL[tier]}
                         </span>
