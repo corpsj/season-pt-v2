@@ -48,12 +48,17 @@ export const getMemberContext = cache(async (): Promise<MemberSession | null> =>
 });
 
 /**
- * 대표 계정 존재 여부 — 부트스트랩(최초 대표 가입) 진입점 노출용.
- * 대표가 생기면 false→로그인 화면에서 대표 가입 메뉴가 자동으로 사라진다.
- * (자가가입 자체는 `ownerSignup`이 서버에서 재차 거부 — 표시는 편의, 가드는 액션.)
+ * 실제 스튜디오 대표(개발자 관리용 admin 대표 제외) 존재 여부 — 최초 대표 회원가입 진입점 노출용.
+ * 개발자 관리 대표(bootstrap_admin=true)는 카운트에서 빼므로, 그 계정이 있어도 진짜 대표가 가입 전이면
+ * 로그인·콘솔에 가입 메뉴가 보인다. 진짜 대표가 가입하면 true→메뉴가 사라지고 ownerSignup도 서버에서 거부.
+ * (단일 스튜디오라 admin·실대표는 같은 데이터를 자동 공유.)
  */
-export const ownerExists = cache(async (): Promise<boolean> => {
+export const studioOwnerExists = cache(async (): Promise<boolean> => {
   const admin = createSupabaseAdmin();
-  const { count } = await admin.from("trainers").select("id", { count: "exact", head: true }).eq("role", "owner");
+  const { count } = await admin
+    .from("trainers")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "owner")
+    .eq("bootstrap_admin", false);
   return (count ?? 0) > 0;
 });

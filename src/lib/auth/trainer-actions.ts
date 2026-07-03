@@ -16,9 +16,14 @@ type Result = { ok: boolean; error?: string; mustChangePassword?: boolean };
 
 export async function ownerSignup(username: string, password: string): Promise<Result> {
   const admin = createSupabaseAdmin();
-  // 부트스트랩 전용: 이미 대표가 있으면 자가가입 거부. 단일 스튜디오라 누구나 공동대표로
-  // 탈취하는 것을 막는다(대표 추가는 강사 초대/직접 DB로만).
-  const { count } = await admin.from("trainers").select("id", { count: "exact", head: true }).eq("role", "owner");
+  // 부트스트랩 전용: 실제 스튜디오 대표(개발자 관리용 admin 대표 제외)가 이미 있으면 자가가입 거부.
+  // 개발자 관리 대표(bootstrap_admin=true)는 카운트에서 빼므로 진짜 대표 1명은 가입할 수 있고,
+  // 그 뒤론 URL을 아는 누군가가 공동대표로 탈취하는 것을 막는다(추가 대표는 강사 초대/직접 DB로만).
+  const { count } = await admin
+    .from("trainers")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "owner")
+    .eq("bootstrap_admin", false);
   if ((count ?? 0) > 0) return { ok: false, error: "이미 대표 계정이 있어요. 대표에게 강사 초대를 요청하세요." };
   const uname = username.trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,20}$/.test(uname)) return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };

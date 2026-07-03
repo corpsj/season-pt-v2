@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { monthBoundsFromKst, weekBoundsFromKst, monthLabelFromKst } from "./kst-bounds";
 
 /** Shared server-side data helpers for the Supabase-backed repository. */
-export { getTrainerContext, getMemberContext, ownerExists } from "@/lib/auth/context";
+export { getTrainerContext, getMemberContext, studioOwnerExists } from "@/lib/auth/context";
 
 /** Service-role client (server only). Scoping is enforced in code via the auth context. */
 export const sb = createSupabaseAdmin();

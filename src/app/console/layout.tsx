@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { getTrainerContext, ownerExists } from "@/lib/data/db";
+import { getTrainerContext, studioOwnerExists } from "@/lib/data/db";
 import { sb } from "@/lib/data/db";
 import { getChatUnread } from "@/lib/data/groups/chat";
 import { getRetention } from "@/lib/data/groups/perf-retention";
@@ -19,8 +19,8 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   // Not signed in (or signed in as a non-owner) → show the login screen instead of the
   // dashboard. Children (the section pages) are not rendered, so their getters never run.
   if (!t || t.role !== "owner") {
-    // 대표 계정이 아직 없으면(부트스트랩) 대표 회원가입 진입점을 함께 노출.
-    const showOwnerSignup = !t && !(await ownerExists());
+    // 실제 대표가 아직 없으면(개발자 관리 대표 제외) 대표 회원가입 진입점을 함께 노출.
+    const showOwnerSignup = !t && !(await studioOwnerExists());
     return <ConsoleLogin notOwner={!!t} showOwnerSignup={showOwnerSignup} />;
   }
 
