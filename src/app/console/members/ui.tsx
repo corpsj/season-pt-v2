@@ -11,7 +11,7 @@ import { listMemberMeals } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
-import { createMember } from "@/lib/data/groups/owner-ops-actions";
+import { createMember, deleteMember } from "@/lib/data/groups/owner-ops-actions";
 import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
@@ -64,7 +64,7 @@ export function MembersClient({
   const [files, setFiles] = useState<MemberFileView[]>(initialFiles);
   const [meals, setMeals] = useState<MealLog[]>(initialMeals);
   const [, startLoad] = useTransition();
-  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team">(null);
+  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team" | "delete">(null);
   const [busy, setBusy] = useState(false);
 
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
@@ -182,6 +182,18 @@ export function MembersClient({
     setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
     router.refresh();
     if (r.memberId) select(r.memberId);
+  }
+  async function doDelete() {
+    if (busy || !selectedId) return;
+    setBusy(true);
+    const r = await deleteMember(selectedId);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
+    toast("회원을 삭제했어요");
+    setModal(null);
+    setSelectedId(null);
+    setDetail(null);
+    router.refresh();
   }
 
   const d = detail;
@@ -345,6 +357,18 @@ export function MembersClient({
               ) : (
                 <div className="px-0.5 text-[12px] font-medium text-[#B3AA9C]">아직 이력이 없어요</div>
               )}
+
+              {/* 회원 완전 삭제 — 탈퇴와 별도의 영구 삭제 */}
+              <div className="mt-[18px] border-t border-[rgba(75,59,46,0.08)] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setModal("delete")}
+                  className="flex items-center gap-1.5 text-[12.5px] font-semibold text-terracotta transition hover:opacity-80"
+                >
+                  <Icon name="circle-close" size={15} />
+                  회원 완전 삭제
+                </button>
+              </div>
             </>
           ) : (
             <div className="py-16 text-center text-[14px] font-medium text-[#A89F92]">회원을 선택하세요</div>
@@ -516,6 +540,20 @@ export function MembersClient({
           <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">환불 수단</div>
           <MethodPicker value={refundMethod} onChange={setRefundMethod} />
           <div className="mt-4 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3"><Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" /><span className="text-[12px] font-medium leading-relaxed text-[#766D60]">환불 시 회원권은 즉시 종료되고 매출 내역에 기록돼요.</span></div>
+        </ConsoleModal>
+      ) : null}
+
+      {modal === "delete" && d ? (
+        <ConsoleModal
+          title="회원 완전 삭제"
+          onClose={() => setModal(null)}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><button onClick={doDelete} disabled={busy} className="flex-[1.6] rounded-[12px] bg-terracotta py-[11px] text-[14px] font-semibold text-white transition hover:brightness-105 disabled:opacity-50">완전 삭제</button></>}
+        >
+          <MemberStripe d={d} />
+          <p className="text-[13.5px] leading-relaxed text-[#766D60]">
+            <b className="text-ink">{d.name}</b> 회원을 삭제할까요? 회원권·결제·출석·기록·사진·식단이 모두 영구 삭제돼요. <b className="text-terracotta">되돌릴 수 없어요.</b>
+          </p>
+          <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3"><Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" /><span className="text-[12px] font-medium leading-relaxed text-[#766D60]">이용을 멈추되 기록을 남기려면 삭제 대신 &lsquo;탈퇴&rsquo; 처리를 쓰세요(모바일 회원 상세).</span></div>
         </ConsoleModal>
       ) : null}
     </>
