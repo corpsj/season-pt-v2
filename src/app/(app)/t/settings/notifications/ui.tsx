@@ -35,7 +35,7 @@ export function NotificationsClient({ settings }: { settings: StudioSettings }) 
     setBusy(true);
     const res = await updateNotifications(state);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요", "error");
     toast("알림 설정을 저장했어요");
   }
 
@@ -76,7 +76,7 @@ export function NotificationsClient({ settings }: { settings: StudioSettings }) 
       </Body>
 
       <Footer>
-        <PrimaryButton icon="check-bold" onClick={save} disabled={busy}>
+        <PrimaryButton icon="check-bold" onClick={save} pending={busy}>
           저장하기
         </PrimaryButton>
       </Footer>

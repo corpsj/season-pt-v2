@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { memberLogin } from "@/lib/auth/member-actions";
@@ -29,7 +29,13 @@ export default function MemberLoginPage() {
   }
 
   return (
-    <div className="scr flex min-h-0 flex-1 flex-col">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="scr flex min-h-0 flex-1 flex-col"
+    >
       <Body pad="form">
         <div className="mb-6 flex items-center">
           <BackButton fallback="/" />
@@ -42,13 +48,7 @@ export default function MemberLoginPage() {
 
         <div className="mt-7 flex flex-col gap-3.5">
           <Field icon="mobile" label="휴대폰 (아이디)">
-            <TextInput
-              type="tel"
-              inputMode="numeric"
-              placeholder="010-2345-6789"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <PhoneInput placeholder="010-2345-6789" value={phone} onValueChange={setPhone} />
           </Field>
           <Field icon="lock" label="생년월일 6자리 (비밀번호)" hint="YYMMDD">
             <TextInput
@@ -72,13 +72,13 @@ export default function MemberLoginPage() {
       </Body>
 
       <Footer pad="form" className="flex flex-col gap-3">
-        <PrimaryButton onClick={submit} disabled={pending}>
+        <PrimaryButton type="submit" pending={pending}>
           로그인
         </PrimaryButton>
         <p className="mx-auto text-[12.5px] font-medium text-muted2">
           비밀번호는 로그인 후 마이페이지에서 변경할 수 있어요.
         </p>
       </Footer>
-    </div>
+    </form>
   );
 }

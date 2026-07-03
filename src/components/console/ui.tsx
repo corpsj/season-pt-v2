@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { Spinner } from "@/components/ui/Button";
 
 /* ============================================================
    Console presentational primitives (desktop owner console).
@@ -45,20 +46,22 @@ type BtnBase = {
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  /** 제출 중: 스피너 표시 + 클릭 차단. 라벨은 유지된다. */
+  pending?: boolean;
   className?: string;
   title?: string;
   "aria-label"?: string;
 };
 
-function Btn({ base, icon, children, href, onClick, type = "button", disabled, className = "", title, ...rest }: BtnBase & { base: string }) {
+function Btn({ base, icon, children, href, onClick, type = "button", disabled, pending, className = "", title, ...rest }: BtnBase & { base: string }) {
   const cls = `${base} ${className}`;
   const inner = (
     <>
-      {icon ? <Icon name={icon} size={16} /> : null}
+      {pending ? <Spinner size={16} /> : icon ? <Icon name={icon} size={16} /> : null}
       {children}
     </>
   );
-  if (href) {
+  if (href && !pending) {
     return (
       <Link href={href} className={cls} title={title} {...rest}>
         {inner}
@@ -66,7 +69,7 @@ function Btn({ base, icon, children, href, onClick, type = "button", disabled, c
     );
   }
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cls} title={title} {...rest}>
+    <button type={type} onClick={onClick} disabled={disabled || pending} aria-busy={pending || undefined} className={cls} title={title} {...rest}>
       {inner}
     </button>
   );

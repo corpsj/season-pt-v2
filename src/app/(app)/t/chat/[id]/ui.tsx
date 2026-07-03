@@ -75,11 +75,11 @@ export function ChatRoomClient({ room }: { room: ChatRoomView }) {
         });
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        showToast(res.error ?? "전송에 실패했어요.");
+        showToast(res.error ?? "전송에 실패했어요.", "error");
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showToast("전송에 실패했어요.");
+      showToast("전송에 실패했어요.", "error");
     }
   }
 

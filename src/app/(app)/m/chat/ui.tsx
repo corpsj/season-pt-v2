@@ -90,11 +90,11 @@ export function MemberChatClient({
         });
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        showToast(res.error ?? "메시지를 보내지 못했어요");
+        showToast(res.error ?? "메시지를 보내지 못했어요", "error");
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      showToast("메시지를 보내지 못했어요");
+      showToast("메시지를 보내지 못했어요", "error");
     }
   }
 

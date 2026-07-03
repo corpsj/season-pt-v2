@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -22,7 +22,7 @@ export function StaffInviteClient() {
     const res = await addInstructor(name, phone);
     setPending(false);
     if (!res.ok || !res.id) {
-      toast(res.error ?? "강사 등록에 실패했어요");
+      toast(res.error ?? "강사 등록에 실패했어요", "error");
       return;
     }
     toast("강사를 등록했어요");
@@ -47,13 +47,7 @@ export function StaffInviteClient() {
             <TextInput placeholder="정하늘" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field icon="phone" label="연락처 (선택)">
-            <TextInput
-              type="tel"
-              inputMode="tel"
-              placeholder="010-0000-0000"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
           </Field>
         </div>
 
@@ -65,7 +59,7 @@ export function StaffInviteClient() {
       </Body>
 
       <Footer>
-        <PrimaryButton icon="person-plus" onClick={onSubmit} disabled={pending}>
+        <PrimaryButton icon="person-plus" onClick={onSubmit} pending={pending}>
           강사 등록
         </PrimaryButton>
       </Footer>

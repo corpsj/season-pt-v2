@@ -61,7 +61,7 @@ export function ScheduleEditModal({
     const slots = Object.entries(dayTimes).map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }));
     const r = await setMemberSchedule(memberId, slots);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요", "error");
     toast(r.warn ?? "정기 일정을 변경했어요");
     await onDone();
     onClose();
@@ -76,7 +76,7 @@ export function ScheduleEditModal({
       footer={
         <>
           <OBtn className="flex-1" onClick={onClose}>취소</OBtn>
-          <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || loading} onClick={save}>저장</PBtn>
+          <PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={loading} onClick={save}>저장</PBtn>
         </>
       }
     >

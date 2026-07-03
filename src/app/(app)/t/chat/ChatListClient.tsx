@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { pollChatThreads } from "@/lib/data/groups/chat-actions";
 import { usePolling } from "@/lib/hooks/usePolling";
 import type { ChatThreadView } from "@/lib/types";
@@ -17,6 +18,10 @@ export function ChatListClient({ initial }: { initial: ChatThreadView[] }) {
       // transient failure — keep current list, retry next tick
     }
   }, 5000);
+
+  if (threads.length === 0) {
+    return <EmptyState icon="message" title="아직 대화가 없어요" desc="회원 상세 화면의 메시지 버튼으로 대화를 시작할 수 있어요." />;
+  }
 
   return (
     <div className="flex flex-col">

@@ -61,7 +61,7 @@ export function MembershipClient({
     const res = await issueMembership(id, effectiveSelected, discountLabel);
     if (!res.ok) {
       setPending(false);
-      toast(res.error ?? "회원권 발급에 실패했어요");
+      toast(res.error ?? "회원권 발급에 실패했어요", "error");
       return;
     }
     router.push(`/t/payment?member=${id}`);
@@ -141,7 +141,7 @@ export function MembershipClient({
       </Body>
 
       <Footer>
-        <PrimaryButton icon="ticket-fill" onClick={onIssue}>
+        <PrimaryButton icon="ticket-fill" onClick={onIssue} pending={pending}>
           발급하고 결제 기록
         </PrimaryButton>
       </Footer>

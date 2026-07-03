@@ -129,7 +129,7 @@ export default function ProposeClient({
                 ? new Date(`${customDate}T${customTime}:00+09:00`).toISOString()
                 : null;
             if (customIso && customIso <= new Date().toISOString()) {
-              toast("지난 시간은 제안할 수 없어요");
+              toast("지난 시간은 제안할 수 없어요", "error");
               return;
             }
             const slotsIso = [
@@ -143,7 +143,7 @@ export default function ProposeClient({
               reason === "직접 입력" ? reasonText.trim() || undefined : reason ?? undefined,
             );
             if (!r.ok) {
-              toast(r.error ?? "요청 전송에 실패했어요");
+              toast(r.error ?? "요청 전송에 실패했어요", "error");
               return;
             }
             toast("변경 요청을 보냈어요");

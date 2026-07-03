@@ -37,7 +37,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
   async function submit() {
     if (busy) return;
     const amt = amount.replace(/[^\d]/g, "");
-    if (!amt) return toast("금액을 입력해주세요");
+    if (!amt) return toast("금액을 입력해주세요", "error");
     setBusy(true);
     const r = await addExpense({
       category: category as (typeof CATS)[number]["v"],
@@ -47,7 +47,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
       trainerId: category === "labor" && trainerId ? trainerId : undefined,
     });
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "지출 추가에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "지출 추가에 실패했어요", "error");
     toast("지출을 추가했어요");
     setOpen(false); reset(); router.refresh();
   }
@@ -57,7 +57,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
     setBusy(true);
     const r = await deleteExpense(del.id);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
     toast("지출을 삭제했어요");
     setDel(null); router.refresh();
   }
@@ -103,7 +103,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
         <ConsoleModal
           title="지출 추가"
           onClose={() => setOpen(false)}
-          footer={<><OBtn className="flex-1" onClick={() => setOpen(false)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={submit}>추가</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setOpen(false)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={submit}>추가</PBtn></>}
         >
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">분류</div>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className={`mb-3.5 ${FIELD}`}>
@@ -111,7 +111,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
           </select>
 
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">금액</div>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" placeholder="₩ 금액" className={`mb-3.5 ${FIELD}`} />
+          <input value={amount ? Number(amount.replace(/[^\d]/g, "")).toLocaleString("ko-KR") : ""} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, "").slice(0, 12))} inputMode="numeric" placeholder="₩ 금액" className={`mb-3.5 ${FIELD}`} />
 
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">날짜</div>
           <input type="date" value={spentAt} onChange={(e) => setSpentAt(e.target.value)} className={`mb-3.5 ${FIELD}`} />

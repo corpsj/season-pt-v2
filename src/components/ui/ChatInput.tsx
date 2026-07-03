@@ -14,16 +14,11 @@ export function ChatInput({
   const ready = value.trim().length > 0;
   return (
     <div className="flex flex-none items-center gap-2 border-t border-ink/[0.06] px-3 pt-2 pb-[max(12px,var(--safe-b))]">
-      <button
-        type="button"
-        aria-label="첨부"
-        className="tappable flex h-[38px] w-[38px] flex-none items-center justify-center rounded-full border border-ink/[0.08] bg-card text-[#9a917f]"
-      >
-        <Icon name="plus" size={18} />
-      </button>
+      {/* 첨부(+) 버튼은 기능이 생기면 복원 — 동작 없는 버튼은 신뢰를 깎는다 */}
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        enterKeyHint="send"
         onKeyDown={(e) => {
           if (e.key === "Enter" && ready) onSend();
         }}

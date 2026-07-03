@@ -33,7 +33,13 @@ export function TrainerLoginForm({ showOwnerSignup }: { showOwnerSignup: boolean
   }
 
   return (
-    <div className="scr flex min-h-0 flex-1 flex-col">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="scr flex min-h-0 flex-1 flex-col"
+    >
       <Body pad="form">
         <div className="mb-6 flex items-center">
           <BackButton fallback="/" />
@@ -91,10 +97,10 @@ export function TrainerLoginForm({ showOwnerSignup }: { showOwnerSignup: boolean
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton onClick={submit} disabled={pending}>
+        <PrimaryButton type="submit" pending={pending}>
           로그인
         </PrimaryButton>
       </Footer>
-    </div>
+    </form>
   );
 }

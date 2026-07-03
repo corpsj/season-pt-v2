@@ -50,7 +50,7 @@ export function MemberReceiveClient({
     if (!requestId || pending) return;
     setPending(true);
     const res = await rejectMemberChange(requestId);
-    toast(res.ok ? "요청을 거절했어요" : res.error ?? "처리하지 못했어요");
+    toast(res.ok ? "요청을 거절했어요" : (res.error ?? "처리하지 못했어요"), res.ok ? "success" : "error");
     router.push("/m");
   }
 
@@ -121,10 +121,10 @@ export function MemberReceiveClient({
       <Footer>
         <div className="flex flex-col gap-2.5">
           {isCancel ? (
-            <PrimaryButton onClick={accept}>수업 취소 수락</PrimaryButton>
+            <PrimaryButton onClick={accept} pending={pending}>수업 취소 수락</PrimaryButton>
           ) : (
             <>
-              <PrimaryButton onClick={accept}>이 시간으로 변경</PrimaryButton>
+              <PrimaryButton onClick={accept} pending={pending}>이 시간으로 변경</PrimaryButton>
               <OutlineButton href={view.sessionId ? `/m/request?s=${view.sessionId}` : "/m/request"}>다른 시간 제안</OutlineButton>
             </>
           )}

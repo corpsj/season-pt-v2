@@ -1,3 +1,6 @@
+"use client";
+import { createContext, useCallback, useContext, useState } from "react";
+
 type Tone = "default" | "warn";
 
 export function ConfirmDialog({
@@ -32,6 +35,9 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="w-full max-w-[320px] rounded-[20px] border border-ink/[0.055] bg-card shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
@@ -57,5 +63,55 @@ export function ConfirmDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+type ConfirmOpts = {
+  title: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: Tone;
+};
+
+const ConfirmContext = createContext<(opts: ConfirmOpts) => Promise<boolean>>(() =>
+  Promise.resolve(false)
+);
+
+/** window.confirm 대체: `const ok = await confirm({ title, tone: "warn" })`.
+ *  네이티브 브라우저 다이얼로그 대신 앱 스타일 ConfirmDialog를 띄운다. */
+export function useConfirm() {
+  return useContext(ConfirmContext);
+}
+
+export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const [req, setReq] = useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
+
+  const confirm = useCallback(
+    (opts: ConfirmOpts) => new Promise<boolean>((resolve) => setReq({ ...opts, resolve })),
+    []
+  );
+
+  function settle(v: boolean) {
+    req?.resolve(v);
+    setReq(null);
+  }
+
+  return (
+    <ConfirmContext.Provider value={confirm}>
+      {children}
+      {req ? (
+        <ConfirmDialog
+          open
+          title={req.title}
+          description={req.description}
+          confirmLabel={req.confirmLabel ?? "확인"}
+          cancelLabel={req.cancelLabel}
+          tone={req.tone}
+          onConfirm={() => settle(true)}
+          onCancel={() => settle(false)}
+        />
+      ) : null}
+    </ConfirmContext.Provider>
   );
 }

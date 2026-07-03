@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, PBtn, OBtn, GBtn, ConsoleModal, won, pill } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
 import { recordPayment, addRevenue, deletePayment } from "@/lib/data/groups/owner-ops-actions";
@@ -33,6 +34,7 @@ function classify(it: RevenueEntry): Kind {
 export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<Kind>("all");
   const [busy, setBusy] = useState<string | null>(null);
   const list = items.filter((it) => filter === "all" || classify(it) === filter);
@@ -40,11 +42,11 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
   // 결제 오입력 정정(감사 H2): 환불(음수) 행은 회원권 환불로만 처리하므로 삭제 버튼을 숨긴다.
   async function remove(id: string) {
     if (busy) return;
-    if (typeof window !== "undefined" && !window.confirm("이 결제 기록을 삭제할까요? 매출·미수금·손익에서 제외돼요.")) return;
+    if (!(await confirm({ title: "이 결제 기록을 삭제할까요?", description: "매출·미수금·손익에서 제외돼요.", confirmLabel: "삭제", tone: "warn" }))) return;
     setBusy(id);
     const r = await deletePayment(id);
     setBusy(null);
-    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
     toast("결제 기록을 삭제했어요");
     router.refresh();
   }
@@ -52,11 +54,11 @@ export function RevenueLedger({ items }: { items: RevenueEntry[] }) {
   // 환불 취소(undoRefund, 감사3 #8): 오클릭·금액 오류로 환불한 건을 스냅샷 상태로 복원.
   async function undo(membershipId: string, rowId: string) {
     if (busy) return;
-    if (typeof window !== "undefined" && !window.confirm("이 환불을 취소하고 회원권을 복원할까요?")) return;
+    if (!(await confirm({ title: "이 환불을 취소할까요?", description: "회원권이 환불 전 상태로 복원돼요.", confirmLabel: "환불 취소" }))) return;
     setBusy(rowId);
     const r = await undoRefund(membershipId);
     setBusy(null);
-    toast(r.ok ? "환불을 취소했어요. 정기 수업이 있었다면 스케줄을 다시 켜주세요." : (r.error ?? "취소에 실패했어요"));
+    toast(r.ok ? "환불을 취소했어요. 정기 수업이 있었다면 스케줄을 다시 켜주세요." : (r.error ?? "취소에 실패했어요"), r.ok ? "success" : "error");
     if (r.ok) router.refresh();
   }
 
@@ -168,17 +170,17 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
     if (busy) return;
     const amt = amount.replace(/[^\d]/g, "");
     if (mode === "member") {
-      if (!memberId) return toast("회원을 선택해주세요");
+      if (!memberId) return toast("회원을 선택해주세요", "error");
       setBusy(true);
       const r = await recordPayment({ memberId, method, amount: amt ? Number(amt) : undefined });
       setBusy(false);
-      if (!r.ok) return toast(r.error ?? "결제 기록에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "결제 기록에 실패했어요", "error");
     } else {
-      if (!amt) return toast("금액을 입력해주세요");
+      if (!amt) return toast("금액을 입력해주세요", "error");
       setBusy(true);
       const r = await addRevenue({ amount: Number(amt), method, note: note.trim() || undefined });
       setBusy(false);
-      if (!r.ok) return toast(r.error ?? "매출 추가에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "매출 추가에 실패했어요", "error");
     }
     toast("결제를 기록했어요");
     setOpen(false);
@@ -207,6 +209,7 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
               <div className="mb-2 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] px-3 py-2.5">
                 <Icon name="search" size={16} className="text-[#A89F92]" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름 검색" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+                {q ? <button type="button" onClick={() => setQ("")} aria-label="지우기" className="flex-none text-[#C2BAAD]"><Icon name="circle-close" size={16} /></button> : null}
               </div>
               <div className="mb-3.5 max-h-[180px] overflow-y-auto rounded-[12px] border border-[rgba(75,59,46,0.08)]">
                 {list.map((m) => (
@@ -227,7 +230,7 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
           )}
 
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">금액 {mode === "member" ? "(비우면 회원권 정가)" : ""}</div>
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="numeric" placeholder="₩ 금액" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+          <input value={amount ? Number(amount.replace(/[^\d]/g, "")).toLocaleString("ko-KR") : ""} onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, "").slice(0, 12))} inputMode="numeric" placeholder="₩ 금액" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
 
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
           <div className="flex gap-2">

@@ -11,6 +11,7 @@ import { TextInput } from "@/components/ui/Field";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { createTeamSchedule, setTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -39,6 +40,7 @@ export function TeamCreateClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const isEdit = mode === "edit";
   const [q, setQ] = useState("");
   const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -68,9 +70,9 @@ export function TeamCreateClient({
 
   async function submit() {
     if (pending) return;
-    if (!isEdit && !partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요");
+    if (!isEdit && !partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요", "error");
     const slots = selectedDays.map((wd) => ({ weekday: wd, hour: dayTimes[wd].hour, minute: dayTimes[wd].minute }));
-    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요");
+    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요", "error");
     setPending(true);
     const res = isEdit
       ? await setTeamSchedule(memberId, slots)
@@ -86,12 +88,12 @@ export function TeamCreateClient({
 
   async function dissolve() {
     if (pending) return;
-    if (!confirm("2:1 팀을 해제할까요? 앞으로의 팀 수업이 모두 삭제돼요 (지난·처리된 수업은 그대로예요).")) return;
+    if (!(await confirm({ title: "2:1 팀을 해제할까요?", description: "앞으로의 팀 수업이 모두 삭제돼요. 지난·처리된 수업은 그대로예요.", confirmLabel: "해제", tone: "warn" }))) return;
     setPending(true);
     const res = await setTeamSchedule(memberId, []);
     if (!res.ok) {
       setPending(false);
-      return toast(res.error ?? "팀 해제에 실패했어요");
+      return toast(res.error ?? "팀 해제에 실패했어요", "error");
     }
     toast("팀을 해제했어요 — 각 회원의 정기 일정을 다시 설정해주세요");
     router.push(`/t/members/${memberId}`);
@@ -215,12 +217,12 @@ export function TeamCreateClient({
             <OutlineButton onClick={dissolve} disabled={pending} className="flex-1">
               팀 해제
             </OutlineButton>
-            <PrimaryButton icon="check" onClick={submit} disabled={pending || selectedDays.length === 0} className="flex-[1.6]">
+            <PrimaryButton icon="check" onClick={submit} pending={pending} disabled={selectedDays.length === 0} className="flex-[1.6]">
               일정 저장
             </PrimaryButton>
           </div>
         ) : (
-          <PrimaryButton icon="persons" onClick={submit} disabled={pending || !partnerId || selectedDays.length === 0}>
+          <PrimaryButton icon="persons" onClick={submit} pending={pending} disabled={!partnerId || selectedDays.length === 0}>
             2:1 팀 만들기
           </PrimaryButton>
         )}

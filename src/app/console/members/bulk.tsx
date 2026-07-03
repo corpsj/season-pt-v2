@@ -5,6 +5,7 @@ import { OBtn, PBtn, ConsoleModal } from "@/components/console/ui";
 import { bulkAddMembers } from "@/lib/data/groups/carryover-actions";
 import type { CarrySlot } from "@/lib/import/carryover-parse";
 import type { Gender, MembershipProduct } from "@/lib/types";
+import { formatPhone } from "@/components/ui/Field";
 
 /* ============================================================
    한꺼번에 입력 — 콘솔에서 여러 회원을 스프레드시트처럼 직접 입력해
@@ -146,7 +147,7 @@ export function BulkAddModal({
               {errCount > 0 ? <span className="text-terracotta"> · 오류 {errCount}명</span> : null}
             </span>
             <OBtn onClick={onClose}>취소</OBtn>
-            <PBtn icon="check-bold" disabled={busy || validCount === 0 || errCount > 0} onClick={submit}>
+            <PBtn icon="check-bold" pending={busy} disabled={validCount === 0 || errCount > 0} onClick={submit}>
               {busy ? "등록 중…" : `${validCount}명 등록`}
             </PBtn>
           </>
@@ -199,7 +200,7 @@ export function BulkAddModal({
               return (
                 <div key={r.key} className={COLS}>
                   <input value={r.name} onChange={(e) => patch(r.key, { name: e.target.value })} placeholder="이름" className={`${CELL} ${b("name")}`} />
-                  <input value={r.phone} onChange={(e) => patch(r.key, { phone: e.target.value })} placeholder="010-0000-0000" inputMode="tel" className={`${CELL} ${b("phone")}`} />
+                  <input value={formatPhone(r.phone)} onChange={(e) => patch(r.key, { phone: e.target.value.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" inputMode="tel" className={`${CELL} ${b("phone")}`} />
                   <input value={r.birth} onChange={(e) => patch(r.key, { birth: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" inputMode="numeric" className={`${CELL} ${b("birth")}`} />
                   {/* 성별: 클릭마다 여↔남 토글 — 드롭다운보다 빠름 */}
                   <button

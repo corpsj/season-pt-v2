@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
 import { confirmAttendance, revertAttendance, sendPropose, moveSessionDirect } from "@/lib/data/groups/scheduling-actions";
 import { loadSessionSignature, loadProposeSlots, loadStudioWeek } from "@/lib/data/groups/console-actions";
@@ -31,6 +32,7 @@ function statusPill(c: StudioClass) {
 export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMonth; initialWeek: StudioCalendarWeek }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [view, setView] = useState<"month" | "week">("week");
   const [week, setWeek] = useState(initialWeek);
   const [weekBusy, setWeekBusy] = useState(false);
@@ -68,7 +70,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
 
   async function openSignature(c: StudioClass) {
     const url = await loadSessionSignature(c.sessionId);
-    if (!url) return toast("서명을 불러오지 못했어요");
+    if (!url) return toast("서명을 불러오지 못했어요", "error");
     setSig({ member: c.member, url });
   }
 
@@ -76,7 +78,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
     setBusy(c.sessionId);
     const view = await loadProposeSlots(c.sessionId);
     setBusy(null);
-    if (!view) return toast("조율 정보를 불러오지 못했어요");
+    if (!view) return toast("조율 정보를 불러오지 못했어요", "error");
     setPropMode("direct");
     setPicked(new Set());
     setReason(null);
@@ -93,11 +95,11 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
   async function submitDirect() {
     if (!prop || !directDate || !directTime) return;
     const iso = new Date(`${directDate}T${directTime}:00+09:00`).toISOString();
-    if (iso <= new Date().toISOString()) return toast("지난 시간으로는 옮길 수 없어요");
+    if (iso <= new Date().toISOString()) return toast("지난 시간으로는 옮길 수 없어요", "error");
     setSending(true);
     const r = await moveSessionDirect(prop.c.sessionId, iso);
     setSending(false);
-    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요", "error");
     toast("일정을 변경했어요");
     setProp(null);
     setDay(null);
@@ -119,7 +121,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
     if (!prop) return;
     const customIso =
       customDate && customTime ? new Date(`${customDate}T${customTime}:00+09:00`).toISOString() : null;
-    if (customIso && customIso <= new Date().toISOString()) return toast("지난 시간은 제안할 수 없어요");
+    if (customIso && customIso <= new Date().toISOString()) return toast("지난 시간은 제안할 수 없어요", "error");
     const slotsIso = [
       ...prop.view.slots.filter((s) => picked.has(s.id)).map((s) => s.iso),
       ...(customIso ? [customIso] : []),
@@ -132,7 +134,7 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
       reason === "직접 입력" ? reasonText.trim() || undefined : reason ?? undefined,
     );
     setSending(false);
-    if (!r.ok) return toast(r.error ?? "요청 전송에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "요청 전송에 실패했어요", "error");
     toast("일정 조율 요청을 보냈어요");
     setProp(null);
   }
@@ -150,18 +152,18 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
     setBusy(id);
     const r = await confirmAttendance(id, action);
     setBusy(null);
-    if (!r.ok) return toast(r.error ?? "처리에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "처리에 실패했어요", "error");
     toast(action === "attend" ? "출석 처리했어요" : "노쇼 처리했어요");
     await refreshActive();
   }
 
   // 오처리 정정(감사 H1): 예정 상태로 되돌리고 차감된 회차를 복구한다.
   async function revert(id: string) {
-    if (typeof window !== "undefined" && !window.confirm("이 수업 처리를 되돌릴까요? 차감된 회차가 복구되고 '예정' 상태로 돌아가요.")) return;
+    if (!(await confirm({ title: "이 수업 처리를 되돌릴까요?", description: "차감된 회차가 복구되고 '예정' 상태로 돌아가요.", confirmLabel: "되돌리기" }))) return;
     setBusy(id);
     const r = await revertAttendance(id);
     setBusy(null);
-    if (!r.ok) return toast(r.error ?? "되돌리지 못했어요");
+    if (!r.ok) return toast(r.error ?? "되돌리지 못했어요", "error");
     toast("처리를 되돌렸어요");
     await refreshActive();
   }

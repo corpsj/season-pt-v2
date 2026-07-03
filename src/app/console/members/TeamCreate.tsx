@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ConsoleModal, OBtn, PBtn } from "@/components/console/ui";
 import { createTeamSchedule, setTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
 import { loadTeamCandidates, loadMemberSchedule } from "@/lib/data/groups/console-actions";
@@ -54,13 +55,13 @@ export function TeamCreateModal({
 
   async function save() {
     if (busy) return;
-    if (!partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요");
+    if (!partnerId) return toast("팀을 이룰 파트너 회원을 선택해주세요", "error");
     const slots = Object.entries(dayTimes).map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }));
-    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요");
+    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요", "error");
     setBusy(true);
     const r = await createTeamSchedule({ memberIds: [memberId, partnerId], slots });
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "팀 만들기에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "팀 만들기에 실패했어요", "error");
     toast(r.warn ?? "2:1 팀을 만들었어요");
     await onDone();
     onClose();
@@ -73,7 +74,7 @@ export function TeamCreateModal({
       footer={
         <>
           <OBtn className="flex-1" onClick={onClose}>취소</OBtn>
-          <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || !partnerId || selectedDays.length === 0} onClick={save}>팀 만들기</PBtn>
+          <PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={!partnerId || selectedDays.length === 0} onClick={save}>팀 만들기</PBtn>
         </>
       }
     >
@@ -216,6 +217,7 @@ export function TeamEditModal({
   onDone: () => void | Promise<void>;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dayTimes, setDayTimes] = useState<DayTimes>({});
@@ -238,11 +240,11 @@ export function TeamEditModal({
   async function save() {
     if (busy) return;
     const slots = Object.entries(dayTimes).map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }));
-    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요 (팀을 끝내려면 '팀 해제')");
+    if (slots.length === 0) return toast("수업 요일·시간을 하나 이상 선택해주세요 (팀을 끝내려면 '팀 해제')", "error");
     setBusy(true);
     const r = await setTeamSchedule(memberId, slots);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "일정 변경에 실패했어요", "error");
     toast(r.warn ?? "팀 일정을 변경했어요");
     await onDone();
     onClose();
@@ -250,11 +252,11 @@ export function TeamEditModal({
 
   async function dissolve() {
     if (busy) return;
-    if (!confirm("2:1 팀을 해제할까요? 앞으로의 팀 수업이 모두 삭제돼요 (지난·처리된 수업은 그대로예요).")) return;
+    if (!(await confirm({ title: "2:1 팀을 해제할까요?", description: "앞으로의 팀 수업이 모두 삭제돼요. 지난·처리된 수업은 그대로예요.", confirmLabel: "해제", tone: "warn" }))) return;
     setBusy(true);
     const r = await setTeamSchedule(memberId, []);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "팀 해제에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "팀 해제에 실패했어요", "error");
     toast("팀을 해제했어요 — 각 회원의 정기 일정을 다시 설정해주세요");
     await onDone();
     onClose();
@@ -267,7 +269,7 @@ export function TeamEditModal({
       footer={
         <>
           <OBtn className="flex-1" onClick={dissolve}>팀 해제</OBtn>
-          <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy || loading} onClick={save}>저장</PBtn>
+          <PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={loading} onClick={save}>저장</PBtn>
         </>
       }
     >

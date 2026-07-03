@@ -2,9 +2,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { addInstructor, issueInstructorLogin, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword } from "@/lib/auth/trainer-actions";
 import { setTrainerRates } from "@/lib/data/groups/settlement-actions";
+import { formatPhone } from "@/components/ui/Field";
 
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
   return (
@@ -30,11 +32,11 @@ export function AddTrainerButton() {
 
   async function submit() {
     if (busy) return;
-    if (!name.trim()) return toast("강사 이름을 입력해주세요");
+    if (!name.trim()) return toast("강사 이름을 입력해주세요", "error");
     setBusy(true);
     const r = await addInstructor(name, phone);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "등록에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
     toast("강사를 등록했어요");
     setOpen(false);
     router.refresh();
@@ -48,14 +50,14 @@ export function AddTrainerButton() {
           title="강사 추가"
           onClose={() => setOpen(false)}
           footer={
-            <><OBtn className="flex-1" onClick={() => setOpen(false)}>취소</OBtn><PBtn icon="person-plus" className="flex-[1.6]" disabled={busy} onClick={submit}>강사 등록</PBtn></>
+            <><OBtn className="flex-1" onClick={() => setOpen(false)}>취소</OBtn><PBtn icon="person-plus" className="flex-[1.6]" pending={busy} onClick={submit}>강사 등록</PBtn></>
           }
         >
           <p className="mb-3 text-[13px] leading-relaxed text-[#8A8175]">이름만 등록하면 바로 회원의 담당 강사로 지정할 수 있어요. 로그인 아이디는 준비되면 강사 상세에서 발급하세요.</p>
           <Label>강사 이름</Label>
           <Input value={name} onChange={setName} placeholder="이름" />
           <Label>연락처 (선택)</Label>
-          <Input value={phone} onChange={setPhone} placeholder="010-0000-0000" />
+          <Input value={formatPhone(phone)} onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 11))} placeholder="010-0000-0000" />
         </ConsoleModal>
       ) : null}
     </>
@@ -78,6 +80,7 @@ export function TrainerActions({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [modal, setModal] = useState<null | "edit" | "delete" | "issue">(null);
   const [busy, setBusy] = useState(false);
   const [eName, setEName] = useState(name);
@@ -92,11 +95,11 @@ export function TrainerActions({
 
   async function issueLogin() {
     if (busy) return;
-    if (!issueUsername.trim()) return toast("아이디를 입력해주세요");
+    if (!issueUsername.trim()) return toast("아이디를 입력해주세요", "error");
     setBusy(true);
     const r = await issueInstructorLogin(id, issueUsername);
     setBusy(false);
-    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요");
+    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요", "error");
     setIssued({ username: r.username, tempPassword: r.tempPassword });
     router.refresh();
   }
@@ -105,7 +108,7 @@ export function TrainerActions({
     setBusy(true);
     const r = await updateInstructor(id, eName, ePhone);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "수정에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "수정에 실패했어요", "error");
     toast("정보를 수정했어요");
     setModal(null);
     router.refresh();
@@ -114,24 +117,24 @@ export function TrainerActions({
     setBusy(true);
     const r = await setInstructorActive(id, !active);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "상태 변경에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "상태 변경에 실패했어요", "error");
     toast(active ? "비활성화했어요" : "활성화했어요");
     router.refresh();
   }
   async function resetPassword() {
     if (busy) return;
-    if (!confirm(`${name} 강사의 비밀번호를 초기화할까요? 임시 비밀번호가 발급돼요.`)) return;
+    if (!(await confirm({ title: `${name} 강사의 비밀번호를 초기화할까요?`, description: "임시 비밀번호가 발급돼요.", confirmLabel: "초기화" }))) return;
     setBusy(true);
     const r = await resetInstructorPassword(id);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요", "error");
     setTempPw(r.tempPassword ?? null);
   }
   async function remove() {
     setBusy(true);
     const r = await deleteInstructor(id);
     setBusy(false);
-    if (!r.ok) { setModal(null); return toast(r.error ?? "삭제에 실패했어요"); }
+    if (!r.ok) { setModal(null); return toast(r.error ?? "삭제에 실패했어요", "error"); }
     toast("강사를 삭제했어요");
     router.push("/console/trainers");
     router.refresh();
@@ -166,11 +169,11 @@ export function TrainerActions({
       ) : null}
 
       {modal === "edit" ? (
-        <ConsoleModal title="강사 정보 수정" onClose={() => setModal(null)} footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={save}>저장</PBtn></>}>
+        <ConsoleModal title="강사 정보 수정" onClose={() => setModal(null)} footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={save}>저장</PBtn></>}>
           <Label>이름</Label>
           <Input value={eName} onChange={setEName} />
           <Label>연락처</Label>
-          <Input value={ePhone} onChange={setEPhone} placeholder="010-0000-0000" />
+          <Input value={formatPhone(ePhone)} onChange={(v) => setEPhone(v.replace(/\D/g, "").slice(0, 11))} placeholder="010-0000-0000" />
         </ConsoleModal>
       ) : null}
 
@@ -182,7 +185,7 @@ export function TrainerActions({
             issued ? (
               <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>확인</PBtn>
             ) : (
-              <><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="lock-fill" className="flex-[1.6]" disabled={busy} onClick={issueLogin}>발급하기</PBtn></>
+              <><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="lock-fill" className="flex-[1.6]" pending={busy} onClick={issueLogin}>발급하기</PBtn></>
             )
           }
         >
@@ -231,7 +234,7 @@ export function TrainerRates({ id, rate1on1, rate2on1 }: { id: string; rate1on1:
     setBusy(true);
     const res = await setTrainerRates(id, Number(r1 || 0), Number(r2 || 0));
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "단가 저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "단가 저장에 실패했어요", "error");
     toast("회당 단가를 저장했어요");
     router.refresh();
   }
@@ -243,7 +246,7 @@ export function TrainerRates({ id, rate1on1, rate2on1 }: { id: string; rate1on1:
           <div className="text-[13.5px] font-bold text-ink">회당 단가</div>
           <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">정산 지급액 계산 기준 · 변경은 다음 진행분부터 적용</div>
         </div>
-        <PBtn icon="check-bold" className="!px-4" disabled={busy || !dirty} onClick={save}>저장</PBtn>
+        <PBtn icon="check-bold" className="!px-4" pending={busy} disabled={!dirty} onClick={save}>저장</PBtn>
       </div>
       <div className="grid grid-cols-2 gap-2.5">
         <RateField label="1:1 회당" value={r1} onChange={setR1} />

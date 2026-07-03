@@ -28,7 +28,7 @@ export function MemberMealsSection({ initial }: { initial: MealLog[] }) {
     setBusy(true);
     try {
       const r = await addMealFeedback(id, draft);
-      if (!r.ok) return toast(r.error ?? "저장에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "저장에 실패했어요", "error");
       toast("피드백을 남겼어요");
       setOpenId(null);
       router.refresh();

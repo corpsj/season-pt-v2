@@ -26,7 +26,7 @@ export function MemberNotifClient({ view }: { view: MemberNotifView }) {
       setGroups((prev) =>
         prev.map((g) => ({ ...g, items: g.items.map((it) => (it.key === key ? { ...it, on: !next } : it)) }))
       );
-      toast(res.error ?? "설정을 바꾸지 못했어요");
+      toast(res.error ?? "설정을 바꾸지 못했어요", "error");
     }
   }
 

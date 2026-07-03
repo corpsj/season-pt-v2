@@ -48,7 +48,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
         router.push("/t/inbox");
         router.refresh();
       } else {
-        toast(r.error ?? "취소 요청에 실패했어요");
+        toast(r.error ?? "취소 요청에 실패했어요", "error");
       }
     });
   }
@@ -267,7 +267,7 @@ function MealCard({ meal }: { meal: SessionMealItem }) {
     setBusy(true);
     try {
       const r = await addMealFeedback(meal.id, draft);
-      if (!r.ok) return toast(r.error ?? "저장에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "저장에 실패했어요", "error");
       toast("피드백을 남겼어요");
       setOpen(false);
       router.refresh();

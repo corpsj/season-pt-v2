@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
 import { logMeal, deleteMeal, loadMoreMeals } from "@/lib/data/groups/meals-actions";
 import type { MealLog } from "@/lib/data/groups/meals";
@@ -36,6 +37,7 @@ export function MemberMealsClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
   const [, refresh] = useTransition();
   const [open, setOpen] = useState(initialOpen);
@@ -85,7 +87,7 @@ export function MemberMealsClient({
   }
   async function submit() {
     if (busy) return;
-    if (!photo && !memo.trim()) return toast("사진이나 메모를 입력해주세요");
+    if (!photo && !memo.trim()) return toast("사진이나 메모를 입력해주세요", "error");
     setBusy(true);
     try {
       const fd = new FormData();
@@ -93,24 +95,24 @@ export function MemberMealsClient({
       if (memo.trim()) fd.set("memo", memo.trim());
       if (photo) fd.set("photo", await downscaleImage(photo), "meal.jpg");
       const r = await logMeal(fd);
-      if (!r.ok) return toast(r.error ?? "기록에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "기록에 실패했어요", "error");
       toast("식단을 기록했어요");
       reset();
       resetPaging();
       refresh(() => router.refresh());
     } catch {
-      toast("기록에 실패했어요");
+      toast("기록에 실패했어요", "error");
     } finally {
       setBusy(false);
     }
   }
   async function remove(id: string) {
-    if (!confirm("이 식단 기록을 삭제할까요? 사진과 선생님 피드백도 함께 삭제되고 되돌릴 수 없어요.")) return;
+    if (!(await confirm({ title: "이 식단 기록을 삭제할까요?", description: "사진과 선생님 피드백도 함께 삭제되고 되돌릴 수 없어요.", confirmLabel: "삭제", tone: "warn" }))) return;
     if (busy) return;
     setBusy(true);
     try {
       const r = await deleteMeal(id);
-      if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
       resetPaging();
       refresh(() => router.refresh());
     } finally {

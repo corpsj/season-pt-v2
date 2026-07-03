@@ -5,7 +5,7 @@ import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
 import { Switch } from "@/components/ui/Switch";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
@@ -144,16 +144,16 @@ export function ProductsClient({ products, discounts }: { products: MembershipPr
     const price = Number(form.price.replace(/[^\d]/g, ""));
     const unitListPrice = Number(form.unitListPrice.replace(/[^\d]/g, "") || "0");
     const durationDays = Number(form.durationDays);
-    if (!form.name.trim()) return toast("상품명을 입력해주세요");
-    if (!sessions || sessions <= 0) return toast("회차를 입력해주세요");
-    if (!price || price <= 0) return toast("가격을 입력해주세요");
-    if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요");
+    if (!form.name.trim()) return toast("상품명을 입력해주세요", "error");
+    if (!sessions || sessions <= 0) return toast("회차를 입력해주세요", "error");
+    if (!price || price <= 0) return toast("가격을 입력해주세요", "error");
+    if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요", "error");
 
     setBusy(true);
     const input = { name: form.name.trim(), sessions, price, unitListPrice, durationDays };
     const res = editId === "new" ? await createProduct(input) : await updateProduct(editId!, input);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요", "error");
     toast(editId === "new" ? "상품을 추가했어요" : "상품을 수정했어요");
     closeForm();
     router.refresh();
@@ -164,7 +164,7 @@ export function ProductsClient({ products, discounts }: { products: MembershipPr
     setBusy(true);
     const res = await setProductActive(editId, !editActive);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     setEditActive(!editActive);
     toast(!editActive ? "판매를 재개했어요" : "보관함으로 옮겼어요");
     router.refresh();
@@ -337,10 +337,10 @@ export function ProductsClient({ products, discounts }: { products: MembershipPr
                 <TextInput inputMode="numeric" placeholder="10" value={form.sessions} onChange={num("sessions")} />
               </Field>
               <Field icon="coins" label="가격 (원)">
-                <TextInput inputMode="numeric" placeholder="750000" value={form.price} onChange={num("price")} />
+                <MoneyInput placeholder="750,000" value={form.price} onValueChange={(d) => patchForm({ price: d })} />
               </Field>
               <Field icon="coins" label="1회 정상가 (환불 기준, 원)">
-                <TextInput inputMode="numeric" placeholder="100000" value={form.unitListPrice} onChange={num("unitListPrice")} />
+                <MoneyInput placeholder="100,000" value={form.unitListPrice} onValueChange={(d) => patchForm({ unitListPrice: d })} />
               </Field>
               <Field icon="calendar" label="유효기간 (일)">
                 <TextInput inputMode="numeric" placeholder="90" value={form.durationDays} onChange={num("durationDays")} />
@@ -362,7 +362,7 @@ export function ProductsClient({ products, discounts }: { products: MembershipPr
             </div>
             <div className="mt-4 flex gap-2.5">
               <OutlineButton onClick={closeForm} className="flex-1">취소</OutlineButton>
-              <PrimaryButton onClick={onSave} disabled={busy} className="flex-[1.6]">저장</PrimaryButton>
+              <PrimaryButton onClick={onSave} pending={busy} className="flex-[1.6]">저장</PrimaryButton>
             </div>
           </div>
         </div>
@@ -394,11 +394,11 @@ function DiscountsSection({ discounts }: { discounts: DiscountItem[] }) {
   async function onSave() {
     if (busy) return;
     const nm = name.trim();
-    if (!nm) return toast("자격 이름을 입력해주세요");
+    if (!nm) return toast("자격 이름을 입력해주세요", "error");
     setBusy(true);
     const res = editId === "new" ? await createDiscount({ name: nm }) : await updateDiscount(editId!, { name: nm });
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요", "error");
     toast(editId === "new" ? "자격을 추가했어요" : "자격을 수정했어요");
     closeForm();
     router.refresh();
@@ -409,7 +409,7 @@ function DiscountsSection({ discounts }: { discounts: DiscountItem[] }) {
     setBusy(true);
     const res = await setDiscountActive(editId, !editActive);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     setEditActive(!editActive);
     toast(!editActive ? "다시 사용해요" : "사용을 중지했어요");
     router.refresh();
@@ -476,7 +476,7 @@ function DiscountsSection({ discounts }: { discounts: DiscountItem[] }) {
             </div>
             <div className="mt-4 flex gap-2.5">
               <OutlineButton onClick={closeForm} className="flex-1">취소</OutlineButton>
-              <PrimaryButton onClick={onSave} disabled={busy} className="flex-[1.6]">저장</PrimaryButton>
+              <PrimaryButton onClick={onSave} pending={busy} className="flex-[1.6]">저장</PrimaryButton>
             </div>
           </div>
         </div>

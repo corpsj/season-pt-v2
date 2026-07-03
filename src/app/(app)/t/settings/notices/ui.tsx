@@ -10,6 +10,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { createNotice, deleteNotice } from "@/lib/data/groups/owner-ops-actions";
 import type { OwnerNotice } from "@/lib/data/groups/owner-ops";
 
@@ -18,6 +19,7 @@ type Cat = "important" | "ops" | "facility";
 export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -25,7 +27,7 @@ export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
 
   function add() {
     if (!title.trim()) {
-      toast("제목을 입력해주세요");
+      toast("제목을 입력해주세요", "error");
       return;
     }
     startTransition(async () => {
@@ -35,14 +37,15 @@ export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
         setBody("");
         toast("공지를 게시했어요");
         router.refresh();
-      } else toast(r.error ?? "작성에 실패했어요");
+      } else toast(r.error ?? "작성에 실패했어요", "error");
     });
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
+    if (!(await confirm({ title: "이 공지를 삭제할까요?", description: "회원에게 더 이상 보이지 않아요.", confirmLabel: "삭제", tone: "warn" }))) return;
     startTransition(async () => {
       const r = await deleteNotice(id);
-      toast(r.ok ? "삭제했어요" : r.error ?? "삭제에 실패했어요");
+      toast(r.ok ? "삭제했어요" : (r.error ?? "삭제에 실패했어요"), r.ok ? "success" : "error");
       if (r.ok) router.refresh();
     });
   }
@@ -72,7 +75,7 @@ export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
             <Field label="내용">
               <TextInput value={body} onChange={(e) => setBody(e.target.value)} placeholder="자세한 안내 (선택)" />
             </Field>
-            <PrimaryButton icon="plus" onClick={add} disabled={pending}>
+            <PrimaryButton icon="plus" onClick={add} pending={pending}>
               회원 앱에 게시
             </PrimaryButton>
           </div>

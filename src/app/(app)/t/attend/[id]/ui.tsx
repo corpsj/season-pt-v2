@@ -25,6 +25,7 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
   const [method, setMethod] = useState<Method>("attend");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const needSign = method === "attend" && !signature;
 
   const deducted = shouldDeduct(method, t.scheduledAt, settings);
@@ -139,7 +140,7 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
       </Body>
 
       <Footer>
-        <PrimaryButton icon="check-bold" disabled={needSign} onClick={() => setConfirmOpen(true)}>
+        <PrimaryButton icon="check-bold" pending={busy} disabled={needSign} onClick={() => setConfirmOpen(true)}>
           {cta}
         </PrimaryButton>
         <p className="mt-2.5 text-center text-[12px] font-medium text-muted3">
@@ -153,10 +154,13 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
         description={confirmDesc}
         confirmLabel="확인"
         onConfirm={async () => {
+          if (busy) return;
           setConfirmOpen(false);
+          setBusy(true);
           const r = await confirmAttendance(t.sessionId, method, method === "attend" ? signature ?? undefined : undefined);
+          setBusy(false);
           if (!r.ok) {
-            toast(r.error ?? "처리에 실패했어요");
+            toast(r.error ?? "처리에 실패했어요", "error");
             return;
           }
           toast(method === "cancel" ? "수업 취소를 기록했어요" : method === "noshow" ? "노쇼로 처리했어요" : "출석을 기록했어요");

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, MoneyInput, PhoneInput, TextInput } from "@/components/ui/Field";
 import { Kicker } from "@/components/ui/Kicker";
 import { Banner } from "@/components/ui/Banner";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
@@ -117,7 +117,7 @@ export function MemberRegisterClient({
     });
     if (!res.ok) {
       setPending(false);
-      toast(res.error ?? "회원 등록에 실패했어요");
+      toast(res.error ?? "회원 등록에 실패했어요", "error");
       return;
     }
     toast("회원을 등록했어요");
@@ -186,13 +186,7 @@ export function MemberRegisterClient({
             <TextInput placeholder="윤서아" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field icon="phone" label="연락처 (아이디)">
-            <TextInput
-              type="tel"
-              inputMode="tel"
-              placeholder="010-0000-0000"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
           </Field>
           <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
             <TextInput
@@ -391,12 +385,11 @@ export function MemberRegisterClient({
                 onChange={setPayMethod}
               />
             </div>
-            <Field icon="coins" label="금액">
-              <TextInput
-                inputMode="numeric"
-                placeholder={String(selectedProductData.price)}
+            <Field icon="coins" label="금액" hint="원">
+              <MoneyInput
+                placeholder={selectedProductData.price.toLocaleString("ko-KR")}
                 value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
+                onValueChange={setPayAmount}
               />
             </Field>
             <Field icon="calendar" label="결제일">
@@ -413,7 +406,7 @@ export function MemberRegisterClient({
       </Body>
 
       <Footer>
-        <PrimaryButton icon="person-plus" onClick={onSubmit}>
+        <PrimaryButton icon="person-plus" pending={pending} onClick={onSubmit}>
           회원 등록
         </PrimaryButton>
       </Footer>

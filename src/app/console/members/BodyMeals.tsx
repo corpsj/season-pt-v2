@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { MicroLabel } from "@/components/console/ui";
 import { downscaleImage } from "@/lib/media/downscale";
 import { validateUpload } from "@/lib/media/upload-guard";
@@ -28,6 +29,7 @@ export function BodyRecordSection({
   onChanged: () => void | Promise<void>;
 }) {
   const toast = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function upload(kind: "photo" | "inbody", file: File) {
@@ -43,11 +45,11 @@ export function BodyRecordSection({
       fd.set("kind", kind);
       fd.set("file", blob, kind === "photo" ? "photo.jpg" : file.name);
       const r = await uploadMemberFile(fd);
-      if (!r.ok) return toast(r.error ?? "업로드에 실패했어요");
+      if (!r.ok) return toast(r.error ?? "업로드에 실패했어요", "error");
       toast(kind === "photo" ? "사진을 저장했어요" : "인바디를 저장했어요");
       await onChanged();
     } catch {
-      toast("업로드에 실패했어요");
+      toast("업로드에 실패했어요", "error");
     } finally {
       setBusy(false);
     }
@@ -55,10 +57,11 @@ export function BodyRecordSection({
 
   async function remove(id: string) {
     if (busy) return;
+    if (!(await confirm({ title: "이 파일을 삭제할까요?", description: "삭제하면 되돌릴 수 없어요.", confirmLabel: "삭제", tone: "warn" }))) return;
     setBusy(true);
     const r = await deleteMemberFile(id);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "삭제에 실패했어요", "error");
     await onChanged();
   }
 
@@ -183,7 +186,7 @@ export function MealsSection({ meals, onChanged }: { meals: MealLog[]; onChanged
     setBusy(true);
     const r = await addMealFeedback(id, draft);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "저장에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "저장에 실패했어요", "error");
     toast("피드백을 남겼어요");
     setOpenId(null);
     await onChanged();

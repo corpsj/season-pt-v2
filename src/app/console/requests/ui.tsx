@@ -25,7 +25,7 @@ export function RequestsClient({ pending, done }: { pending: StudioInboxItem[]; 
     setBusy(id);
     const r = kind === "accept" ? await acceptRequest(id) : await rejectRequest(id);
     setBusy(null);
-    if (!r.ok) return toast(r.error ?? "처리에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "처리에 실패했어요", "error");
     toast(kind === "accept" ? "승인했어요" : "거절했어요");
     router.refresh();
   }
@@ -66,7 +66,7 @@ export function RequestsClient({ pending, done }: { pending: StudioInboxItem[]; 
               </div>
               <div className="flex gap-2.5">
                 <OBtn className="flex-1" disabled={busy === r.id} onClick={() => act(r.id, "reject")}>거절</OBtn>
-                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy === r.id} onClick={() => act(r.id, "accept")}>승인</PBtn>
+                <PBtn icon="check-bold" className="flex-[1.6]" pending={busy === r.id} onClick={() => act(r.id, "accept")}>승인</PBtn>
               </div>
             </Card>
           ))}

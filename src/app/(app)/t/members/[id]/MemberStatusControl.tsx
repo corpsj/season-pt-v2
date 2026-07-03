@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
 
 type Status = "active" | "rest" | "inactive";
@@ -15,15 +16,25 @@ const OPTS: { v: Status; l: string }[] = [
 export function MemberStatusControl({ memberId, status }: { memberId: string; status: Status }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
 
   async function change(next: Status) {
     if (busy || next === status) return;
-    if (next === "inactive" && typeof window !== "undefined" && !confirm("이 회원을 탈퇴 처리할까요? 정기 수업(1:1)이 자동으로 중지돼요.")) return;
+    if (
+      next === "inactive" &&
+      !(await confirm({
+        title: "이 회원을 탈퇴 처리할까요?",
+        description: "정기 수업(1:1)이 자동으로 중지돼요.",
+        confirmLabel: "탈퇴 처리",
+        tone: "warn",
+      }))
+    )
+      return;
     setBusy(true);
     const r = await setMemberStatus(memberId, next);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "상태 변경에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "상태 변경에 실패했어요", "error");
     toast(next === "active" ? "활성으로 전환했어요" : next === "rest" ? "휴면으로 전환했어요" : "탈퇴 처리했어요");
     router.refresh();
   }

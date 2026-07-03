@@ -8,11 +8,12 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Kicker } from "@/components/ui/Kicker";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
 import { Switch } from "@/components/ui/Switch";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   updateInstructor,
   setInstructorActive,
@@ -32,6 +33,7 @@ export function StaffDetailClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone);
   const [active, setActive] = useState(member.status === "active");
@@ -46,7 +48,7 @@ export function StaffDetailClient({
     setBusy(true);
     const r = await issueInstructorLogin(member.id, issueUsername);
     setBusy(false);
-    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요");
+    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요", "error");
     setIssued({ username: r.username, tempPassword: r.tempPassword });
     toast("로그인 계정을 발급했어요");
     router.refresh();
@@ -54,7 +56,7 @@ export function StaffDetailClient({
 
   async function onReassign() {
     if (busy || !reassignTo) return;
-    if (typeof window !== "undefined" && !confirm(`${member.name} 강사의 담당 회원·정기수업·채팅을 선택한 강사에게 이관할까요?`)) return;
+    if (!(await confirm({ title: `${member.name} 강사의 회원을 이관할까요?`, description: "담당 회원·정기수업·채팅이 선택한 강사에게 넘어가요.", confirmLabel: "이관" }))) return;
     setBusy(true);
     const res = await reassignMembers(member.id, reassignTo);
     setBusy(false);
@@ -63,7 +65,7 @@ export function StaffDetailClient({
       setReassignTo("");
       router.refresh();
     } else {
-      toast(res.error ?? "이관에 실패했어요");
+      toast(res.error ?? "이관에 실패했어요", "error");
     }
   }
 
@@ -79,7 +81,7 @@ export function StaffDetailClient({
     setBusy(true);
     const res = await updateInstructor(member.id, name, phone);
     setBusy(false);
-    toast(res.ok ? "강사 정보를 저장했어요" : res.error ?? "저장에 실패했어요");
+    toast(res.ok ? "강사 정보를 저장했어요" : (res.error ?? "저장에 실패했어요"), res.ok ? "success" : "error");
     if (res.ok) router.refresh();
   }
 
@@ -91,7 +93,7 @@ export function StaffDetailClient({
     setBusy(false);
     if (!res.ok) {
       setActive(!next);
-      toast(res.error ?? "상태 변경에 실패했어요");
+      toast(res.error ?? "상태 변경에 실패했어요", "error");
     } else {
       toast(next ? "강사를 활성화했어요" : "강사를 비활성화했어요");
       router.refresh();
@@ -100,17 +102,17 @@ export function StaffDetailClient({
 
   async function onResetPassword() {
     if (busy) return;
-    if (!confirm(`${member.name} 강사의 비밀번호를 초기화할까요? 임시 비밀번호가 발급돼요.`)) return;
+    if (!(await confirm({ title: `${member.name} 강사의 비밀번호를 초기화할까요?`, description: "임시 비밀번호가 발급돼요.", confirmLabel: "초기화" }))) return;
     setBusy(true);
     const r = await resetInstructorPassword(member.id);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "초기화에 실패했어요", "error");
     setTempPw(r.tempPassword ?? null);
   }
 
   async function onDelete() {
     if (busy) return;
-    if (!confirm(`${member.name} 강사를 삭제할까요? 계정이 완전히 삭제돼요.`)) return;
+    if (!(await confirm({ title: `${member.name} 강사를 삭제할까요?`, description: "계정이 완전히 삭제돼요. 되돌릴 수 없어요.", confirmLabel: "삭제", tone: "warn" }))) return;
     setBusy(true);
     const res = await deleteInstructor(member.id);
     setBusy(false);
@@ -119,7 +121,7 @@ export function StaffDetailClient({
       router.push("/t/staff");
       router.refresh();
     } else {
-      toast(res.error ?? "삭제에 실패했어요");
+      toast(res.error ?? "삭제에 실패했어요", "error");
     }
   }
 
@@ -176,13 +178,7 @@ export function StaffDetailClient({
                 <TextInput value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
               <Field icon="phone" label="연락처">
-                <TextInput
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="010-0000-0000"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
+                <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
               </Field>
             </div>
             <div className="mt-3.5">

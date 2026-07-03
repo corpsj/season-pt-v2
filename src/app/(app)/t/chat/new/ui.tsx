@@ -20,9 +20,9 @@ export function NewChatClient({ members }: { members: ChatMemberPick[] }) {
         router.push(`/t/chat/${res.threadId}`);
         return;
       }
-      showToast(res.error ?? "대화를 시작할 수 없어요.");
+      showToast(res.error ?? "대화를 시작할 수 없어요.", "error");
     } catch {
-      showToast("대화를 시작할 수 없어요.");
+      showToast("대화를 시작할 수 없어요.", "error");
     }
     setBusy(null);
   }

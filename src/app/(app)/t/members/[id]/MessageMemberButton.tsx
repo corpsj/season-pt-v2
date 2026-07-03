@@ -19,15 +19,15 @@ export function MessageMemberButton({ memberId }: { memberId: string }) {
         router.push(`/t/chat/${res.threadId}`);
         return;
       }
-      showToast(res.error ?? "대화를 시작할 수 없어요.");
+      showToast(res.error ?? "대화를 시작할 수 없어요.", "error");
     } catch {
-      showToast("대화를 시작할 수 없어요.");
+      showToast("대화를 시작할 수 없어요.", "error");
     }
     setBusy(false);
   }
 
   return (
-    <OutlineButton icon="message" onClick={go} disabled={busy}>
+    <OutlineButton icon="message" onClick={go} pending={busy}>
       메시지
     </OutlineButton>
   );

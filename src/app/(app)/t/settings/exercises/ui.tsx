@@ -44,7 +44,7 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
     setBusy(true);
     const res = await createExercise(name, newCategory || undefined);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "추가에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "추가에 실패했어요", "error");
     setNewName("");
     setNewCategory("");
     toast("종목이 추가되었어요");
@@ -57,7 +57,7 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
     setBusy(true);
     const res = await renameExercise(id, name, editCategory || undefined);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "이름 변경에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "이름 변경에 실패했어요", "error");
     setItems((prev) =>
       prev.map((e) => (e.id === id ? { ...e, name, category: editCategory || null } : e))
     );
@@ -70,7 +70,7 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
     const res = await setExerciseActive(id, active);
     if (!res.ok) {
       setItems((prev) => prev.map((e) => (e.id === id ? { ...e, active: !active } : e)));
-      toast(res.error ?? "상태 변경에 실패했어요");
+      toast(res.error ?? "상태 변경에 실패했어요", "error");
     }
   }
 

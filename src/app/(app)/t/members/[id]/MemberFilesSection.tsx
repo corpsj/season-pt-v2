@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
 import { validateUpload } from "@/lib/media/upload-guard";
 import { uploadMemberFile, deleteMemberFile } from "@/lib/data/groups/member-files-actions";
@@ -29,6 +30,7 @@ export function MemberFilesSection({
   const cfg = CFG[kind];
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [, refresh] = useTransition();
@@ -50,13 +52,13 @@ export function MemberFilesSection({
       if (takenAt) fd.set("takenAt", takenAt);
       fd.set("file", blob, kind === "photo" ? "photo.jpg" : file.name);
       const r = await uploadMemberFile(fd);
-      if (!r.ok) toast(r.error ?? "업로드에 실패했어요");
+      if (!r.ok) toast(r.error ?? "업로드에 실패했어요", "error");
       else {
         toast(kind === "photo" ? "사진을 저장했어요" : "인바디를 저장했어요");
         refresh(() => router.refresh());
       }
     } catch {
-      toast("업로드에 실패했어요");
+      toast("업로드에 실패했어요", "error");
     } finally {
       setBusy(false);
     }
@@ -64,10 +66,11 @@ export function MemberFilesSection({
 
   async function onDelete(id: string) {
     if (busy) return;
+    if (!(await confirm({ title: "이 파일을 삭제할까요?", description: "삭제하면 되돌릴 수 없어요.", confirmLabel: "삭제", tone: "warn" }))) return;
     setBusy(true);
     try {
       const r = await deleteMemberFile(id);
-      if (!r.ok) toast(r.error ?? "삭제에 실패했어요");
+      if (!r.ok) toast(r.error ?? "삭제에 실패했어요", "error");
       else refresh(() => router.refresh());
     } finally {
       setBusy(false);

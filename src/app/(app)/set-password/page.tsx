@@ -87,7 +87,7 @@ export default function SetPasswordPage() {
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton icon="check-bold" onClick={submit} disabled={pending}>
+        <PrimaryButton icon="check-bold" onClick={submit} pending={pending}>
           비밀번호 설정 완료
         </PrimaryButton>
       </Footer>

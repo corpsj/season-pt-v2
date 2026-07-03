@@ -5,7 +5,7 @@ import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -33,11 +33,11 @@ export function RevenueClient({ view }: { view: RevenueView }) {
   async function submit() {
     if (busy) return;
     const won = Number(amount.replace(/[^\d]/g, ""));
-    if (!won) return toast("금액을 입력해주세요");
+    if (!won) return toast("금액을 입력해주세요", "error");
     setBusy(true);
     const res = await addRevenue({ amount: won, method, paidAt: date, note });
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "추가에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "추가에 실패했어요", "error");
     toast("매출을 추가했어요");
     setOpen(false);
     setAmount("");
@@ -92,8 +92,8 @@ export function RevenueClient({ view }: { view: RevenueView }) {
         {/* add toggle */}
         {open ? (
           <Card className="mb-4 flex flex-col gap-3 p-4">
-            <Field icon="coins" label="금액">
-              <TextInput inputMode="numeric" placeholder="50000" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <Field icon="coins" label="금액" hint="원">
+              <MoneyInput placeholder="50,000" value={amount} onValueChange={setAmount} />
             </Field>
             <Field icon="calendar" label="날짜">
               <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />

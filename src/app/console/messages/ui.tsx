@@ -89,11 +89,11 @@ export function MessagesClient({
         });
       } else {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
-        toast(res.error ?? "전송에 실패했어요");
+        toast(res.error ?? "전송에 실패했어요", "error");
       }
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      toast("전송에 실패했어요");
+      toast("전송에 실패했어요", "error");
     }
   }
 
@@ -109,7 +109,7 @@ export function MessagesClient({
         /* ignore */
       }
     } else {
-      toast(r.error ?? "대화를 시작할 수 없어요");
+      toast(r.error ?? "대화를 시작할 수 없어요", "error");
     }
   }
 
@@ -195,6 +195,7 @@ export function MessagesClient({
           <div className="mb-2 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] px-3 py-2.5">
             <Icon name="search" size={16} className="text-[#A89F92]" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="회원 이름 검색" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+            {q ? <button type="button" onClick={() => setQ("")} aria-label="지우기" className="flex-none text-[#C2BAAD]"><Icon name="circle-close" size={16} /></button> : null}
           </div>
           <div className="max-h-[300px] overflow-y-auto rounded-[12px] border border-[rgba(75,59,46,0.08)]">
             {pickList.map((m) => (

@@ -21,11 +21,11 @@ export function SettingsClient({ products, discounts, settings }: { products: Me
 
   async function savePolicy(next: { noshowDeducts: boolean; cancelCutoffHours: number }) {
     const r = await updatePolicy(next);
-    if (!r.ok) toast(r.error ?? "저장에 실패했어요");
+    if (!r.ok) toast(r.error ?? "저장에 실패했어요", "error");
   }
   async function saveNotif(next: { notifExpiry: boolean; notifSession: boolean; notifPayment: boolean }) {
     const r = await updateNotifications(next);
-    if (!r.ok) toast(r.error ?? "저장에 실패했어요");
+    if (!r.ok) toast(r.error ?? "저장에 실패했어요", "error");
   }
 
   return (
@@ -210,16 +210,16 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
     const price = Number(digits(form.price));
     const unitListPrice = Number(digits(form.unitListPrice) || "0");
     const durationDays = Number(form.durationDays);
-    if (!form.name.trim()) return toast("상품명을 입력해주세요");
-    if (!sessions || sessions <= 0) return toast("회차를 입력해주세요");
-    if (!price || price <= 0) return toast("가격을 입력해주세요");
-    if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요");
+    if (!form.name.trim()) return toast("상품명을 입력해주세요", "error");
+    if (!sessions || sessions <= 0) return toast("회차를 입력해주세요", "error");
+    if (!price || price <= 0) return toast("가격을 입력해주세요", "error");
+    if (!durationDays || durationDays <= 0) return toast("유효기간을 입력해주세요", "error");
 
     setBusy(true);
     const input = { name: form.name.trim(), sessions, price, unitListPrice, durationDays };
     const res = editId === "new" ? await createProduct(input) : await updateProduct(editId!, input);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요", "error");
     toast(editId === "new" ? "상품을 추가했어요" : "상품을 수정했어요");
     router.refresh();
     if (cont && editId === "new") {
@@ -235,7 +235,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
     setBusy(true);
     const res = await setProductActive(editId, !editActive);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     setEditActive(!editActive);
     toast(!editActive ? "판매를 재개했어요" : "보관함으로 옮겼어요");
     router.refresh();
@@ -358,13 +358,13 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             editId === "new" ? (
               <>
                 <OBtn className="flex-1" onClick={closeForm}>취소</OBtn>
-                <OBtn className="flex-1" disabled={busy} onClick={() => save(true)}>저장 후 계속</OBtn>
-                <PBtn icon="check-bold" className="flex-1" disabled={busy} onClick={() => save(false)}>저장</PBtn>
+                <OBtn className="flex-1" pending={busy} onClick={() => save(true)}>저장 후 계속</OBtn>
+                <PBtn icon="check-bold" className="flex-1" pending={busy} onClick={() => save(false)}>저장</PBtn>
               </>
             ) : (
               <>
                 <OBtn className="flex-1" onClick={closeForm}>취소</OBtn>
-                <PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={() => save(false)}>저장</PBtn>
+                <PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={() => save(false)}>저장</PBtn>
               </>
             )
           }
@@ -459,11 +459,11 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
   async function save() {
     if (busy) return;
     const nm = name.trim();
-    if (!nm) return toast("자격 이름을 입력해주세요");
+    if (!nm) return toast("자격 이름을 입력해주세요", "error");
     setBusy(true);
     const res = editId ? await updateDiscount(editId, { name: nm }) : await createDiscount({ name: nm });
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "저장에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "저장에 실패했어요", "error");
     toast(editId ? "자격을 수정했어요" : "자격을 추가했어요");
     reset();
     router.refresh();
@@ -474,7 +474,7 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
     setBusy(true);
     const res = await setDiscountActive(d.id, !d.active);
     setBusy(false);
-    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요");
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     if (editId === d.id) reset(); // 수정 중이던 항목을 중지하면 폼 초기화
     toast(!d.active ? "다시 사용해요" : "사용을 중지했어요");
     router.refresh();
@@ -511,7 +511,7 @@ function DiscountsEditor({ discounts }: { discounts: DiscountItem[] }) {
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="가족 할인" className={INPUT} />
         </div>
         {editId ? <OBtn onClick={reset} disabled={busy}>취소</OBtn> : null}
-        <PBtn icon={editId ? "check-bold" : "plus-bold"} onClick={save} disabled={busy}>{editId ? "저장" : "추가"}</PBtn>
+        <PBtn icon={editId ? "check-bold" : "plus-bold"} onClick={save} pending={busy}>{editId ? "저장" : "추가"}</PBtn>
       </div>
       <div className="mt-2.5 text-[11.5px] font-medium text-[#9A917F]">가격은 &lsquo;특별할인&rsquo; 상품이 담당해요. 여기선 자격 종류만 관리해요.</div>
     </Card>

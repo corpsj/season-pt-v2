@@ -50,14 +50,14 @@ export default function RecordClient({
     try {
       const r = await saveRecord(t.sessionId, exercises, comment || undefined);
       if (!r.ok) {
-        toast(r.error ?? "저장에 실패했어요. 다시 시도해주세요.");
+        toast(r.error ?? "저장에 실패했어요. 다시 시도해주세요.", "error");
         setSaving(false);
         return;
       }
       toast("기록이 저장되었어요");
       router.push(`/t/class/${t.sessionId}`);
     } catch {
-      toast("저장에 실패했어요. 다시 시도해주세요.");
+      toast("저장에 실패했어요. 다시 시도해주세요.", "error");
       setSaving(false);
     }
   };
@@ -154,7 +154,7 @@ export default function RecordClient({
       </Body>
 
       <Footer>
-        <PrimaryButton icon="check-bold" onClick={save} disabled={saving}>
+        <PrimaryButton icon="check-bold" onClick={save} pending={saving}>
           {saving ? "저장 중…" : isEdit ? "수정 저장" : "기록 저장"}
         </PrimaryButton>
       </Footer>

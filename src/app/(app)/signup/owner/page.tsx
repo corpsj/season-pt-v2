@@ -85,7 +85,7 @@ export default function OwnerSignupPage() {
       </Body>
 
       <Footer pad="form">
-        <PrimaryButton onClick={submit} disabled={pending}>
+        <PrimaryButton onClick={submit} pending={pending}>
           대표로 시작하기
         </PrimaryButton>
       </Footer>

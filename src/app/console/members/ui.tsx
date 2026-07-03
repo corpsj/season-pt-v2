@@ -18,6 +18,7 @@ import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
 import { TeamCreateModal, TeamEditModal } from "./TeamCreate";
 import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod, DiscountItem } from "@/lib/types";
+import { formatPhone } from "@/components/ui/Field";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
 const FILTERS: { key: "all" | "expiring" | "active" | "rest"; label: string }[] = [
@@ -111,7 +112,7 @@ export function MembersClient({
     setBusy(true);
     const r = await extendMembership(detail.activeMembershipId);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "연장에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "연장에 실패했어요", "error");
     toast("유효기간을 연장했어요");
     setModal(null);
     await reload();
@@ -130,11 +131,11 @@ export function MembersClient({
   async function doRefund() {
     if (!detail?.activeMembershipId) return;
     const n = Number(refundAmt);
-    if (refundAmt === "" || !Number.isInteger(n) || n < 0) return toast("환불 금액을 확인해주세요");
+    if (refundAmt === "" || !Number.isInteger(n) || n < 0) return toast("환불 금액을 확인해주세요", "error");
     setBusy(true);
     const r = await refundMembership({ membershipId: detail.activeMembershipId, method: refundMethod, amountOverride: n });
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "환불에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "환불에 실패했어요", "error");
     toast("환불을 처리했어요");
     setModal(null);
     await reload();
@@ -155,13 +156,13 @@ export function MembersClient({
   async function doIssue() {
     if (!selectedId || !issueProduct) return;
     const amt = Number(issueAmt);
-    if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요");
+    if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요", "error");
     const disc = discounts.find((x) => x.id === issueDiscountId) ?? (detail?.discount?.id === issueDiscountId ? detail.discount : null);
     const discountLabel = disc ? disc.name : undefined;
     setBusy(true);
     const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt, discountLabel);
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "발급에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "발급에 실패했어요", "error");
     toast("회원권을 발급했어요");
     setModal(null);
     await reload();
@@ -169,10 +170,10 @@ export function MembersClient({
   }
   async function doAdd() {
     if (busy) return;
-    if (!f.name.trim() || !f.phone.trim() || f.birth.replace(/\D/g, "").length !== 6) return toast("이름·연락처·생년월일(6자리)을 입력해주세요");
+    if (!f.name.trim() || !f.phone.trim() || f.birth.replace(/\D/g, "").length !== 6) return toast("이름·연락처·생년월일(6자리)을 입력해주세요", "error");
     if (f.productId) {
       const amt = Number(f.amount);
-      if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요");
+      if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요", "error");
     }
     setBusy(true);
     const r = await createMember({
@@ -186,7 +187,7 @@ export function MembersClient({
       payment: f.productId ? { method: f.method, amount: Number(f.amount) } : undefined,
     });
     setBusy(false);
-    if (!r.ok) return toast(r.error ?? "등록에 실패했어요");
+    if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
     toast("회원을 등록했어요");
     setModal(null);
     setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card", amount: "", discountId: "" });
@@ -370,7 +371,7 @@ export function MembersClient({
           footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" onClick={doAdd}>등록</PBtn></>}
         >
           <ModalField label="이름"><Input value={f.name} onChange={(v) => setF({ ...f, name: v })} placeholder="회원 이름" /></ModalField>
-          <ModalField label="연락처"><Input value={f.phone} onChange={(v) => setF({ ...f, phone: v })} placeholder="010-0000-0000" /></ModalField>
+          <ModalField label="연락처"><Input value={formatPhone(f.phone)} onChange={(v) => setF({ ...f, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
           <div className="grid grid-cols-2 gap-2.5">
             <ModalField label="생년월일 (6자리)"><Input value={f.birth} onChange={(v) => setF({ ...f, birth: v })} placeholder="YYMMDD" /></ModalField>
             <ModalField label="성별">

@@ -49,13 +49,13 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
   async function submit() {
     if (pending) return;
     if (mode === "change" && (!date || !time)) {
-      toast("원하는 날짜와 시간을 선택해주세요");
+      toast("원하는 날짜와 시간을 선택해주세요", "error");
       return;
     }
     if (mode === "change") {
       const iso = kstLocalToISO(date, time);
       if (iso <= new Date().toISOString()) {
-        toast("지난 시간은 선택할 수 없어요");
+        toast("지난 시간은 선택할 수 없어요", "error");
         return;
       }
     }
@@ -63,7 +63,7 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
     const proposedSlots = mode === "change" ? [kstLocalToISO(date, time)] : undefined;
     const res = await sendMemberRequest({ sessionId: view.sessionId, type: mode, proposedSlots });
     if (!res.ok) {
-      toast(res.error ?? "요청을 보내지 못했어요");
+      toast(res.error ?? "요청을 보내지 못했어요", "error");
       setPending(false);
       return;
     }
@@ -177,7 +177,7 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
       </Body>
 
       <Footer>
-        <PrimaryButton icon="send" onClick={submit} disabled={pending}>
+        <PrimaryButton icon="send" onClick={submit} pending={pending}>
           {mode === "change" ? "변경 요청 보내기" : "취소 요청 보내기"}
         </PrimaryButton>
       </Footer>

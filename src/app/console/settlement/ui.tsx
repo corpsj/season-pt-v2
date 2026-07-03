@@ -182,7 +182,7 @@ function ConfirmControl({
         <ConsoleModal
           title="지급 확정"
           onClose={() => setModal(null)}
-          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" disabled={busy} onClick={() => run("confirm")}>지급 확정</PBtn></>}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={() => run("confirm")}>지급 확정</PBtn></>}
         >
           <p className="text-[13.5px] leading-relaxed text-[#766D60]">이 달 정산을 지급 확정할까요? <b className="text-ink">인건비 지출</b>로 반영돼요.</p>
         </ConsoleModal>

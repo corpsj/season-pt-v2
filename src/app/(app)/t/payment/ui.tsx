@@ -6,7 +6,7 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import { PrimaryButton } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -74,7 +74,7 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
   async function onRecord() {
     if (pending) return;
     const hasAny = lines.some((l) => parseAmt(l.amount) > 0);
-    if (!hasAny) { toast("금액을 입력해 주세요"); return; }
+    if (!hasAny) { toast("금액을 입력해 주세요", "error"); return; }
     setPending(true);
     const r = await recordPayments({
       memberId: summary.memberId ?? undefined,
@@ -84,7 +84,7 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
       lines: lines.map((l) => ({ method: l.method, amount: parseAmt(l.amount) })),
     });
     if (!r.ok) {
-      toast(r.error ?? "결제 기록 실패");
+      toast(r.error ?? "결제 기록 실패", "error");
       setPending(false);
       return;
     }
@@ -166,16 +166,13 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
                   )
                 }
               />
-              <Field icon="coins" label="금액">
-                <TextInput
-                  inputMode="numeric"
+              <Field icon="coins" label="금액" hint="원">
+                <MoneyInput
                   placeholder="0"
                   value={line.amount}
-                  onChange={(e) =>
+                  onValueChange={(d) =>
                     setLines((ls) =>
-                      ls.map((l, j) =>
-                        j === i ? { ...l, amount: e.target.value } : l
-                      )
+                      ls.map((l, j) => (j === i ? { ...l, amount: d } : l))
                     )
                   }
                 />
@@ -199,7 +196,7 @@ export function PaymentClient({ summary, discounts }: { summary: PaymentSummary;
       </Body>
 
       <Footer>
-        <PrimaryButton onClick={() => setConfirmOpen(true)}>결제 완료 기록</PrimaryButton>
+        <PrimaryButton pending={pending} onClick={() => setConfirmOpen(true)}>결제 완료 기록</PrimaryButton>
       </Footer>
 
       <ConfirmDialog

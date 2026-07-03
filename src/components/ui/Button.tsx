@@ -10,18 +10,29 @@ type BaseProps = {
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  /** 제출 중: 스피너 표시 + 클릭 차단. 라벨은 유지된다. */
+  pending?: boolean;
   className?: string;
 };
 
-function Base({ children, icon, iconSize = 18, href, onClick, type = "button", disabled, className, base }: BaseProps & { base: string }) {
+export function Spinner({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function Base({ children, icon, iconSize = 18, href, onClick, type = "button", disabled, pending, className, base }: BaseProps & { base: string }) {
   const content = (
     <>
-      {icon ? <Icon name={icon} size={iconSize} /> : null}
+      {pending ? <Spinner size={iconSize} /> : icon ? <Icon name={icon} size={iconSize} /> : null}
       {children}
     </>
   );
   const cls = cn(base, className);
-  if (href && !disabled) {
+  if (href && !disabled && !pending) {
     return (
       <Link href={href} className={cls}>
         {content}
@@ -29,7 +40,13 @@ function Base({ children, icon, iconSize = 18, href, onClick, type = "button", d
     );
   }
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={cn(cls, disabled && "opacity-50")}>
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled || pending}
+      aria-busy={pending || undefined}
+      className={cn(cls, disabled && "opacity-50", pending && "opacity-80")}
+    >
       {content}
     </button>
   );

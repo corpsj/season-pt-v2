@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { OutlineButton, PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
@@ -45,7 +45,7 @@ export function EditMemberButton({
         setOpen(false);
         router.refresh();
       } else {
-        toast(r.error ?? "수정에 실패했어요");
+        toast(r.error ?? "수정에 실패했어요", "error");
       }
     });
   }
@@ -75,11 +75,10 @@ export function EditMemberButton({
                 <TextInput value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
               </Field>
               <Field icon="phone" label="연락처">
-                <TextInput
+                <PhoneInput
                   value={f.phone}
-                  onChange={(e) => setF({ ...f, phone: e.target.value })}
-                  inputMode="numeric"
-                  placeholder="01012345678"
+                  onValueChange={(d) => setF({ ...f, phone: d })}
+                  placeholder="010-0000-0000"
                 />
               </Field>
               <div>
@@ -129,7 +128,7 @@ export function EditMemberButton({
               <OutlineButton onClick={() => setOpen(false)} className="flex-1">
                 취소
               </OutlineButton>
-              <PrimaryButton onClick={save} disabled={pending} className="flex-1">
+              <PrimaryButton onClick={save} pending={pending} className="flex-1">
                 저장
               </PrimaryButton>
             </div>
