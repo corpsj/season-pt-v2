@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { ensureOwner, OWNER_ONLY_ERROR } from "@/lib/auth/guard";
+import { getTrainerContext } from "@/lib/auth/context";
 
 const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 const toEmail = (u: string) => `${u.trim().toLowerCase()}@${DOMAIN}`;
@@ -14,7 +15,7 @@ const genTempPassword = () => Array.from({ length: 8 }, () => ALPHANUM[randomInt
 
 type Result = { ok: boolean; error?: string; mustChangePassword?: boolean };
 
-export async function ownerSignup(username: string, password: string): Promise<Result> {
+export async function ownerSignup(username: string, password: string, name: string): Promise<Result> {
   const admin = createSupabaseAdmin();
   // 부트스트랩 전용: 실제 스튜디오 대표(개발자 관리용 admin 대표 제외)가 이미 있으면 자가가입 거부.
   // 개발자 관리 대표(bootstrap_admin=true)는 카운트에서 빼므로 진짜 대표 1명은 가입할 수 있고,
@@ -28,6 +29,9 @@ export async function ownerSignup(username: string, password: string): Promise<R
   const uname = username.trim().toLowerCase();
   if (!/^[a-z0-9._-]{3,20}$/.test(uname)) return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
   if (!password || password.length < 8) return { ok: false, error: "비밀번호는 8자 이상이어야 해요" };
+  const display = name.trim();
+  if (!display) return { ok: false, error: "이름을 입력해주세요" };
+  if (display.length > 20) return { ok: false, error: "이름은 20자 이하로 입력해주세요" };
   const { data: created, error } = await admin.auth.admin.createUser({
     email: toEmail(uname),
     password,
@@ -37,7 +41,7 @@ export async function ownerSignup(username: string, password: string): Promise<R
   const { error: insErr } = await admin.from("trainers").insert({
     auth_user_id: created.user.id,
     username: uname,
-    display_name: username.trim(),
+    display_name: display,
     role: "owner",
     status: "active",
   });
@@ -47,6 +51,22 @@ export async function ownerSignup(username: string, password: string): Promise<R
   }
   const sb = await createSupabaseServer();
   await sb.auth.signInWithPassword({ email: toEmail(uname), password });
+  return { ok: true };
+}
+
+/** 본인 표시 이름 변경(자기 계정만). 가입 때 이름을 못 받았거나 오타를 고치는 경로. */
+export async function updateMyName(name: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  const display = name.trim();
+  if (!display) return { ok: false, error: "이름을 입력해주세요" };
+  if (display.length > 20) return { ok: false, error: "이름은 20자 이하로 입력해주세요" };
+  const admin = createSupabaseAdmin();
+  const { error } = await admin.from("trainers").update({ display_name: display }).eq("id", t.id);
+  if (error) return { ok: false, error: "이름 변경에 실패했어요" };
+  revalidatePath("/t/settings");
+  revalidatePath("/t");
+  revalidatePath("/console");
   return { ok: true };
 }
 
