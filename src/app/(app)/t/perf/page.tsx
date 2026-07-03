@@ -3,9 +3,11 @@ import Link from "next/link";
 import { Body } from "@/components/shell/Body";
 import { TabBar } from "@/components/shell/TabBar";
 import { Icon, type IconName } from "@/components/ui/icon";
+import { Banner } from "@/components/ui/Banner";
 import { trainerTabs } from "@/components/trainer/tabs";
 import { getStudioOps, getOutstanding } from "@/lib/data/groups/owner-ops";
 import { getFinanceSummary } from "@/lib/data/groups/finance";
+import { getSettlementTodo } from "@/lib/data/groups/settlement";
 import { sb } from "@/lib/data/db";
 import { requireOwnerPage } from "@/lib/auth/guard";
 
@@ -70,15 +72,16 @@ export default async function TrainerOpsPage() {
   const isOwner = true;
   // getStudioOps re-reads the (cached) trainer context internally; overlap it with the
   // unread-count query instead of stacking them.
-  const [ops, chatUnread, outstanding, finance] = await Promise.all([
+  const [ops, chatUnread, outstanding, finance, settlementTodo] = await Promise.all([
     getStudioOps(),
     chatUnreadFor(t.id),
     getOutstanding(),
     getFinanceSummary(0),
+    getSettlementTodo(),
   ]);
 
   const todoCount =
-    (ops.pendingRequests > 0 ? 1 : 0) + (chatUnread > 0 ? 1 : 0) + (ops.expiringCount > 0 ? 1 : 0);
+    (ops.pendingRequests > 0 ? 1 : 0) + (chatUnread > 0 ? 1 : 0) + (ops.expiringCount > 0 ? 1 : 0) + (settlementTodo ? 1 : 0);
   const deltaLabel =
     ops.revenueDeltaPct != null
       ? `전월 대비 ${ops.revenueDeltaPct >= 0 ? "+" : ""}${ops.revenueDeltaPct}%`
@@ -170,6 +173,15 @@ export default async function TrainerOpsPage() {
             {chatUnread > 0 ? (
               <ActionRow href="/t/chat" icon="message" title="답장 안 한 채팅" sub={`미답 ${chatUnread}건`} />
             ) : null}
+            {settlementTodo ? (
+              <ActionRow
+                href="/console/settlement"
+                icon="coins"
+                title={settlementTodo.kind === "last" ? "지난달 정산 미확정" : "이번 달 정산 확정 임박"}
+                sub={`${settlementTodo.monthLabel} · PC 콘솔 화면이에요`}
+                tone="warn"
+              />
+            ) : null}
           </>
         ) : (
           <div className="mb-2.5 flex items-center gap-3 rounded-[16px] border border-ink/[0.07] bg-card px-4 py-[15px]">
@@ -218,6 +230,10 @@ export default async function TrainerOpsPage() {
         <ActionRow href="/t/staff" icon="persons" title="강사 관리" sub="강사 초대·권한 관리" />
         <ActionRow href="/t/settings/products" icon="ticket-fill" title="회원권 상품" sub="상품 카탈로그 관리" />
         <ActionRow href="/t/settings/notices" icon="megaphone" title="공지사항" sub="회원 앱 공지 작성" />
+
+        <Banner tone="neutral" icon="coins" className="mt-3">
+          강사 정산·손익·일괄 등록은 PC 콘솔에서 관리해요.
+        </Banner>
 
         <div className="h-3.5" />
       </Body>

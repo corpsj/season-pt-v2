@@ -335,7 +335,21 @@ type RequestRow = {
   original_at: string | null;
   proposed_slots: string[] | null;
   created_at: string;
+  seen_at: string | null;
 };
+
+/**
+ * 인박스 뷰(강사 전용 확장). received에 sessionId(인라인 역제안용), sent에 memberSeen(회원 열람 표식)을
+ * 얹는다 — 이 게터의 소비처는 t/inbox뿐이라 공용 InboxView를 넓히지 않고 여기서만 확장.
+ */
+export type InboxReceivedItem = InboxView["received"][number] & { sessionId: string };
+export type InboxSentItem = SentItem & { memberSeen: boolean };
+export interface TrainerInboxView {
+  receivedCount: number;
+  sentCount: number;
+  received: InboxReceivedItem[];
+  sent: InboxSentItem[];
+}
 
 function agoLabel(createdAt: string): string {
   const diffMs = Date.now() - new Date(createdAt).getTime();
@@ -347,7 +361,7 @@ function agoLabel(createdAt: string): string {
   return day === 1 ? "어제" : `${day}일 전`;
 }
 
-export async function getInbox(): Promise<InboxView> {
+export async function getInbox(): Promise<TrainerInboxView> {
   const t = await getTrainerContext();
   if (!t) {
     return { receivedCount: 0, sentCount: 0, received: [], sent: [] };
@@ -366,7 +380,7 @@ export async function getInbox(): Promise<InboxView> {
   const { data: reqRows } = await sb
     .from("schedule_change_requests")
     .select(
-      "id, session_id, requester_type, requester_id, type, status, reason, original_at, proposed_slots, created_at",
+      "id, session_id, requester_type, requester_id, type, status, reason, original_at, proposed_slots, created_at, seen_at",
     )
     .in("session_id", sessionIds)
     .eq("status", "pending")
@@ -409,6 +423,7 @@ export async function getInbox(): Promise<InboxView> {
       const name = m?.name ?? "";
       return {
         id: r.id,
+        sessionId: r.session_id, // 인박스에서 페이지 이동 없이 역제안(counterPropose)하려면 세션 참조 필요
         name,
         initial: name ? initialOf(name) : "",
         avatarTone: tone(m?.avatar_tone),
@@ -425,13 +440,14 @@ export async function getInbox(): Promise<InboxView> {
 
   const sent = requests
     .filter((r) => r.requester_type === "trainer")
-    .map<SentItem>((r) => {
+    .map<InboxSentItem>((r) => {
       const before = r.original_at ? slotLabel(r.original_at) : "";
       const after =
         r.proposed_slots && r.proposed_slots.length ? slotLabel(r.proposed_slots[0]) : "";
       const summary =
         r.type === "change" && before && after ? `${before} → ${after}` : "수업 취소 요청";
-      return { id: r.id, name: (namesBySession.get(r.session_id) ?? []).join("·"), summary, status: "awaiting" };
+      // seen_at은 회원이 /m/receive에서 이 제안을 처음 연 시각(0023) — 응답 전이라도 '확인함'을 알린다.
+      return { id: r.id, name: (namesBySession.get(r.session_id) ?? []).join("·"), summary, status: "awaiting", memberSeen: !!r.seen_at };
     });
 
   return {

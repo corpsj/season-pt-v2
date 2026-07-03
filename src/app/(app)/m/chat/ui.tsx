@@ -31,6 +31,7 @@ export function MemberChatClient({
   messages: initialMessages,
   cursor: initialCursor,
   truncated,
+  initialDraft,
 }: {
   trainerName: string;
   initial: string;
@@ -39,10 +40,11 @@ export function MemberChatClient({
   messages: ChatMessageView[];
   cursor: string | null;
   truncated?: boolean;
+  initialDraft?: string;
 }) {
   const showToast = useToast();
   const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft ?? "");
   const cursorRef = useRef<string | null>(
     latestCursor(initialMessages, initialCursor)
   );

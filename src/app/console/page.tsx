@@ -8,6 +8,7 @@ import { getStudioOps } from "@/lib/data/groups/owner-ops";
 import { getRetention } from "@/lib/data/groups/perf-retention";
 import { getChatUnread } from "@/lib/data/groups/trainer-home";
 import { getStudioToday, getTrainerPerf } from "@/lib/data/groups/console";
+import { getSettlementTodo } from "@/lib/data/groups/settlement";
 import { runStudioMaintenance } from "@/lib/data/groups/maintenance";
 import { scanExpiringMemberships } from "@/lib/data/groups/notifications";
 import type { SessionStatus } from "@/lib/types";
@@ -55,12 +56,13 @@ function Kpi({
 export default async function ConsoleDashboard() {
   await runStudioMaintenance(); // best-effort: expire past memberships + materialize upcoming sessions
   await scanExpiringMemberships().catch(() => {}); // 콘솔만 쓰는 날에도 만료 임박 알림이 생성되도록(감사 low)
-  const [ops, retention, today, perf, chatUnread] = await Promise.all([
+  const [ops, retention, today, perf, chatUnread, settlementTodo] = await Promise.all([
     getStudioOps(),
     getRetention(),
     getStudioToday(),
     getTrainerPerf(),
     getChatUnread(),
+    getSettlementTodo(),
   ]);
 
   const todos: { icon: IconName; bg: string; color: string; title: string; desc: string; href: string; action: string }[] = [];
@@ -70,6 +72,16 @@ export default async function ConsoleDashboard() {
     todos.push({ icon: "refresh", bg: "#FBF3E9", color: "#C67352", title: `처리 대기 요청 ${ops.pendingRequests}건`, desc: "일정 변경·취소 요청", href: "/console/requests", action: "확인" });
   if (chatUnread > 0)
     todos.push({ icon: "message", bg: "#EDF4E3", color: "#6B785E", title: `답장 안 한 채팅 ${chatUnread}건`, desc: "회원·강사 메시지", href: "/console/messages", action: "열기" });
+  if (settlementTodo)
+    todos.push({
+      icon: "coins",
+      bg: "#FBF3E9",
+      color: "#C67352",
+      title: settlementTodo.kind === "last" ? "지난달 정산 미확정" : "이번 달 정산 확정 임박",
+      desc: `${settlementTodo.monthLabel} 강사 지급분 확정`,
+      href: "/console/settlement",
+      action: "정산",
+    });
 
   const expiringList = retention.items.slice(0, 5);
 

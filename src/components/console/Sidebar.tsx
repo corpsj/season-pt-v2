@@ -29,7 +29,7 @@ const NAV_GROUPS: { label?: string; items: NavItem[] }[] = [
     items: [
       { key: "revenue", label: "매출 현황", href: "/console/revenue", icon: "coins", activeIcon: "coins-fill" },
       { key: "settlement", label: "강사 정산", href: "/console/settlement", icon: "tag", activeIcon: "tag-fill" },
-      { key: "finance", label: "손익", href: "/console/finance", icon: "chart", activeIcon: "chart" },
+      { key: "finance", label: "손익", href: "/console/finance", icon: "chart", activeIcon: "chart-fill" },
     ],
   },
   {

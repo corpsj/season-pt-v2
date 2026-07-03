@@ -195,7 +195,7 @@ export default function TrainerCalendarClient({
 
 /* ---------------- 주간 시간표 그리드 ---------------- */
 
-const HOUR_PX = 48;
+const HOUR_PX = 54;
 
 function WeekTimeGrid({ cal, onPrev, onNext }: { cal: TrainerCalendarData; onPrev: () => void; onNext: () => void }) {
   const blocks = cal.weekDays.flatMap((d, di) =>
@@ -259,9 +259,12 @@ function WeekTimeGrid({ cal, onPrev, onNext }: { cal: TrainerCalendarData; onPre
               const list = cal.classesByDate[d.dateISO] ?? [];
               return list.map((c, ci) => {
                 // ponytail: 동일 시각 더블부킹은 우측으로 살짝 겹쳐 표시 — 한 강사 같은 슬롯 2개는 예외 상황
+                const same = list.filter((x) => x.startMin === c.startMin).length;
                 const dup = list.slice(0, ci).filter((x) => x.startMin === c.startMin).length;
+                // 최상단(마지막) 블록에만 ×N 뱃지 — 겹침이 의도된 표시임을 전달
+                const overlap = same >= 2 && dup === same - 1 ? same : 0;
                 return (
-                  <WeekBlock key={c.sessionId} c={c} col={di} dup={dup} top={((c.startMin - startHour * 60) / 60) * HOUR_PX} />
+                  <WeekBlock key={c.sessionId} c={c} col={di} dup={dup} overlap={overlap} top={((c.startMin - startHour * 60) / 60) * HOUR_PX} />
                 );
               });
             })}
@@ -303,7 +306,7 @@ function WeekDayHead({ d }: { d: TrainerWeekDay }) {
   );
 }
 
-function WeekBlock({ c, col, dup, top }: { c: TrainerDayClass; col: number; dup: number; top: number }) {
+function WeekBlock({ c, col, dup, overlap, top }: { c: TrainerDayClass; col: number; dup: number; overlap: number; top: number }) {
   const dead = c.status === "cancelled" || c.status === "noshow";
   return (
     <Link
@@ -320,11 +323,16 @@ function WeekBlock({ c, col, dup, top }: { c: TrainerDayClass; col: number; dup:
         background: dead ? undefined : c.barColor,
       }}
     >
-      <span className={cn("w-full truncate text-[10.5px] font-bold leading-[1.25]", dead ? "text-muted line-through" : "text-surface")}>
+      {overlap ? (
+        <span className="absolute right-[2px] top-[2px] flex h-[14px] items-center rounded-full border border-surface/60 bg-terracotta px-[4px] text-[8.5px] font-bold text-surface">
+          ×{overlap}
+        </span>
+      ) : null}
+      <span className={cn("w-full truncate text-[11.5px] font-bold leading-[1.25]", dead ? "text-muted line-through" : "text-surface")}>
         {c.name}
       </span>
       {c.sub ? (
-        <span className={cn("w-full truncate text-[9.5px] font-semibold leading-[1.2]", dead ? "text-placeholder" : "text-surface/80")}>
+        <span className={cn("w-full truncate text-[10.5px] font-semibold leading-[1.2]", dead ? "text-placeholder" : "text-surface/80")}>
           {c.sub}
         </span>
       ) : null}
