@@ -22,6 +22,14 @@ export function weekBoundsFromKst(kstNow: Date): { startISO: string; endISO: str
   return { startISO: start.toISOString(), endISO: end.toISOString() };
 }
 
+/** KST 달력일(YYYY-MM-DD) 경계 [그날 00:00, 다음날 00:00) — 실제 UTC instant. 세션 하루치 식단 조회용. */
+export function dayBoundsFromKst(dateISO: string): { startISO: string; endISO: string } {
+  const [y, m, d] = dateISO.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d) - KST_OFFSET_MS);
+  const end = new Date(Date.UTC(y, m - 1, d + 1) - KST_OFFSET_MS);
+  return { startISO: start.toISOString(), endISO: end.toISOString() };
+}
+
 export function monthLabelFromKst(kstNow: Date): string {
   return `${kstNow.getUTCFullYear()}년 ${kstNow.getUTCMonth() + 1}월`;
 }

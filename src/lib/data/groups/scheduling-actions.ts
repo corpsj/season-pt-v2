@@ -256,18 +256,36 @@ export async function saveRecord(
   const memberIds = await memberIdsForSession(sessionId);
   if (memberIds.length === 0) return { ok: false, error: "기록할 회원이 없어요." };
   for (const memberId of memberIds) {
-    // insert 오류를 삼키지 않는다 — 약한 네트워크에서 기록이 통째로 유실됐는데도 성공 표시되던 버그(감사 H10).
-    const { error } = await sb.from("workout_records").insert({
-      session_id: sessionId,
-      member_id: memberId,
-      exercises,
-      comment: comment ?? null,
-      created_by: t.id,
-    });
-    if (error) return { ok: false, error: "기록 저장에 실패했어요. 다시 시도해주세요." };
+    // upsert: (session_id, member_id) 기존 최신 1행이 있으면 갱신, 없으면 삽입 — 수정 모드에서
+    // 매번 새 행이 쌓여 세션당 기록이 중복되던 문제 방지. insert/update 오류는 삼키지 않는다(감사 H10).
+    const { data: existing } = await sb
+      .from("workout_records")
+      .select("id")
+      .eq("session_id", sessionId)
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await sb
+        .from("workout_records")
+        .update({ exercises, comment: comment ?? null })
+        .eq("id", existing.id);
+      if (error) return { ok: false, error: "기록 저장에 실패했어요. 다시 시도해주세요." };
+    } else {
+      const { error } = await sb.from("workout_records").insert({
+        session_id: sessionId,
+        member_id: memberId,
+        exercises,
+        comment: comment ?? null,
+        created_by: t.id,
+      });
+      if (error) return { ok: false, error: "기록 저장에 실패했어요. 다시 시도해주세요." };
+    }
   }
 
   revalidatePath("/t");
+  revalidatePath(`/t/class/${sessionId}`); // 허브 복귀 시 최신 기록 반영
   revalidatePath("/m"); // 회원 캘린더 날짜별 운동 기록
   revalidatePath("/m/my/records");
   return { ok: true };

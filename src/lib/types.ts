@@ -302,6 +302,60 @@ export interface AttendTarget {
   scheduledAt: string; // ISO — for deduction policy check
 }
 
+/* --------------------------- class detail (콘텐츠 허브) --------------------------- */
+/** 세션 KST 날짜의 회원 식단 한 건(서명 URL 포함). */
+export interface SessionMealItem {
+  id: string;
+  mealType: string; // 아침/점심/저녁/간식
+  memo?: string;
+  photoUrl?: string; // 서명 URL
+  timeLabel: string; // "오후 12:30"
+  feedback?: string;
+}
+/** 세션 KST 날짜의 회원 체형 기록 한 건(사진/인바디, 서명 URL). */
+export interface SessionFileItem {
+  id: string;
+  kind: "photo" | "inbody";
+  url: string; // 서명 URL
+  note?: string;
+}
+/** 한 회원의 세션 콘텐츠(운동·식단·체형) — 2:1이면 회원당 하나씩. */
+export interface SessionMemberContent {
+  memberId: string;
+  name: string;
+  record: { recordId: string; exercises: WorkoutExercise[]; comment?: string } | null; // 최신 1건
+  meals: SessionMealItem[]; // 세션 KST 날짜의 식단
+  files: SessionFileItem[]; // 세션 KST 날짜의 체형(photo+inbody)
+}
+/** 수업 상세(콘텐츠 허브) 페이로드 — 회원 카드 + 상태 + 회원별 콘텐츠. */
+export interface ClassDetailView {
+  sessionId: string;
+  name: string;
+  initial: string;
+  avatarTone: AvatarTone;
+  isTeam: boolean;
+  team?: TeamAvatar;
+  typeLabel: string; // "1:1 PT · 잔여 3회"
+  dateLabel: string; // "7월 3일 목 · 오후 9:00–10:00"
+  status: SessionStatus;
+  dateISO: string; // 세션 KST 날짜 YYYY-MM-DD
+  isFuture: boolean; // scheduled_at > now
+  members: SessionMemberContent[];
+}
+/** 회원 앱 수업 상세 — 본인 데이터만(읽기 전용). */
+export interface MemberClassDetailView {
+  sessionId: string;
+  status: SessionStatus;
+  isTeam: boolean;
+  dateLabel: string; // "7월 3일 목 · 오후 9:00–10:00"
+  trainerName: string;
+  isFuture: boolean;
+  isToday: boolean; // KST 기준 오늘
+  record: { exercises: WorkoutExercise[]; comment?: string } | null; // 본인 것만
+  meals: SessionMealItem[]; // 본인, 세션 KST 날짜
+  files: SessionFileItem[]; // 본인, 세션 KST 날짜
+}
+
 export interface RetentionItem {
   memberId: string;
   name: string;

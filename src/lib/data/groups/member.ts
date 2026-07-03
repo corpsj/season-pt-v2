@@ -10,7 +10,7 @@ import {
   todayISO,
   dayDiff,
 } from "@/lib/data/db";
-import { monthBoundsFromKst } from "@/lib/data/kst-bounds";
+import { monthBoundsFromKst, dayBoundsFromKst } from "@/lib/data/kst-bounds";
 import { ensureChatThread } from "@/lib/data/groups/chat";
 import { FILES_BUCKET } from "@/lib/data/groups/member-files";
 import type {
@@ -18,6 +18,7 @@ import type {
   CalendarDay,
   ChatMessageView,
   MemberCalendarView,
+  MemberClassDetailView,
   MemberDayClass,
   MemberMyView,
   MemberNotice,
@@ -30,6 +31,9 @@ import type {
   MemberRequestView,
   MemberWorkoutRecord,
   MemberWorkoutView,
+  SessionFileItem,
+  SessionMealItem,
+  SessionStatus,
 } from "@/lib/types";
 
 /* ------------------------------- helpers ------------------------------- */
@@ -557,6 +561,107 @@ export async function getMemberRequest(sessionId?: string): Promise<MemberReques
     trainerName,
     isTeam,
     partnerName,
+  };
+}
+
+/* ----------------------------- 수업 상세 (/m/class/[id]) ----------------------------- */
+/**
+ * 회원 앱 수업 상세(콘텐츠 허브) — 본인이 속한 세션만, 본인 데이터만(읽기 전용).
+ * 본인 세션이 아니면 null(페이지에서 redirect("/m")). 운동은 세션 최신 1건, 식단·체형은 세션 KST 날짜.
+ */
+export async function getMemberClassDetail(sessionId: string): Promise<MemberClassDetailView | null> {
+  const me = await requireMember();
+
+  // 본인이 session_members에 포함된 세션만 — IDOR 차단(타 회원 세션 열람 불가).
+  const { data: smRow } = await sb
+    .from("session_members")
+    .select("sessions(id, scheduled_at, status, type, trainer_id)")
+    .eq("member_id", me.memberId)
+    .eq("session_id", sessionId)
+    .maybeSingle();
+  const session = (smRow as unknown as {
+    sessions?: { id: string; scheduled_at: string; status: SessionStatus; type: string; trainer_id: string };
+  } | null)?.sessions;
+  if (!session) return null;
+
+  const dISO = kstDateISO(session.scheduled_at);
+  const { startISO, endISO } = dayBoundsFromKst(dISO);
+  const [{ data: trainer }, recRes, mlRes, mfRes] = await Promise.all([
+    sb.from("trainers").select("display_name").eq("id", session.trainer_id).maybeSingle(),
+    sb
+      .from("workout_records")
+      .select("exercises, comment")
+      .eq("session_id", sessionId)
+      .eq("member_id", me.memberId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sb
+      .from("meal_logs")
+      .select("id, photo_path, memo, meal_type, eaten_at, feedback")
+      .eq("member_id", me.memberId)
+      .gte("eaten_at", startISO)
+      .lt("eaten_at", endISO)
+      .order("eaten_at", { ascending: true }),
+    sb
+      .from("member_files")
+      .select("id, kind, storage_path, note, taken_at")
+      .eq("member_id", me.memberId)
+      .eq("taken_at", dISO)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const mealRows = (mlRes.data ?? []) as unknown as {
+    id: string; photo_path: string | null; memo: string | null; meal_type: string | null; eaten_at: string; feedback: string | null;
+  }[];
+  const fileRows = (mfRes.data ?? []) as unknown as {
+    id: string; kind: "photo" | "inbody"; storage_path: string; note: string | null;
+  }[];
+
+  // 서명 URL 일괄 발급.
+  const paths = [
+    ...mealRows.map((m) => m.photo_path).filter((p): p is string => !!p),
+    ...fileRows.map((f) => f.storage_path),
+  ];
+  const signedByPath = new Map<string, string>();
+  if (paths.length) {
+    const { data: signs } = await sb.storage.from(FILES_BUCKET).createSignedUrls(paths, 60 * 60);
+    for (const s of signs ?? []) if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
+  }
+
+  const meals: SessionMealItem[] = mealRows.map((m) => ({
+    id: m.id,
+    mealType: m.meal_type ?? "",
+    memo: m.memo ?? undefined,
+    photoUrl: m.photo_path ? signedByPath.get(m.photo_path) : undefined,
+    timeLabel: clockLabel(m.eaten_at),
+    feedback: m.feedback ?? undefined,
+  }));
+  const files: SessionFileItem[] = fileRows.map((f) => ({
+    id: f.id,
+    kind: f.kind,
+    url: signedByPath.get(f.storage_path) ?? "",
+    note: f.note ?? undefined,
+  }));
+
+  const [, mo, da] = dISO.split("-").map(Number);
+  const wd = new Date(dISO + "T00:00:00Z").getUTCDay();
+  const at = new Date(session.scheduled_at).getTime();
+  const timeRange = `${clockLabel(session.scheduled_at)}–${clockLabel(new Date(at + 3600000).toISOString())}`;
+
+  return {
+    sessionId,
+    status: session.status,
+    isTeam: session.type === "2on1",
+    dateLabel: `${mo}월 ${da}일 ${weekdayKo(wd)} · ${timeRange}`,
+    trainerName: trainer?.display_name ?? "",
+    isFuture: at > Date.now(),
+    isToday: dISO === todayISO(),
+    record: recRes.data
+      ? { exercises: parseExercises(recRes.data.exercises), comment: (recRes.data.comment as string | null) ?? undefined }
+      : null,
+    meals,
+    files,
   };
 }
 

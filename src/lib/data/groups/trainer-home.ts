@@ -275,7 +275,7 @@ function mapDayClass(
   else if (s.status === "cancelled") badge = { text: "취소", variant: "cancelled" };
   else if (isTeam) badge = { text: "2:1", variant: "team" };
   else badge = { text: "예정", variant: "scheduled" };
-  const href = isTeam ? `/t/attend/${s.id}` : `/t/class/${s.id}`;
+  const href = `/t/class/${s.id}`; // 2:1도 상세(콘텐츠 허브)로 — 출석은 상세 안 인라인 버튼/푸터에서
   const k = new Date(new Date(s.scheduled_at).getTime() + 9 * 3600 * 1000);
   const startMin = k.getUTCHours() * 60 + k.getUTCMinutes();
   return {

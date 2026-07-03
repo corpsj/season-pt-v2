@@ -7,13 +7,20 @@ import {
   weekdayKo,
   todayISO,
 } from "@/lib/data/db";
+import { dayBoundsFromKst } from "@/lib/data/kst-bounds";
+import { FILES_BUCKET } from "@/lib/data/groups/member-files";
 import type {
   AttendTarget,
   AvatarTone,
+  ClassDetailView,
   ConfirmView,
   InboxView,
   SentItem,
+  SessionFileItem,
+  SessionMealItem,
+  SessionMemberContent,
   TeamAvatar,
+  WorkoutExercise,
 } from "@/lib/types";
 
 /* ------------------------------------------------------------------ helpers */
@@ -34,6 +41,14 @@ type MemberRow = {
 
 const tone = (t: string | null | undefined): AvatarTone => (t ?? "sage") as AvatarTone;
 const initialOf = (name: string): string => name.slice(0, 1);
+
+/** workout_records.exercises(jsonb) → 안전 파싱. */
+function parseExercises(raw: unknown): WorkoutExercise[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown })
+    .filter((e) => typeof e?.name === "string")
+    .map((e) => ({ name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0 }));
+}
 
 /** Members attached to a session, ordered for stable team rendering. */
 async function sessionMembers(sessionId: string): Promise<MemberRow[]> {
@@ -133,6 +148,24 @@ export async function getRecordTarget(sessionId: string) {
   const isTeam = (session?.type ?? "1on1") === "2on1";
   const dISO = session ? kstDateISO(session.scheduled_at) : todayISO();
   const [, mo, da] = dISO.split("-").map(Number);
+
+  // 기존 기록 프리로드 — 수정 모드의 초기값(회원 간 내용 동일이므로 세션 최신 1건). 없으면 빈 배열.
+  let exercises: WorkoutExercise[] = [];
+  let comment: string | undefined;
+  if (session && first) {
+    const { data } = await sb
+      .from("workout_records")
+      .select("exercises, comment")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      exercises = parseExercises(data.exercises);
+      comment = (data.comment as string | null) ?? undefined;
+    }
+  }
+
   return {
     sessionId,
     memberId: first?.id ?? "",
@@ -140,13 +173,14 @@ export async function getRecordTarget(sessionId: string) {
     initial: first ? initialOf(first.name) : "",
     avatarTone: first ? tone(first.avatar_tone) : ("sage" as AvatarTone),
     dateLabel: `${mo}월 ${da}일 · ${isTeam ? "2:1" : "1:1"} PT`,
-    exercises: [] as { name: string; kg: number; sets: number }[],
+    exercises,
+    comment,
   };
 }
 
 /* -------------------------------------------------------------- class detail */
 
-export async function getClassDetail(sessionId: string) {
+export async function getClassDetail(sessionId: string): Promise<ClassDetailView> {
   const session = await fetchSession(sessionId);
   const members = session ? await sessionMembers(sessionId) : [];
   const isTeam = (session?.type ?? "1on1") === "2on1";
@@ -158,6 +192,11 @@ export async function getClassDetail(sessionId: string) {
   const timeRange = session
     ? `${clockHM(session.scheduled_at)}–${clockHM(new Date(new Date(session.scheduled_at).getTime() + 3600000))}`
     : "";
+
+  const content = session
+    ? await loadSessionContent(sessionId, members.map((m) => m.id), dISO)
+    : new Map<string, { record: SessionMemberContent["record"]; meals: SessionMealItem[]; files: SessionFileItem[] }>();
+
   return {
     sessionId,
     name: members.length ? sessionName(members) : "",
@@ -167,7 +206,96 @@ export async function getClassDetail(sessionId: string) {
     team: isTeam && members.length >= 2 ? teamAvatarFrom(members) : undefined,
     typeLabel: `${isTeam ? "2:1" : "1:1"} PT · 잔여 ${remaining}회`,
     dateLabel: `${mo}월 ${da}일 ${weekdayKo(wd)} · ${timeRange}`,
+    status: session?.status ?? "scheduled",
+    dateISO: dISO,
+    isFuture: session ? new Date(session.scheduled_at).getTime() > Date.now() : false,
+    members: members.map((m) => {
+      const c = content.get(m.id);
+      return {
+        memberId: m.id,
+        name: m.name,
+        record: c?.record ?? null,
+        meals: c?.meals ?? [],
+        files: c?.files ?? [],
+      } satisfies SessionMemberContent;
+    }),
   };
+}
+
+/**
+ * 세션 KST 날짜의 회원별 콘텐츠(운동 최신 1건·식단·체형) 로드. 서명 URL은 한 번에 batch.
+ * workout_records는 session_id 키(최신순), meal_logs는 그날 KST 경계, member_files는 taken_at=날짜.
+ */
+async function loadSessionContent(
+  sessionId: string,
+  memberIds: string[],
+  dISO: string,
+): Promise<Map<string, { record: SessionMemberContent["record"]; meals: SessionMealItem[]; files: SessionFileItem[] }>> {
+  const out = new Map<string, { record: SessionMemberContent["record"]; meals: SessionMealItem[]; files: SessionFileItem[] }>();
+  for (const id of memberIds) out.set(id, { record: null, meals: [], files: [] });
+  if (memberIds.length === 0) return out;
+
+  const { startISO, endISO } = dayBoundsFromKst(dISO);
+  const [recRes, mlRes, mfRes] = await Promise.all([
+    sb
+      .from("workout_records")
+      .select("id, member_id, exercises, comment, created_at")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false }),
+    sb
+      .from("meal_logs")
+      .select("id, member_id, photo_path, memo, meal_type, eaten_at, feedback")
+      .in("member_id", memberIds)
+      .gte("eaten_at", startISO)
+      .lt("eaten_at", endISO)
+      .order("eaten_at", { ascending: true }),
+    sb
+      .from("member_files")
+      .select("id, member_id, kind, storage_path, note, taken_at")
+      .in("member_id", memberIds)
+      .eq("taken_at", dISO)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const recRows = (recRes.data ?? []) as unknown as { id: string; member_id: string; exercises: unknown; comment: string | null }[];
+  const mealRows = (mlRes.data ?? []) as unknown as { id: string; member_id: string; photo_path: string | null; memo: string | null; meal_type: string | null; eaten_at: string; feedback: string | null }[];
+  const fileRows = (mfRes.data ?? []) as unknown as { id: string; member_id: string; kind: "photo" | "inbody"; storage_path: string; note: string | null }[];
+
+  // 서명 URL 일괄 발급(건당 왕복 방지) — meals.photo_path + files.storage_path.
+  const paths = [
+    ...mealRows.map((m) => m.photo_path).filter((p): p is string => !!p),
+    ...fileRows.map((f) => f.storage_path),
+  ];
+  const signedByPath = new Map<string, string>();
+  if (paths.length) {
+    const { data: signs } = await sb.storage.from(FILES_BUCKET).createSignedUrls(paths, 60 * 60);
+    for (const s of signs ?? []) if (s.path && s.signedUrl) signedByPath.set(s.path, s.signedUrl);
+  }
+
+  // 회원별 최신 1건(created_at desc라 첫 등장이 최신).
+  for (const r of recRows) {
+    const slot = out.get(r.member_id);
+    if (!slot || slot.record) continue;
+    slot.record = { recordId: r.id, exercises: parseExercises(r.exercises), comment: r.comment ?? undefined };
+  }
+  for (const m of mealRows) {
+    const slot = out.get(m.member_id);
+    if (!slot) continue;
+    slot.meals.push({
+      id: m.id,
+      mealType: m.meal_type ?? "",
+      memo: m.memo ?? undefined,
+      photoUrl: m.photo_path ? signedByPath.get(m.photo_path) : undefined,
+      timeLabel: clockHM(m.eaten_at),
+      feedback: m.feedback ?? undefined,
+    });
+  }
+  for (const f of fileRows) {
+    const slot = out.get(f.member_id);
+    if (!slot) continue;
+    slot.files.push({ id: f.id, kind: f.kind, url: signedByPath.get(f.storage_path) ?? "", note: f.note ?? undefined });
+  }
+  return out;
 }
 
 /* --------------------------------------------------------------- propose */
