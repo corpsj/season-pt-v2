@@ -196,7 +196,7 @@ export default async function TrainerOpsPage() {
         {outstanding.total > 0 && (
           <>
             <div className="mb-2 mt-6 flex items-baseline justify-between px-0.5">
-              <span className="text-[12px] font-semibold text-muted">받을 돈 (미수금) · {outstanding.count}명</span>
+              <span className="text-[12px] font-semibold text-muted">미수금 · {outstanding.count}명</span>
               <span className="text-[13px] font-bold text-terracotta">{won(outstanding.total)}</span>
             </div>
             {outstanding.items.slice(0, 6).map((o) => (
