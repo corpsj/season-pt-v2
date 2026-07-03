@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { getTrainerContext } from "@/lib/data/db";
+import { getTrainerContext, ownerExists } from "@/lib/data/db";
 import { sb } from "@/lib/data/db";
 import { getChatUnread } from "@/lib/data/groups/chat";
 import { getRetention } from "@/lib/data/groups/perf-retention";
@@ -19,7 +19,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   // Not signed in (or signed in as a non-owner) → show the login screen instead of the
   // dashboard. Children (the section pages) are not rendered, so their getters never run.
   if (!t || t.role !== "owner") {
-    return <ConsoleLogin notOwner={!!t} />;
+    // 대표 계정이 아직 없으면(부트스트랩) 대표 회원가입 진입점을 함께 노출.
+    const showOwnerSignup = !t && !(await ownerExists());
+    return <ConsoleLogin notOwner={!!t} showOwnerSignup={showOwnerSignup} />;
   }
 
   const [chatUnread, retention, pendingRes, ck] = await Promise.all([

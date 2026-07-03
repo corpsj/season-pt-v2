@@ -46,3 +46,14 @@ export const getMemberContext = cache(async (): Promise<MemberSession | null> =>
   const c = await cookies();
   return verifySession(c.get(MEMBER_COOKIE)?.value);
 });
+
+/**
+ * 대표 계정 존재 여부 — 부트스트랩(최초 대표 가입) 진입점 노출용.
+ * 대표가 생기면 false→로그인 화면에서 대표 가입 메뉴가 자동으로 사라진다.
+ * (자가가입 자체는 `ownerSignup`이 서버에서 재차 거부 — 표시는 편의, 가드는 액션.)
+ */
+export const ownerExists = cache(async (): Promise<boolean> => {
+  const admin = createSupabaseAdmin();
+  const { count } = await admin.from("trainers").select("id", { count: "exact", head: true }).eq("role", "owner");
+  return (count ?? 0) > 0;
+});

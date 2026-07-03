@@ -1,5 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { trainerLogin, trainerLogout } from "@/lib/auth/trainer-actions";
@@ -9,7 +10,7 @@ import { trainerLogin, trainerLogout } from "@/lib/auth/trainer-actions";
  * member/trainer role split (PC console is admin-only). Rendered by the console layout
  * whenever there's no owner session, so /console is the single PC entry point.
  */
-export function ConsoleLogin({ notOwner }: { notOwner: boolean }) {
+export function ConsoleLogin({ notOwner, showOwnerSignup }: { notOwner: boolean; showOwnerSignup?: boolean }) {
   const router = useRouter();
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
@@ -87,6 +88,15 @@ export function ConsoleLogin({ notOwner }: { notOwner: boolean }) {
               >
                 {pending ? "로그인 중…" : <>로그인<Icon name="login" size={16} /></>}
               </button>
+              {showOwnerSignup ? (
+                <Link
+                  href="/signup/owner"
+                  className="mt-3 flex items-center justify-center gap-2 rounded-[12px] border border-gold/40 bg-gold-bg py-[12px] text-[13.5px] font-semibold text-gold transition hover:brightness-[0.98] active:scale-[.99]"
+                >
+                  <Icon name="crown-fill" size={16} className="text-gold" />
+                  대표 회원가입 (최초 1회)
+                </Link>
+              ) : null}
             </>
           )}
         </div>
