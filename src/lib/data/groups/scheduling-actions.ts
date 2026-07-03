@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { sb, getTrainerContext } from "@/lib/data/db";
 import { getStudioSettings } from "@/lib/data/groups/owner-ops";
 import { shouldDeduct } from "@/lib/data/deduction";
-import { notifyLowSessions, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
-import { slotLabel } from "@/lib/data/groups/scheduling";
+import { notifyLowSessions, notifyMemberOfCounterProposal, notifyRequestResult, notifyTeamOfScheduleChange } from "@/lib/data/groups/notifications";
+import { getProposeSlots, slotLabel } from "@/lib/data/groups/scheduling";
 import {
   hasSlotConflict,
   moveSessionWithTombstone,
@@ -346,6 +346,85 @@ export async function sendPropose(
 }
 
 /**
+ * 인박스 인라인 역제안용 후보 시간 온디맨드 로드(모바일 propose와 동일 게터 재사용).
+ * 트레이너 컨텍스트 + 본인 담당 세션(대표는 전체)만. 비인가/미존재는 null.
+ */
+export async function loadTrainerProposeSlots(sessionId: string) {
+  const t = await getTrainerContext();
+  if (!t) return null;
+  const { data: session } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+  if (!session) return null;
+  if (t.role !== "owner" && session.trainer_id !== t.id) return null;
+  return getProposeSlots(sessionId);
+}
+
+/**
+ * 회원의 변경 요청에 강사가 다른 시간을 역제안. 원 요청(pending·member 발의·본인 세션)을 rejected로
+ * 정리하고 강사 발의 change 요청을 새로 insert → 회원에게 알림. 회원 측 sendMemberRequest의 역제안
+ * 자동 정리(member-actions)와 대칭. 제안 단계라 세션은 움직이지 않으므로 팀 통지(notifyTeamOfScheduleChange)는 없다.
+ */
+export async function counterPropose(
+  requestId: string,
+  slotsIso: string[],
+  reason?: string,
+): Promise<ActionResult> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "권한이 없어요." };
+  if (!slotsIso || slotsIso.length === 0) return { ok: false, error: "제안할 시간을 선택해주세요." };
+
+  const { data: reqRow } = await sb
+    .from("schedule_change_requests")
+    .select("id, session_id, requester_type, requester_id, status")
+    .eq("id", requestId)
+    .maybeSingle();
+  if (!reqRow) return { ok: false, error: "요청을 찾을 수 없어요." };
+  if (reqRow.requester_type !== "member" || reqRow.status !== "pending") {
+    return { ok: false, error: "이미 처리된 요청이에요." };
+  }
+
+  // 세션 상태·담당 가드(acceptRequest와 동일 스코프): 남의 수업/처리된 수업엔 역제안 불가.
+  const { data: session } = await sb
+    .from("sessions")
+    .select("scheduled_at, status, trainer_id")
+    .eq("id", reqRow.session_id)
+    .maybeSingle();
+  if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  if (session.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요." };
+
+  // 원자 클레임: 아직 pending일 때만 정리 — 이미 수락/거절된 요청에 역제안하지 못하게.
+  const { data: claimed } = await sb
+    .from("schedule_change_requests")
+    .update({ status: "rejected", resolved_at: new Date().toISOString() })
+    .eq("id", requestId)
+    .eq("status", "pending")
+    .select("id");
+  if (!claimed || claimed.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
+
+  const { error } = await sb.from("schedule_change_requests").insert({
+    session_id: reqRow.session_id,
+    requester_type: "trainer",
+    requester_id: t.id,
+    type: "change",
+    status: "pending",
+    reason: reason ?? null,
+    original_at: session.scheduled_at,
+    proposed_slots: slotsIso,
+  });
+  if (error) {
+    // insert 실패 시 원 요청을 되살려 유실 방지(감사 #37 톤).
+    await sb.from("schedule_change_requests").update({ status: "pending", resolved_at: null }).eq("id", requestId);
+    return { ok: false, error: "제안을 보내지 못했어요. 다시 시도해주세요." };
+  }
+
+  await notifyMemberOfCounterProposal(reqRow.requester_id as string).catch(() => {}); // best-effort
+
+  revalidatePath("/t");
+  revalidatePath("/t/inbox");
+  return { ok: true };
+}
+
+/**
  * 대표/담당 강사가 회원 승인 없이 수업을 새 시각으로 즉시 이동(수동 지정). 제안(sendPropose)과 달리 바로 반영된다.
  * 더블부킹 가드 + 원자적 이동(유령 방지 tombstone) 재사용. 대표가 이미 회원과 합의한 변경을 손수 반영할 때.
  */
@@ -573,6 +652,26 @@ export async function rejectRequest(requestId: string): Promise<ActionResult> {
 
   revalidatePath("/t/inbox");
   return { ok: true };
+}
+
+/**
+ * 인박스 열람 표식: 본인 담당 세션(대표는 getInbox와 동일하게 본인 trainer_id로 스코프)의 회원 발의 pending
+ * 요청 중 seen_at 미기록 건을 now()로 일괄 기록 → 회원 '보낸 요청 내역'(M2)이 '확인함'으로 전환. best-effort,
+ * 반환값 없음(렌더 경로에서 호출되므로 revalidate 안 함).
+ */
+export async function markInboxSeen(): Promise<void> {
+  const t = await getTrainerContext();
+  if (!t) return;
+  const { data: sessRows } = await sb.from("sessions").select("id").eq("trainer_id", t.id);
+  const sessionIds = (sessRows ?? []).map((s) => s.id as string);
+  if (sessionIds.length === 0) return;
+  await sb
+    .from("schedule_change_requests")
+    .update({ seen_at: new Date().toISOString() })
+    .in("session_id", sessionIds)
+    .eq("requester_type", "member")
+    .eq("status", "pending")
+    .is("seen_at", null);
 }
 
 /**

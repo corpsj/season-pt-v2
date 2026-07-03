@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -10,15 +10,164 @@ import { Avatar } from "@/components/ui/Avatar";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { RadioOption } from "@/components/ui/RadioOption";
+import { Spinner } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
-import { acceptRequest, rejectRequest } from "@/lib/data/groups/scheduling-actions";
-import type { InboxView } from "@/lib/types";
+import {
+  acceptRequest,
+  counterPropose,
+  loadTrainerProposeSlots,
+  rejectRequest,
+} from "@/lib/data/groups/scheduling-actions";
+import type { TrainerInboxView } from "@/lib/data/groups/scheduling";
 
 type Tab = "received" | "sent";
 type PendingAction = { id: string; kind: "accept" | "reject"; type: "change" | "cancel" };
+type Slot = { id: string; label: string; iso: string };
 
-export default function InboxClient({ view }: { view: InboxView }) {
+/** 변경 요청 카드 안에서 페이지 이동 없이 대안 시간을 역제안하는 인라인 패널. */
+function CounterPropose({
+  requestId,
+  sessionId,
+  onDone,
+}: {
+  requestId: string;
+  sessionId: string;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [slots, setSlots] = useState<Slot[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [customDate, setCustomDate] = useState("");
+  const [customTime, setCustomTime] = useState("");
+  const [submitting, startSubmit] = useTransition();
+
+  async function toggleOpen() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (!slots && !loading) {
+      setLoading(true);
+      const v = await loadTrainerProposeSlots(sessionId);
+      setLoading(false);
+      if (!v) {
+        toast("시간을 불러오지 못했어요", "error");
+        setOpen(false);
+        return;
+      }
+      setSlots(v.slots);
+    }
+  }
+
+  function toggleSlot(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < 3) next.add(id);
+      return next;
+    });
+  }
+
+  const count = picked.size + (customDate && customTime ? 1 : 0);
+
+  function submit() {
+    const customIso =
+      customDate && customTime
+        ? new Date(`${customDate}T${customTime}:00+09:00`).toISOString()
+        : null;
+    if (customIso && customIso <= new Date().toISOString()) {
+      toast("지난 시간은 제안할 수 없어요", "error");
+      return;
+    }
+    const slotsIso = [
+      ...(slots ?? []).filter((s) => picked.has(s.id)).map((s) => s.iso),
+      ...(customIso ? [customIso] : []),
+    ];
+    if (slotsIso.length === 0) return;
+    startSubmit(async () => {
+      const r = await counterPropose(requestId, slotsIso);
+      if (!r.ok) {
+        toast(r.error ?? "제안을 보내지 못했어요", "error");
+        return;
+      }
+      toast("다른 시간을 제안했어요");
+      onDone();
+    });
+  }
+
+  return (
+    <div className="mt-2.5">
+      <button
+        type="button"
+        onClick={toggleOpen}
+        className="tappable flex w-full items-center justify-center gap-1.5 rounded-[10px] border border-sage-deep/35 bg-transparent py-2.5 text-[12.5px] font-bold text-sage-deep"
+      >
+        <Icon name="clock" size={15} />
+        다른 시간 제안
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={14} />
+      </button>
+
+      {open ? (
+        <div className="mt-2.5 rounded-[12px] border border-ink/[0.08] bg-sage-banner p-3">
+          {loading || !slots ? (
+            <div className="flex items-center justify-center py-4 text-muted">
+              <Spinner size={20} />
+            </div>
+          ) : (
+            <>
+              <div className="mb-2 text-[11.5px] font-bold uppercase tracking-wide text-muted">
+                새 시간 · 최대 3개
+              </div>
+              <div className="flex flex-col gap-2">
+                {slots.map((s) => (
+                  <RadioOption
+                    key={s.id}
+                    shape="square"
+                    selected={picked.has(s.id)}
+                    onClick={() => toggleSlot(s.id)}
+                  >
+                    <span className="text-[13.5px] font-semibold text-ink">{s.label}</span>
+                  </RadioOption>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-2 rounded-[12px] border border-ink/[0.08] bg-card px-3.5 py-2.5">
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  className="flex-1 bg-transparent text-[13px] font-semibold text-ink"
+                />
+                <input
+                  type="time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                  step={1800}
+                  className="bg-transparent text-[13px] font-semibold text-ink"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={count === 0 || submitting}
+                onClick={submit}
+                className="tappable mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] bg-sage py-2.5 text-[12.5px] font-bold text-surface disabled:opacity-50"
+              >
+                {submitting ? <Spinner size={15} /> : <Icon name="send" size={14} />}
+                제안 보내기{count > 0 ? ` · ${count}개` : ""}
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function InboxClient({ view }: { view: TrainerInboxView }) {
   const router = useRouter();
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("received");
@@ -116,6 +265,15 @@ export default function InboxClient({ view }: { view: InboxView }) {
                       수락
                     </button>
                   </div>
+
+                  {/* 변경 요청만: 페이지 이동 없이 대안 시간 역제안 */}
+                  {item.type === "change" ? (
+                    <CounterPropose
+                      requestId={item.id}
+                      sessionId={item.sessionId}
+                      onDone={() => router.refresh()}
+                    />
+                  ) : null}
                 </Card>
               ))}
             </div>
@@ -129,6 +287,12 @@ export default function InboxClient({ view }: { view: InboxView }) {
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-bold text-ink">{s.name}</div>
                     <div className="mt-0.5 text-[12.5px] text-muted">{s.summary}</div>
+                    {s.memberSeen ? (
+                      <div className="mt-1 flex items-center gap-1 text-[11.5px] font-semibold text-sage-deep">
+                        <Icon name="circle-check" size={12} />
+                        회원이 확인했어요
+                      </div>
+                    ) : null}
                   </div>
                   <Badge variant="awaiting">응답 대기</Badge>
                 </div>

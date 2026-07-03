@@ -111,6 +111,22 @@ export async function notifyRequestResult(input: {
 }
 
 /**
+ * 강사가 회원의 변경 요청에 '다른 시간'을 역제안했을 때 요청한 회원에게 알림(제안 도착 신호). best-effort.
+ * 'request' 타입 재사용(스키마 변경 불필요). 회원 대상 문구 → 선생님 호칭.
+ */
+export async function notifyMemberOfCounterProposal(memberId: string): Promise<void> {
+  await sb.from("notifications").insert({
+    recipient_type: "member",
+    recipient_id: memberId,
+    type: "request",
+    title: "새로운 시간 제안",
+    body: "선생님이 다른 시간을 제안했어요. 받은 요청에서 확인해주세요.",
+    channel: "in_app",
+    status: "unread",
+  });
+}
+
+/**
  * 세션 일정이 이동/취소 확정됐을 때 세션의 다른 회원(2:1 팀 파트너)에게 알림. best-effort.
  * "무조건 함께 듣는" 2:1에서 한 명이 조율하면 파트너는 결과를 알아야 한다 — exceptMemberId(조율 당사자)는 건너뛴다.
  * 1:1 세션은 당사자를 빼면 수신자가 0이라 자연히 no-op.

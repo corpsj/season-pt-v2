@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -154,6 +155,16 @@ export function MemberRequestClient({ view }: { view: MemberRequestView }) {
                 );
               })}
             </div>
+
+            <Banner tone="neutral" className="mb-5">
+              2주 이후 일정은 선생님께 채팅으로 문의해 주세요.{" "}
+              <Link
+                href={`/m/chat?draft=${encodeURIComponent("수업 일정 변경 문의드려요. 원하는 날짜: ")}`}
+                className="font-bold text-sage-deep underline underline-offset-2"
+              >
+                채팅으로 문의
+              </Link>
+            </Banner>
 
             <div className="mb-2.5">
               <Kicker>원하는 시간</Kicker>

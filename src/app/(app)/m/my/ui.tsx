@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { useToast } from "@/components/ui/Toast";
 import { memberTabs } from "@/components/trainer/tabs";
 import { memberLogout } from "@/lib/auth/member-actions";
 import { cn } from "@/lib/cn";
@@ -18,7 +17,6 @@ const APP_VERSION = "1.0.0";
 
 export function MemberMyClient({ view, chatUnread, notifUnread }: { view: MemberMyView; chatUnread: number; notifUnread: number }) {
   const router = useRouter();
-  const toast = useToast();
   const m = view.membership;
 
   async function onLogout() {
@@ -97,14 +95,13 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
                 <Icon name="ticket-fill" size={20} className="text-sage-deep" />
                 <span className="text-[15px] font-bold text-ink">{m.productLabel}</span>
               </div>
-              <button
-                type="button"
-                onClick={() => toast("재등록은 선생님에게 메시지로 문의해 주세요")}
+              <Link
+                href={`/m/chat?draft=${encodeURIComponent("재등록 문의드려요!")}`}
                 className="tappable flex items-center gap-0.5 whitespace-nowrap text-[13px] font-bold text-terracotta"
               >
                 재등록
                 <Icon name="chevron-right" size={15} />
-              </button>
+              </Link>
             </div>
             <div className="mb-3 flex items-end justify-between">
               <div className="flex items-end gap-[5px]">
@@ -159,6 +156,7 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
         <Kicker className="mx-1 mb-[9px]">내 활동</Kicker>
         <Card className="mb-[18px] shrink-0 overflow-hidden">
           <MenuRow icon="coins-fill" label="결제·구매 내역" href="/m/my/payments" first />
+          <MenuRow icon="clock" label="일정 요청 내역" href="/m/my/requests" />
           <MenuRow icon="document-text" label="운동 기록" href="/m/my/records" />
           <MenuRow icon="camera" label="체형 기록" href="/m/my/body" />
           <MenuRow icon="fire" label="식단 관리" href="/m/my/meals" />
@@ -176,13 +174,12 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
 
         {/* footer */}
         <div className="px-0 pb-[22px] pt-1 text-center">
-          <button
-            type="button"
-            onClick={() => toast("회원 탈퇴는 선생님에게 문의해 주세요")}
+          <Link
+            href={`/m/chat?draft=${encodeURIComponent("회원 탈퇴 문의드려요.")}`}
             className="tappable text-[12.5px] font-medium text-placeholder underline underline-offset-[3px]"
           >
             회원 탈퇴
-          </button>
+          </Link>
           <div className="mt-2 text-[11px] font-medium text-chevron">앱 버전 {APP_VERSION}</div>
         </div>
       </Body>

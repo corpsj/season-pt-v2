@@ -27,7 +27,6 @@ import type {
   MemberPaymentItem,
   MemberPaymentsView,
   MemberPaymentYear,
-  MemberReceiveView,
   MemberRequestView,
   MemberWorkoutRecord,
   MemberWorkoutView,
@@ -127,7 +126,9 @@ async function primaryTrainer(memberId: string) {
 }
 
 /* ----------------------------- calendar (/m) ----------------------------- */
-export async function getMemberCalendar(iso?: string): Promise<MemberCalendarView> {
+export async function getMemberCalendar(
+  iso?: string,
+): Promise<MemberCalendarView & { trainerReqCount: number }> {
   const me = await requireMember();
   const today = todayISO(); // YYYY-MM-DD (KST)
   const selISO = iso ?? today;
@@ -186,6 +187,7 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
   // the viewed month, or a request for a session in another month leaves the member with no
   // signal to act on it.
   let hasTrainerReq = false;
+  let trainerReqCount = 0;
   const allSessionIds = (sm ?? [])
     .map((r) => (r as unknown as { sessions?: { id: string } }).sessions?.id)
     .filter((id): id is string => !!id);
@@ -196,7 +198,8 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
       .eq("requester_type", "trainer")
       .eq("status", "pending")
       .in("session_id", allSessionIds);
-    hasTrainerReq = (count ?? 0) > 0;
+    trainerReqCount = count ?? 0;
+    hasTrainerReq = trainerReqCount > 0;
   }
 
   const paused = !!membership && membership.status === "paused";
@@ -208,6 +211,7 @@ export async function getMemberCalendar(iso?: string): Promise<MemberCalendarVie
     expired: !!membership && (membership.status === "expired" || (dDay < 0 && !paused)),
     paused,
     hasTrainerReq,
+    trainerReqCount,
     monthLabel,
     calDays,
     selDateLabel,
@@ -416,90 +420,129 @@ async function scheduleLegendFor(memberId: string): Promise<string> {
 }
 
 /* ----------------------------- receive (/m/receive) ----------------------------- */
-export async function getMemberReceive(): Promise<MemberReceiveView> {
+/** One trainer-sent pending request the member must act on. iso rides with each slot so the
+ *  client can accept a chosen time without a second round-trip (no view/meta split → no race). */
+export type MemberReceiveItem = {
+  requestId: string;
+  trainerName: string;
+  ago: string;
+  type: "change" | "cancel";
+  before: string;
+  reason?: string;
+  sessionId: string;
+  slots: { id: string; label: string; iso: string }[];
+};
+
+/** All pending trainer requests across this member's sessions (newest first). Opening this list
+ *  marks them seen (강사 '보낸 요청' 확인 표시의 대칭 데이터). */
+export async function getMemberReceiveList(): Promise<MemberReceiveItem[]> {
   const me = await requireMember();
 
-  // This member's session ids.
   const { data: sm } = await sb
     .from("session_members")
     .select("session_id")
     .eq("member_id", me.memberId);
-  const sessionIds = (sm ?? []).map((r) => (r as unknown as {session_id: string }).session_id);
+  const sessionIds = (sm ?? []).map((r) => (r as unknown as { session_id: string }).session_id);
+  if (!sessionIds.length) return [];
 
-  const empty: MemberReceiveView = {
-    trainerName: "",
-    ago: "",
-    before: "",
-    type: "change",
-    sessionId: "",
-    slots: [],
-  };
-  if (!sessionIds.length) return empty;
-
-  const { data: req } = await sb
+  const { data: reqs } = await sb
     .from("schedule_change_requests")
     .select("id, requester_id, reason, original_at, proposed_slots, created_at, session_id, type")
     .eq("requester_type", "trainer")
     .eq("status", "pending")
     .in("session_id", sessionIds)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!req) return empty;
+    .order("created_at", { ascending: false });
+  const requests = reqs ?? [];
+  if (!requests.length) return [];
 
-  const { data: trainer } = await sb
+  // Trainer names in one query.
+  const trainerIds = [...new Set(requests.map((r) => r.requester_id as string))];
+  const { data: trainers } = await sb
     .from("trainers")
-    .select("display_name")
-    .eq("id", req.requester_id)
-    .maybeSingle();
+    .select("id, display_name")
+    .in("id", trainerIds);
+  const nameById = new Map((trainers ?? []).map((t) => [t.id as string, t.display_name as string]));
 
-  const slots = (Array.isArray(req.proposed_slots) ? (req.proposed_slots as string[]) : []).map(
-    (iso, i) => ({ id: `r${i + 1}`, label: slotLabel(iso) })
-  );
+  // Mark seen (best-effort, only the still-unseen ones) — feeds the trainer's '확인함' badge.
+  await sb
+    .from("schedule_change_requests")
+    .update({ seen_at: new Date().toISOString() })
+    .in("id", requests.map((r) => r.id as string))
+    .is("seen_at", null);
 
-  return {
-    trainerName: trainer?.display_name ?? "",
-    ago: agoLabel(req.created_at),
-    before: req.original_at ? slotLabel(req.original_at) : "",
-    reason: req.reason ?? undefined,
+  return requests.map((req) => ({
+    requestId: req.id as string,
+    trainerName: nameById.get(req.requester_id as string) ?? "",
+    ago: agoLabel(req.created_at as string),
     type: (req.type as "change" | "cancel") ?? "change",
-    sessionId: req.session_id,
-    slots,
-  };
+    before: req.original_at ? slotLabel(req.original_at as string) : "",
+    reason: req.reason ?? undefined,
+    sessionId: req.session_id as string,
+    slots: (Array.isArray(req.proposed_slots) ? (req.proposed_slots as string[]) : []).map(
+      (iso, i) => ({ id: `r${i + 1}`, label: slotLabel(iso), iso }),
+    ),
+  }));
 }
 
-/** Action metadata for the receive screen (request id + per-option slot ISO). */
-export type MemberReceiveMeta = {
-  requestId: string | null;
-  slotIsoById: Record<string, string>;
+/* ----------------------- 보낸 요청 내역 (/m/my/requests) ----------------------- */
+export type MemberSentStatus = "pending" | "seen" | "accepted" | "rejected" | "expired";
+export type MemberSentRequest = {
+  id: string;
+  type: "change" | "cancel";
+  title: string;
+  ago: string;
+  originalLabel: string;
+  proposedLabel?: string;
+  status: MemberSentStatus;
+  statusLabel: string;
 };
 
-export async function getMemberReceiveMeta(): Promise<MemberReceiveMeta> {
+const SENT_STATUS_LABEL: Record<MemberSentStatus, string> = {
+  pending: "대기 중",
+  seen: "확인함",
+  accepted: "수락",
+  rejected: "거절",
+  expired: "기간 지남",
+};
+
+/** Requests this member sent to their trainer (last 30 days, newest first). Status is derived:
+ *  accepted/rejected from the row, else seen_at → 확인함, 세션 원시각 경과 → 기간 지남, else 대기 중. */
+export async function getMemberSentRequests(): Promise<MemberSentRequest[]> {
   const me = await requireMember();
-  const { data: sm } = await sb
-    .from("session_members")
-    .select("session_id")
-    .eq("member_id", me.memberId);
-  const sessionIds = (sm ?? []).map((r) => (r as unknown as {session_id: string }).session_id);
-  if (!sessionIds.length) return { requestId: null, slotIsoById: {} };
-
-  const { data: req } = await sb
+  const sinceISO = new Date(Date.now() - 30 * 86400000).toISOString();
+  const { data } = await sb
     .from("schedule_change_requests")
-    .select("id, proposed_slots")
-    .eq("requester_type", "trainer")
-    .eq("status", "pending")
-    .in("session_id", sessionIds)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!req) return { requestId: null, slotIsoById: {} };
+    .select("id, type, status, original_at, proposed_slots, created_at, seen_at")
+    .eq("requester_type", "member")
+    .eq("requester_id", me.memberId)
+    .gte("created_at", sinceISO)
+    .order("created_at", { ascending: false });
 
-  const slots = Array.isArray(req.proposed_slots) ? (req.proposed_slots as string[]) : [];
-  const slotIsoById: Record<string, string> = {};
-  slots.forEach((iso, i) => {
-    slotIsoById[`r${i + 1}`] = iso;
+  const nowIso = new Date().toISOString();
+  return (data ?? []).map((r) => {
+    const type = (r.type as "change" | "cancel") ?? "change";
+    const slots = Array.isArray(r.proposed_slots) ? (r.proposed_slots as string[]) : [];
+    const original = (r.original_at as string | null) ?? null;
+    let status: MemberSentStatus;
+    if (r.status === "accepted") status = "accepted";
+    else if (r.status === "rejected") status = "rejected";
+    else if (original && original < nowIso) status = "expired"; // 세션 원시각 경과 (파생, enum 불변)
+    else if (r.seen_at) status = "seen";
+    else status = "pending";
+    return {
+      id: r.id as string,
+      type,
+      title: type === "cancel" ? "수업 취소 요청" : "시간 변경 요청",
+      ago: agoLabel(r.created_at as string),
+      originalLabel: original ? slotLabel(original) : "",
+      proposedLabel:
+        type === "change" && slots.length
+          ? slotLabel(slots[0]) + (slots.length > 1 ? ` 외 ${slots.length - 1}` : "")
+          : undefined,
+      status,
+      statusLabel: SENT_STATUS_LABEL[status],
+    };
   });
-  return { requestId: req.id, slotIsoById };
 }
 
 /* ----------------------------- request (/m/request) ----------------------------- */

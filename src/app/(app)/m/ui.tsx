@@ -20,6 +20,7 @@ import type {
 
 export function MemberCalendarClient({
   view,
+  trainerReqCount,
   dayMap,
   initialSelected,
   chatUnread,
@@ -28,6 +29,7 @@ export function MemberCalendarClient({
   today,
 }: {
   view: MemberCalendarView;
+  trainerReqCount: number;
   dayMap: MemberCalendarDayMap;
   initialSelected: string;
   chatUnread: number;
@@ -80,7 +82,7 @@ export function MemberCalendarClient({
           >
             <Icon name="clock" size={18} className="text-terracotta" />
             <span className="flex-1 text-[12.5px] font-bold text-terracotta-deep">
-              선생님이 일정 변경을 요청했어요
+              선생님이 일정 변경을 요청했어요{trainerReqCount >= 2 ? ` · ${trainerReqCount}건` : ""}
             </span>
             <Icon name="chevron-right" size={15} className="text-terracotta" />
           </Link>

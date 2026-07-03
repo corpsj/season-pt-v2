@@ -29,6 +29,7 @@ export default async function MemberCalendarPage(props: {
   return (
     <MemberCalendarClient
       view={view}
+      trainerReqCount={view.trainerReqCount}
       dayMap={dayMap}
       initialSelected={initialSelected}
       chatUnread={chatUnread}

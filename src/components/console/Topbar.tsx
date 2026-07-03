@@ -3,6 +3,7 @@ import { getTrainerContext } from "@/lib/data/db";
 import { getNotifications, countUnread } from "@/lib/data/groups/notifications";
 import { kstTodayLabel } from "./ui";
 import { BellMenu } from "./BellMenu";
+import { SearchBox } from "./SearchBox";
 
 /** Console page header: per-page title/sub on the left, today + bell on the right. */
 export function Topbar({
@@ -21,6 +22,7 @@ export function Topbar({
         {sub ? <div className="mt-1 text-[13px] font-medium text-[#9A917F]">{sub}</div> : null}
       </div>
       {right}
+      <SearchBox />
       <div className="flex flex-none items-center gap-[7px] rounded-[11px] border border-[rgba(75,59,46,0.07)] bg-white px-[14px] py-[9px]">
         <Icon name="calendar" size={16} className="text-[#8FA187]" />
         <span className="text-[13px] font-semibold text-[#5B5345]">{kstTodayLabel()}</span>
