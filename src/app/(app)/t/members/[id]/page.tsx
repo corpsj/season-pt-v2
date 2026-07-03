@@ -66,6 +66,19 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           </div>
         </div>
 
+        {/* 2:1 팀 — 두 회원을 나눠서 보기(전환) */}
+        {m.isTeam && m.partnerId && m.partnerName ? (
+          <div className="mb-3.5 flex items-center gap-1.5 rounded-[13px] border border-ink/[0.08] bg-card p-1.5">
+            <span className="flex-1 rounded-[10px] bg-sage py-2 text-center text-[13px] font-bold text-surface">{m.name}</span>
+            <Link
+              href={`/t/members/${m.partnerId}`}
+              className="tappable flex-1 rounded-[10px] py-2 text-center text-[13px] font-bold text-muted2"
+            >
+              {m.partnerName}
+            </Link>
+          </div>
+        ) : null}
+
         {m.isTeam ? (
           <Banner tone="team" className="mb-3.5">
             2:1 팀 수업이에요. 두 회원의 잔여 횟수가 함께 차감돼요.

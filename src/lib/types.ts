@@ -227,6 +227,8 @@ export interface MemberDetailView {
   gender: Gender | null;
   isTeam: boolean;
   team?: TeamAvatar;
+  partnerId?: string; // 2:1 파트너 — 상세에서 두 명 전환용
+  partnerName?: string;
   initial: string;
   avatarTone: AvatarTone;
   badge: BadgeView;

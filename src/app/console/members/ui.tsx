@@ -262,6 +262,16 @@ export function MembersClient({
                   <div className="flex items-center gap-2">
                     <span className="whitespace-nowrap text-[20px] font-bold tracking-[-0.01em] text-ink">{d.name}</span>
                     <DPill dDay={d.activeMembershipId ? d.dDay : null} />
+                    {d.isTeam && d.partnerId && d.partnerName ? (
+                      <button
+                        type="button"
+                        onClick={() => select(d.partnerId!)}
+                        className="flex items-center gap-1 rounded-[9px] bg-[#EDF4E3] px-2.5 py-1 text-[12px] font-semibold text-[#5B6452] transition hover:bg-[#E3ECD6]"
+                      >
+                        <Icon name="persons" size={13} />
+                        {d.partnerName} 보기
+                      </button>
+                    ) : null}
                   </div>
                   <div className="mt-0.5 truncate text-[13px] font-medium text-[#847A66]">{d.schedule}</div>
                 </div>

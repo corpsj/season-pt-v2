@@ -12,7 +12,7 @@ import { RadioOption } from "@/components/ui/RadioOption";
 import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
-import { createMember } from "@/lib/data/groups/owner-ops-actions";
+import { createMember, createDuetMembers } from "@/lib/data/groups/owner-ops-actions";
 import { productType, matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
 
@@ -46,10 +46,10 @@ export function MemberRegisterClient({
   const [phone, setPhone] = useState("");
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<Gender>("female");
-  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({
-    3: { hour: 19, minute: 0 },
-    6: { hour: 19, minute: 0 },
-  });
+  // 듀엣(2:1) 파트너 — 신규 회원 2명 동시 등록
+  const [p2, setP2] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender });
+  // 정기 일정은 선택 사항 — 요일을 고르지 않으면 일정 없이 등록된다.
+  const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
   const [trainerId, setTrainerId] = useState(ownerId);
   const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
@@ -77,6 +77,10 @@ export function MemberRegisterClient({
 
   async function onSubmit() {
     if (pending) return;
+    if (is2on1 && (!p2.name.trim() || !p2.phone.trim() || !p2.birth.trim())) {
+      toast("듀엣 파트너의 이름·연락처·생년월일을 입력해주세요", "error");
+      return;
+    }
     setPending(true);
     const productArg =
       selectedProduct !== "later" ? { productId: selectedProduct } : undefined;
@@ -88,28 +92,36 @@ export function MemberRegisterClient({
             paidAt: payDate || undefined,
           }
         : undefined;
-    // 2:1은 팀 만들기에서 시간을 정하므로 개인 정기 슬롯을 생성하지 않는다.
-    const slots = is2on1
-      ? []
-      : Object.entries(dayTimes)
-          .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
-          .sort((a, b) => a.weekday - b.weekday);
-    const res = await createMember({
-      name,
-      phone,
-      birth,
-      gender,
-      slots,
-      trainerId,
-      product: productArg,
-      payment: paymentArg,
-    });
+    const slots = Object.entries(dayTimes)
+      .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
+      .sort((a, b) => a.weekday - b.weekday);
+    const res = is2on1
+      ? await createDuetMembers({
+          members: [
+            { name, phone, birth, gender },
+            { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
+          ],
+          trainerId,
+          slots,
+          product: productArg,
+          payment: paymentArg,
+        })
+      : await createMember({
+          name,
+          phone,
+          birth,
+          gender,
+          slots,
+          trainerId,
+          product: productArg,
+          payment: paymentArg,
+        });
     if (!res.ok) {
       setPending(false);
       toast(res.error ?? "회원 등록에 실패했어요", "error");
       return;
     }
-    toast("회원을 등록했어요");
+    toast(res.warn ?? (is2on1 ? "듀엣 회원 두 명을 등록했어요" : "회원을 등록했어요"));
     router.push("/t/members/" + res.memberId);
     router.refresh();
   }
@@ -189,13 +201,13 @@ export function MemberRegisterClient({
             />
           </div>
 
-          {/* 수업 형태 — 2:1은 정기 일정을 팀 만들기에서 정하므로 여기서 명시적으로 받는다 */}
+          {/* 수업 형태 — 2:1(듀엣)은 파트너 정보를 함께 받아 두 명을 동시에 등록한다 */}
           <div>
             <div className="mb-2 text-[12.5px] font-semibold text-muted5">수업 형태</div>
             <SegmentedToggle
               options={[
                 { value: "1on1", label: "1:1" },
-                { value: "2on1", label: "2:1" },
+                { value: "2on1", label: "2:1 (듀엣)" },
               ]}
               value={classType}
               onChange={setClassType}
@@ -203,10 +215,44 @@ export function MemberRegisterClient({
           </div>
         </div>
 
-        {!is2on1 ? (
-        <>
+        {/* 듀엣 파트너 — 신규 회원 2명 동시 등록 */}
+        {is2on1 ? (
+          <>
+            <div className="mb-2.5 mt-6">
+              <Kicker>듀엣 파트너</Kicker>
+            </div>
+            <Card className="flex flex-col gap-3.5 p-4">
+              <Field icon="person" label="이름">
+                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
+              </Field>
+              <Field icon="phone" label="연락처 (아이디)">
+                <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
+              </Field>
+              <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
+                <TextInput
+                  inputMode="numeric"
+                  placeholder="000000"
+                  value={p2.birth}
+                  onChange={(e) => setP2({ ...p2, birth: e.target.value })}
+                />
+              </Field>
+              <div>
+                <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
+                <SegmentedToggle
+                  options={[
+                    { value: "female", label: "여성" },
+                    { value: "male", label: "남성" },
+                  ]}
+                  value={p2.gender}
+                  onChange={(v) => setP2({ ...p2, gender: v })}
+                />
+              </div>
+            </Card>
+          </>
+        ) : null}
+
         <div className="mb-2.5 mt-6">
-          <Kicker>정기 수업 요일</Kicker>
+          <Kicker>{is2on1 ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</Kicker>
         </div>
         <div className="mb-3 flex gap-1.5">
           {DAYS.map((d, i) => {
@@ -266,18 +312,19 @@ export function MemberRegisterClient({
           </div>
         )}
 
-        <Banner tone="neutral">선택한 요일·시간에 매주 수업이 자동 생성돼요.</Banner>
-        </>
-        ) : (
-          <Banner tone="team" className="mt-6">
-            2:1 팀 수업은 회원 등록 후 회원 상세 화면의 [2:1 팀으로 묶기]에서 두 회원을 함께 묶어 시간을 정해요.
-          </Banner>
-        )}
+        <Banner tone="neutral">
+          {is2on1
+            ? "선택한 요일·시간에 두 회원의 팀 수업이 매주 자동 생성돼요. 일정은 나중에 정해도 돼요."
+            : "선택한 요일·시간에 매주 수업이 자동 생성돼요. 일정은 나중에 정해도 돼요."}
+        </Banner>
 
         {/* 회원권 상품 선택 — 1:1/2:1/특별할인 3분류 칩 */}
         <div className="mb-2.5 mt-6">
           <Kicker>회원권 상품</Kicker>
         </div>
+        {is2on1 ? (
+          <div className="mb-2.5 text-[12px] font-medium text-muted">선택한 회원권은 두 회원에게 각각 발급·결제 기록돼요.</div>
+        ) : null}
         {products.length > 0 ? (
           <div className="mb-2.5">
             <SegmentedToggle
@@ -331,7 +378,7 @@ export function MemberRegisterClient({
                 onChange={setPayMethod}
               />
             </div>
-            <Field icon="coins" label="금액" hint="원">
+            <Field icon="coins" label={is2on1 ? "금액 (1인당)" : "금액"} hint="원">
               <MoneyInput
                 placeholder={selectedProductData.price.toLocaleString("ko-KR")}
                 value={payAmount}

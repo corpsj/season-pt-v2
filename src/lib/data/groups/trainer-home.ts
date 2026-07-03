@@ -20,6 +20,7 @@ import type {
   MemberDetailView,
   MemberFilter,
   MembersView,
+  MemberListItem,
   TeamAvatar,
   TrainerCalendarData,
   TrainerDayClass,
@@ -331,7 +332,7 @@ async function memberIdsOf(trainerId: string): Promise<string[]> {
 async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
   const meta = new Map<
     string,
-    { type: "1on1" | "2on1"; weekdays: number[]; hour: number; minute: number; team?: TeamAvatar; partnerNames: string[] }
+    { type: "1on1" | "2on1"; weekdays: number[]; hour: number; minute: number; team?: TeamAvatar; partnerNames: string[]; partnerId?: string }
   >();
   if (memberIds.length === 0) return meta;
 
@@ -371,13 +372,17 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
     const minute = mine[0].minute ?? 0;
     const isTeam = mine.some((s) => s.type === "2on1");
     let team: TeamAvatar | undefined;
+    let partnerId: string | undefined;
     const partnerNames: string[] = [];
     if (isTeam) {
       const teamSched = mine.find((s) => s.type === "2on1")!;
       const ms = teamSched.schedule_members;
       const selfSm = ms.find((sm) => sm.member_id === mid);
       const otherSm = ms.find((sm) => sm.member_id !== mid);
-      if (otherSm) partnerNames.push(otherSm.members?.name ?? "");
+      if (otherSm) {
+        partnerNames.push(otherSm.members?.name ?? "");
+        partnerId = otherSm.member_id;
+      }
       team = {
         init1: initialOf(selfSm?.members?.name ?? ""),
         tone1: asTone(selfSm?.members?.avatar_tone),
@@ -385,7 +390,7 @@ async function scheduleMetaOf(trainerId: string | null, memberIds: string[]) {
         tone2: asTone(otherSm?.members?.avatar_tone),
       };
     }
-    meta.set(mid, { type: isTeam ? "2on1" : "1on1", weekdays, hour, minute, team, partnerNames });
+    meta.set(mid, { type: isTeam ? "2on1" : "1on1", weekdays, hour, minute, team, partnerNames, partnerId });
   }
   return meta;
 }
@@ -543,21 +548,53 @@ export async function getMembersAll(): Promise<{
 
   const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, memberIds);
   const statusById: Record<string, "active" | "expiring" | "rest" | "inactive"> = {};
+  const rowById = new Map(memberRows.map((m) => [m.id, m]));
 
-  const items = memberRows.map((m) => {
+  // 상태는 회원별로 전부 채운다(카운트·필터의 기준). 리스트 카드는 2:1 팀을 한 장으로 묶는다.
+  for (const m of memberRows) {
     const ms = msByMember.get(m.id);
     const dDay = ms ? ms.dDay : null;
     const isExpiring = dDay !== null && isExpiringWindow(dDay);
+    statusById[m.id] =
+      m.status === "rest" ? "rest" : m.status === "inactive" ? "inactive" : isExpiring ? "expiring" : "active";
+  }
+
+  const absorbed = new Set<string>(); // 대표 카드에 흡수된 파트너
+  const items: MemberListItem[] = [];
+  for (const m of memberRows) {
+    if (absorbed.has(m.id)) continue;
+    const ms = msByMember.get(m.id);
+    const dDay = ms ? ms.dDay : null;
     const sm = meta.get(m.id);
     const isTeam = sm?.type === "2on1";
     const remaining = ms?.remaining ?? 0;
-    const kind = isTeam ? "2:1" : "1:1";
     const days = sm ? sm.weekdays.map((w) => WD[w]).join("·") : "";
     const time = sm ? hmLabel(sm.hour, sm.minute) : "";
+
+    // 2:1 팀 = 카드 한 장("박성주·이은비"). 잔여·D-day는 두 명 중 급한 쪽 기준.
+    const partner = isTeam && sm?.partnerId ? rowById.get(sm.partnerId) : undefined;
+    if (partner) {
+      absorbed.add(partner.id);
+      const pms = msByMember.get(partner.id);
+      const dDays = [dDay, pms ? pms.dDay : null].filter((v): v is number => v !== null);
+      const teamDday = dDays.length ? Math.min(...dDays) : null;
+      if (statusById[partner.id] === "expiring") statusById[m.id] = statusById[m.id] === "inactive" || statusById[m.id] === "rest" ? statusById[m.id] : "expiring";
+      items.push({
+        id: m.id,
+        name: `${m.name}·${partner.name}`,
+        initial: initialOf(m.name),
+        avatarTone: asTone(m.avatar_tone),
+        isTeam: true,
+        team: sm?.team,
+        sub: `2:1 · ${days} ${time} · 잔여 ${remaining}·${pms?.remaining ?? 0}회`,
+        badge: badgeForMember(teamDday),
+      });
+      continue;
+    }
+
+    const kind = isTeam ? "2:1" : "1:1";
     const sub = sm ? `${kind} · ${days} ${time} · 잔여 ${remaining}회` : `${kind} · 잔여 ${remaining}회`;
-    statusById[m.id] =
-      m.status === "rest" ? "rest" : m.status === "inactive" ? "inactive" : isExpiring ? "expiring" : "active";
-    return {
+    items.push({
       id: m.id,
       name: m.name,
       initial: initialOf(m.name),
@@ -566,8 +603,8 @@ export async function getMembersAll(): Promise<{
       team: sm?.team,
       sub,
       badge: badgeForMember(dDay),
-    };
-  });
+    });
+  }
 
   const statuses = Object.values(statusById);
   const totalActive = statuses.filter((s) => s !== "rest" && s !== "inactive").length;
@@ -687,6 +724,8 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     gender: m.gender,
     isTeam: !!isTeam,
     team: sm?.team,
+    partnerId: sm?.partnerId,
+    partnerName: sm?.partnerNames[0] || undefined,
     initial: initialOf(m.name),
     avatarTone: asTone(m.avatar_tone),
     badge: badgeForMember(ms ? dDay : null),
