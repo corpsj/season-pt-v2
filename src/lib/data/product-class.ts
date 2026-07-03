@@ -16,16 +16,20 @@ export function productType(name: string): "1on1" | "2on1" | null {
   return null;
 }
 
-/** 발급 픽커 자동 필터: 담당이 대표면 대표+공용, 강사면 강사+공용 상품만 노출. */
-export function tierMatches(name: string, trainerIsOwner: boolean): boolean {
-  const tier = productTier(name);
-  return tier === "common" || tier === (trainerIsOwner ? "owner" : "staff");
-}
-
-/** 특별할인 상품 여부: 이름에 "특별할인" 포함 — 자체 할인 가격표를 가진 별도 상품(금액 차감 아님).
- *  발급 픽커에서 자격 있는 회원에게만 노출하고, 무자격 회원에겐 숨긴다. */
+/** 특별할인 상품 여부: 이름에 "특별할인" 포함 — 자체 할인 가격표를 가진 별도 상품(금액 차감 아님). */
 export function isDiscountProduct(name: string): boolean {
   return name.includes("특별할인");
+}
+
+export type PickerFilter = "1on1" | "2on1" | "discount";
+
+/** 발급 픽커 3분류 필터: 특별할인 칩은 특별할인 상품만, 1:1/2:1 칩은 일반 상품 중 해당 유형.
+ *  유형 표기 없는 상품(기존 커스텀 이름)은 1:1/2:1 어느 칩에서도 노출 — 숨은 상품이 생기지 않게. */
+export function matchesPickerFilter(name: string, filter: PickerFilter): boolean {
+  if (filter === "discount") return isDiscountProduct(name);
+  if (isDiscountProduct(name)) return false;
+  const t = productType(name);
+  return t === null || t === filter;
 }
 
 /** 폼 조합용 상품명: "대표 1:1 PT 10회권" (공용은 무접두). 할인이면 "특별할인 "을 최전방에 접두("특별할인 강사 1:1 PT 10회권"). */

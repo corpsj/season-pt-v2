@@ -20,7 +20,7 @@ export default async function StaffPage() {
       <Body>
         {/* header */}
         <div className="mb-5 flex items-center gap-3">
-          <BackButton fallback="/t/settings" />
+          <BackButton fallback="/t/perf" />
           <span className="text-[19px] font-bold text-ink">강사 관리</span>
         </div>
 

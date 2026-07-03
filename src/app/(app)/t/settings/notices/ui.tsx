@@ -54,7 +54,7 @@ export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body>
         <div className="mb-5 flex items-center gap-3">
-          <BackButton fallback="/t/settings" />
+          <BackButton fallback="/t/perf" />
           <span className="text-[19px] font-bold text-ink">공지사항 관리</span>
         </div>
 

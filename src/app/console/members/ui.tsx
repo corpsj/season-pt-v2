@@ -12,12 +12,12 @@ import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches, isDiscountProduct } from "@/lib/data/product-class";
+import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
 import { TeamCreateModal, TeamEditModal } from "./TeamCreate";
-import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod, DiscountItem } from "@/lib/types";
+import type { MemberDetailView, MemberListItem, MembershipProduct, Gender, PaymentMethod } from "@/lib/types";
 import { formatPhone } from "@/components/ui/Field";
 
 type Status = "active" | "expiring" | "rest" | "inactive";
@@ -39,7 +39,7 @@ export function MembersClient({
   statusById,
   products,
   trainers,
-  discounts,
+  ownerId,
   initialId,
   initialDetail,
   initialFiles,
@@ -49,7 +49,7 @@ export function MembersClient({
   statusById: Record<string, Status>;
   products: MembershipProduct[];
   trainers: TrainerOpt[];
-  discounts: DiscountItem[];
+  ownerId: string;
   initialId: string | null;
   initialDetail: MemberDetailView | null;
   initialFiles: MemberFileView[];
@@ -67,15 +67,11 @@ export function MembersClient({
   const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team">(null);
   const [busy, setBusy] = useState(false);
 
-  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, productId: "", method: "card" as PaymentMethod, amount: "", discountId: "" });
+  // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
+  const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, trainerId: ownerId, productId: "", method: "card" as PaymentMethod, amount: "" });
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
   const [issueAmt, setIssueAmt] = useState("");
-  const [issueDiscountId, setIssueDiscountId] = useState("");
-  // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
-  // 자격 있으면 특별할인 상품만, 없으면 특별할인 상품 숨김 — 담당 필터와 AND.
-  const productMatches = (name: string, trainerIsOwner: boolean, qualified: boolean) =>
-    tierMatches(name, trainerIsOwner) && isDiscountProduct(name) === qualified;
   const [refund, setRefund] = useState<{ refund: number; used: number; noBaseline: boolean } | null>(null);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
   const [refundAmt, setRefundAmt] = useState("");
@@ -142,14 +138,9 @@ export function MembersClient({
     router.refresh();
   }
   function openIssue() {
-    const owner = detail?.trainerIsOwner ?? true;
-    // 회원의 할인 자격을 기본 선택(변경 가능). 담당 + 자격에 맞는 첫 상품만 기본 선택 —
-    // 숨겨진 상품이 조용히 발급되는 것 방지(자격 있는데 특별할인 상품 0개면 미선택 → "전체 상품 보기").
-    const discId = detail?.discount?.id ?? "";
-    const first = products.find((p) => productMatches(p.name, owner, discId !== ""));
-    setIssueProduct(first?.id ?? "");
-    setIssueDiscountId(discId);
-    setIssueAmt(first ? String(first.price) : "");
+    // 기본 미선택 — 대표가 상품을 직접 고른다(숨은 상품이 조용히 발급되는 것 방지, 발급 버튼은 선택 전 비활성).
+    setIssueProduct("");
+    setIssueAmt("");
     setIssueMethod("card");
     setModal("issue");
   }
@@ -157,10 +148,8 @@ export function MembersClient({
     if (!selectedId || !issueProduct) return;
     const amt = Number(issueAmt);
     if (!Number.isInteger(amt) || amt <= 0) return toast("결제 금액을 확인해주세요", "error");
-    const disc = discounts.find((x) => x.id === issueDiscountId) ?? (detail?.discount?.id === issueDiscountId ? detail.discount : null);
-    const discountLabel = disc ? disc.name : undefined;
     setBusy(true);
-    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt, discountLabel);
+    const r = await consoleIssueMembership(selectedId, issueProduct, issueMethod, amt);
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "발급에 실패했어요", "error");
     toast("회원권을 발급했어요");
@@ -182,7 +171,7 @@ export function MembersClient({
       birth: f.birth,
       gender: f.gender,
       slots: [],
-      discountId: f.discountId || undefined, // 회원 속성 저장 + 발급 결제 라벨 스냅샷(서버가 합성)
+      trainerId: f.trainerId,
       product: f.productId ? { productId: f.productId } : undefined,
       payment: f.productId ? { method: f.method, amount: Number(f.amount) } : undefined,
     });
@@ -190,7 +179,7 @@ export function MembersClient({
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
     toast("회원을 등록했어요");
     setModal(null);
-    setF({ name: "", phone: "", birth: "", gender: "female", productId: "", method: "card", amount: "", discountId: "" });
+    setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
     router.refresh();
     if (r.memberId) select(r.memberId);
   }
@@ -382,35 +371,29 @@ export function MembersClient({
               </div>
             </ModalField>
           </div>
+          <ModalField label="담당 강사">
+            <select
+              value={f.trainerId}
+              onChange={(e) => setF({ ...f, trainerId: e.target.value })}
+              className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+            >
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </ModalField>
           <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
-          {/* 콘솔 등록은 담당이 대표로 배정되므로 대표+공용 상품 기본 노출 */}
           <ProductPicker
             products={products}
             selected={f.productId}
             showPrice
-            trainerIsOwner={true}
-            qualified={f.discountId !== ""}
             onPick={(id) => {
               const newId = f.productId === id ? "" : id;
               const p = products.find((pp) => pp.id === newId);
               setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
             }}
+            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
           />
-          {discounts.length > 0 ? (
-            <div className="mt-3">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">특별 할인 자격</div>
-              <DiscountSelect
-                discounts={discounts}
-                value={f.discountId}
-                onChange={(id) => {
-                  // 자격 변경 시 상품 필터가 바뀐다 — 선택 상품이 숨겨지면 해제(상품은 선택).
-                  const cur = products.find((pp) => pp.id === f.productId);
-                  const keep = cur && productMatches(cur.name, true, id !== "");
-                  setF({ ...f, discountId: id, productId: keep ? f.productId : "", amount: keep ? f.amount : "" });
-                }}
-              />
-            </div>
-          ) : null}
           {f.productId ? (
             <div className="mt-3">
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
@@ -475,34 +458,14 @@ export function MembersClient({
           <ProductPicker
             products={products}
             selected={issueProduct}
-            trainerIsOwner={d.trainerIsOwner ?? true}
-            qualified={issueDiscountId !== ""}
             onPick={(id) => {
               setIssueProduct(id);
               const p = products.find((pp) => pp.id === id);
               if (p) setIssueAmt(String(p.price));
             }}
+            onClear={() => { setIssueProduct(""); setIssueAmt(""); }}
             showPrice
           />
-          {discounts.length > 0 || d.discount ? (
-            <>
-              <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">특별 할인 자격</div>
-              <DiscountSelect
-                discounts={discounts}
-                storedDiscount={d.discount}
-                value={issueDiscountId}
-                onChange={(id) => {
-                  setIssueDiscountId(id);
-                  // 자격 변경으로 상품 필터가 바뀐다 — 선택 상품이 숨겨지면 담당+자격에 맞는 첫 상품으로 재선택.
-                  const owner = d.trainerIsOwner ?? true;
-                  const cur = products.find((pp) => pp.id === issueProduct);
-                  const next = cur && productMatches(cur.name, owner, id !== "") ? cur : products.find((pp) => productMatches(pp.name, owner, id !== ""));
-                  setIssueProduct(next?.id ?? "");
-                  setIssueAmt(next ? String(next.price) : "");
-                }}
-              />
-            </>
-          ) : null}
           <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
           <input
             value={issueAmt ? Number(issueAmt).toLocaleString("ko-KR") : ""}
@@ -585,22 +548,6 @@ function Input({ value, onChange, placeholder }: { value: string; onChange: (v: 
     />
   );
 }
-function DiscountSelect({ discounts, value, onChange, storedDiscount }: { discounts: DiscountItem[]; value: string; onChange: (id: string) => void; storedDiscount?: { id: string; name: string } | null }) {
-  // 회원 저장 할인이 비활성 프리셋이면 목록에 없으므로 병합해 선택 유지.
-  const extra = storedDiscount && !discounts.some((d) => d.id === storedDiscount.id) ? [storedDiscount] : [];
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
-    >
-      <option value="">할인 없음</option>
-      {[...discounts, ...extra].map((d) => (
-        <option key={d.id} value={d.id}>{d.name}</option>
-      ))}
-    </select>
-  );
-}
 function MethodPicker({ value, onChange }: { value: PaymentMethod; onChange: (m: PaymentMethod) => void }) {
   return (
     <div className="flex gap-2">
@@ -610,24 +557,20 @@ function MethodPicker({ value, onChange }: { value: PaymentMethod; onChange: (m:
     </div>
   );
 }
-type ProductFilter = "all" | "1on1" | "2on1";
-const PRODUCT_FILTERS: { key: ProductFilter; label: string }[] = [
-  { key: "all", label: "전체" },
+const PRODUCT_FILTERS: { key: PickerFilter; label: string }[] = [
   { key: "1on1", label: "1:1" },
   { key: "2on1", label: "2:1" },
+  { key: "discount", label: "특별할인" },
 ];
-function ProductPicker({ products, selected, onPick, showPrice, trainerIsOwner, qualified }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; showPrice?: boolean; trainerIsOwner?: boolean; qualified?: boolean }) {
-  const [filter, setFilter] = useState<ProductFilter>("all");
-  // 담당(대표/강사) + 할인 자격 자동 필터 — 자격 있으면 특별할인 상품만·없으면 숨김. "전체 상품 보기"로 둘 다 해제.
-  const [allTiers, setAllTiers] = useState(false);
-  const tierVisible = allTiers
-    ? products
-    : products.filter(
-        (p) =>
-          (trainerIsOwner == null || tierMatches(p.name, trainerIsOwner)) &&
-          (qualified == null || isDiscountProduct(p.name) === qualified),
-      );
-  const shown = filter === "all" ? tierVisible : tierVisible.filter((p) => productType(p.name) === filter);
+function ProductPicker({ products, selected, onPick, onClear, showPrice }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; onClear: () => void; showPrice?: boolean }) {
+  const [filter, setFilter] = useState<PickerFilter>("1on1");
+  const shown = products.filter((p) => matchesPickerFilter(p.name, filter));
+  // 칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 숨은 상품이 조용히 발급되는 것 방지.
+  function pickFilter(next: PickerFilter) {
+    setFilter(next);
+    const cur = products.find((p) => p.id === selected);
+    if (cur && !matchesPickerFilter(cur.name, next)) onClear();
+  }
   return (
     <div>
       {products.length > 0 ? (
@@ -635,16 +578,11 @@ function ProductPicker({ products, selected, onPick, showPrice, trainerIsOwner, 
           {PRODUCT_FILTERS.map((f) => {
             const on = filter === f.key;
             return (
-              <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}>
+              <button key={f.key} type="button" onClick={() => pickFilter(f.key)} className={`rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}>
                 {f.label}
               </button>
             );
           })}
-          {trainerIsOwner != null && (tierVisible.length !== products.length || allTiers) ? (
-            <button type="button" onClick={() => setAllTiers((v) => !v)} className="ml-auto text-[11.5px] font-semibold text-[#9A917F] underline underline-offset-2 hover:text-ink">
-              {allTiers ? `${trainerIsOwner ? "대표" : "강사"} 상품만` : "전체 상품 보기"}
-            </button>
-          ) : null}
         </div>
       ) : null}
       <div className="flex flex-col gap-2.5">

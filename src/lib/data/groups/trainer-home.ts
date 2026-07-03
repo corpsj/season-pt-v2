@@ -7,6 +7,9 @@ import {
   clockHM,
   todayISO,
   dayDiff,
+  monthBoundsKst,
+  weekBoundsKst,
+  currentMonthLabel,
 } from "@/lib/data/db";
 import { isExpiringWindow } from "@/lib/data/notify";
 import type {
@@ -604,16 +607,15 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
       startDate: "", endDate: "", barPct: 0,
       body: { weight: 0, skeletalMuscle: 0, bodyFat: 0 },
       schedule: "정기 일정 미설정", injury: undefined,
-      activeMembershipId: null, membershipPaused: false, memberStatus: "active", discount: null, events: [],
+      activeMembershipId: null, membershipPaused: false, memberStatus: "active", events: [],
     };
   }
 
   const { data: member } = await sb
     .from("members")
-    .select("id, name, phone, gender, status, avatar_tone, injury_note, discount_id, discounts(id, name)")
+    .select("id, name, phone, gender, status, avatar_tone, injury_note")
     .eq("id", id)
     .maybeSingle();
-  const discount = (member as unknown as { discounts?: { id: string; name: string } | null } | null)?.discounts ?? null;
 
   const m = (member ?? {
     id,
@@ -656,15 +658,6 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const meta = await scheduleMetaOf(me.isOwner ? null : trainerId, [id]);
   const sm = meta.get(id);
   const isTeam = sm?.type === "2on1";
-
-  // 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용.
-  const { data: mtl } = await sb
-    .from("member_trainers")
-    .select("trainers(role)")
-    .eq("member_id", id)
-    .limit(1)
-    .maybeSingle();
-  const trainerIsOwner = (mtl as unknown as { trainers?: { role?: string } } | null)?.trainers?.role === "owner";
 
   const dDay = ms ? dayDiff(today, ms.end_date) : 0;
   const remaining = ms?.remaining_sessions ?? 0;
@@ -711,8 +704,6 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     activeMembershipId: ms?.id ?? null,
     membershipPaused,
     memberStatus: m.status,
-    trainerIsOwner,
-    discount,
     events,
   };
 }
@@ -752,4 +743,46 @@ export async function getMemberRecordHref(memberId: string): Promise<string> {
   if (pa) return `/t/record/${pa.id}`;
 
   return `/t/record/${memberId}`;
+}
+
+/* ------------------------------------------------- my stats (강사 본인) */
+export interface MyStats {
+  monthLabel: string; // "2026년 7월"
+  monthTotal: number; // 이번 달 수업(취소 제외)
+  attended: number;   // 완료
+  upcoming: number;   // 예정
+  noshow: number;     // 노쇼
+  weekTotal: number;  // 이번 주 수업(취소 제외)
+  memberCount: number; // 담당 회원 수
+}
+
+/** 강사 본인 수업 현황 — 이번 달/주 수업 수와 상태별 집계, 담당 회원 수. 로그인 트레이너 스코프. */
+export async function getMyStats(): Promise<MyStats> {
+  const t = await getTrainerContext();
+  const empty: MyStats = { monthLabel: currentMonthLabel(), monthTotal: 0, attended: 0, upcoming: 0, noshow: 0, weekTotal: 0, memberCount: 0 };
+  if (!t) return empty;
+
+  const { startISO, endISO } = monthBoundsKst();
+  const { startISO: wkS, endISO: wkE } = weekBoundsKst();
+  const [{ data: sess }, weekRes, memberRes] = await Promise.all([
+    sb.from("sessions").select("status").eq("trainer_id", t.id).gte("scheduled_at", startISO).lt("scheduled_at", endISO),
+    sb.from("sessions").select("id", { count: "exact", head: true }).eq("trainer_id", t.id).neq("status", "cancelled").gte("scheduled_at", wkS).lt("scheduled_at", wkE),
+    sb.from("member_trainers").select("member_id", { count: "exact", head: true }).eq("trainer_id", t.id),
+  ]);
+
+  let attended = 0, upcoming = 0, noshow = 0;
+  for (const s of (sess ?? []) as { status: string }[]) {
+    if (s.status === "attended") attended++;
+    else if (s.status === "scheduled") upcoming++;
+    else if (s.status === "noshow") noshow++;
+  }
+  return {
+    ...empty,
+    monthTotal: attended + upcoming + noshow,
+    attended,
+    upcoming,
+    noshow,
+    weekTotal: weekRes.count ?? 0,
+    memberCount: memberRes.count ?? 0,
+  };
 }

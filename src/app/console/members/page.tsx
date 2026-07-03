@@ -1,6 +1,7 @@
 import { Topbar } from "@/components/console/Topbar";
 import { getMembersAll, getMemberDetail } from "@/lib/data/groups/trainer-home";
-import { getMembershipProducts, getAssignableTrainers, getDiscounts } from "@/lib/data/groups/owner-ops";
+import { getMembershipProducts, getAssignableTrainers } from "@/lib/data/groups/owner-ops";
+import { getTrainerContext } from "@/lib/data/db";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
 import { getMemberMeals } from "@/lib/data/groups/meals";
 import { MembersClient } from "./ui";
@@ -11,11 +12,11 @@ export default async function ConsoleMembersPage({
   searchParams: Promise<{ sel?: string }>;
 }) {
   const sp = await searchParams;
-  const [{ view, statusById }, products, trainers, discounts] = await Promise.all([
+  const [{ view, statusById }, products, trainers, t] = await Promise.all([
     getMembersAll(),
     getMembershipProducts(),
     getAssignableTrainers(),
-    getDiscounts(),
+    getTrainerContext(), // 레이아웃이 대표를 보장 — 등록 모달 담당 강사 기본값용
   ]);
   const initialId = sp.sel ?? view.items[0]?.id ?? null;
   const [initialDetail, initialFiles, initialMeals] = initialId
@@ -32,7 +33,7 @@ export default async function ConsoleMembersPage({
           statusById={statusById}
           products={products}
           trainers={trainers}
-          discounts={discounts}
+          ownerId={t?.id ?? ""}
           initialId={initialId}
           initialDetail={initialDetail}
           initialFiles={initialFiles}

@@ -12,7 +12,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { issueMembership } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches, isDiscountProduct } from "@/lib/data/product-class";
+import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import type { MemberDetailView, MembershipProduct } from "@/lib/types";
 
 // ponytail: date labels computed client-side from durationDays; no timezone edge cases matter here (display only)
@@ -33,17 +33,11 @@ export function MembershipClient({
   const id = member.id;
   const router = useRouter();
   const toast = useToast();
-  // 담당(대표/강사) + 할인 자격 자동 필터 — 자격 있으면 특별할인 상품만·없으면 숨김. 예외 발급은 "전체 상품 보기"로.
-  const trainerIsOwner = member.trainerIsOwner ?? true;
-  const qualified = !!member.discount;
-  const [allTiers, setAllTiers] = useState(false);
-  const [typeFilter, setTypeFilter] = useState<"all" | "1on1" | "2on1">("all");
+  // 1:1/2:1/특별할인 3분류 칩 — 담당·자격 기반 자동 필터 없음(대표가 어느 상품이든 발급 가능).
+  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
   const visible = useMemo(
-    () =>
-      products
-        .filter((p) => allTiers || (tierMatches(p.name, trainerIsOwner) && isDiscountProduct(p.name) === qualified))
-        .filter((p) => typeFilter === "all" || productType(p.name) === typeFilter),
-    [products, allTiers, typeFilter, trainerIsOwner, qualified],
+    () => products.filter((p) => matchesPickerFilter(p.name, typeFilter)),
+    [products, typeFilter],
   );
   const [selected, setSelected] = useState<string>("");
   const [pending, setPending] = useState(false);
@@ -52,13 +46,10 @@ export function MembershipClient({
   const effectiveSelected = visible.some((p) => p.id === selected) ? selected : visible[0]?.id ?? "";
   const selectedProductData = products.find((p) => p.id === effectiveSelected);
 
-  // 회원의 할인 자격이 있으면 발급 이벤트에 자격 이름 스냅샷을 남긴다(가격은 특별할인 상품가 그대로).
-  const discountLabel = member.discount ? member.discount.name : undefined;
-
   async function onIssue() {
     if (pending || !effectiveSelected) return;
     setPending(true);
-    const res = await issueMembership(id, effectiveSelected, discountLabel);
+    const res = await issueMembership(id, effectiveSelected);
     if (!res.ok) {
       setPending(false);
       toast(res.error ?? "회원권 발급에 실패했어요", "error");
@@ -83,25 +74,16 @@ export function MembershipClient({
           <span className="text-[14px] font-bold text-ink">{member.name}</span>
         </div>
 
-        <div className="mb-2.5 flex items-center">
+        <div className="mb-2.5">
           <Kicker>회원권 상품</Kicker>
-          {visible.length !== products.length || allTiers ? (
-            <button
-              type="button"
-              onClick={() => setAllTiers((v) => !v)}
-              className="tappable ml-auto text-[12px] font-semibold text-muted5 underline underline-offset-2"
-            >
-              {allTiers ? `${trainerIsOwner ? "대표" : "강사"} 상품만 보기` : "전체 상품 보기"}
-            </button>
-          ) : null}
         </div>
         {products.length > 0 ? (
           <SegmentedToggle
             className="mb-2.5"
             options={[
-              { value: "all", label: "전체" },
               { value: "1on1", label: "1:1" },
               { value: "2on1", label: "2:1" },
+              { value: "discount", label: "특별할인" },
             ]}
             value={typeFilter}
             onChange={setTypeFilter}

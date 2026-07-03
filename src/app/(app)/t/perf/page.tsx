@@ -213,6 +213,12 @@ export default async function TrainerOpsPage() {
         <ActionRow href="/t/members" icon="persons" title="회원 관리" sub="회원 조회·상세" />
         <ActionRow href="/t/revenue" icon="coins" title="매출 장부" sub="결제 내역·월 합계" />
 
+        {/* 운영 관리 — 설정에서 이동해온 운영성 메뉴 */}
+        <div className="mb-2 mt-5 px-0.5 text-[12px] font-semibold text-muted">운영 관리</div>
+        <ActionRow href="/t/staff" icon="persons" title="강사 관리" sub="강사 초대·권한 관리" />
+        <ActionRow href="/t/settings/products" icon="ticket-fill" title="회원권 상품" sub="상품 카탈로그 관리" />
+        <ActionRow href="/t/settings/notices" icon="megaphone" title="공지사항" sub="회원 앱 공지 작성" />
+
         <div className="h-3.5" />
       </Body>
 

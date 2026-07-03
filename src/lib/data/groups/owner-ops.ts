@@ -16,7 +16,6 @@ import {
 import type {
   AvatarTone,
   BadgeView,
-  DiscountItem,
   ExerciseItem,
   Me,
   MemberDetailView,
@@ -42,7 +41,6 @@ export interface PaymentSummary {
   price: number | null;       // 회원권 정가 (null = 회원권 없음)
   paid: number;               // 기존 누적 결제액
   outstanding: number | null; // null = 회원권 없음, 0+ = 미수금
-  discount: { id: string; name: string } | null; // 회원의 할인 자격(결제 라벨 스냅샷)
 }
 
 const TONE_FALLBACK: AvatarTone = "sage";
@@ -308,26 +306,6 @@ export async function getAllProducts(): Promise<MembershipProduct[]> {
   }));
 }
 
-/* ----------------------------- discounts ---------------------------- */
-/** Active discounts only, ordered by sort_order — 발급 자격 선택용. */
-export async function getDiscounts(): Promise<DiscountItem[]> {
-  const { data } = await sb
-    .from("discounts")
-    .select("id, name, active, sort_order")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, active: r.active, sortOrder: r.sort_order }));
-}
-
-/** All discounts including inactive — 설정용. */
-export async function getAllDiscounts(): Promise<DiscountItem[]> {
-  const { data } = await sb
-    .from("discounts")
-    .select("id, name, active, sort_order")
-    .order("sort_order", { ascending: true });
-  return (data ?? []).map((r) => ({ id: r.id, name: r.name, active: r.active, sortOrder: r.sort_order }));
-}
-
 const DEFAULT_SETTINGS: StudioSettings = {
   noshowDeducts: true,
   cancelCutoffHours: 0,
@@ -396,11 +374,10 @@ function badgeForMember(status: string, endDate: string | null): BadgeView {
 export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const { data: member } = await sb
     .from("members")
-    .select("id, name, phone, gender, avatar_tone, status, injury_note, discount_id, discounts(id, name)")
+    .select("id, name, phone, gender, avatar_tone, status, injury_note")
     .eq("id", id)
     .maybeSingle();
 
-  const discount = (member as unknown as { discounts?: { id: string; name: string } | null } | null)?.discounts ?? null;
   const name = member?.name ?? "";
   const avatarTone = toTone(member?.avatar_tone);
   const initial = initialOf(name);
@@ -506,21 +483,8 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     injury: member?.injury_note ?? undefined,
     activeMembershipId: null,
     membershipPaused: false,
-    trainerIsOwner: await memberTrainerIsOwner(id),
-    discount,
     events: [],
   };
-}
-
-/** 담당 강사가 대표인지 — 발급 픽커의 대표/강사 상품 자동 필터용. */
-async function memberTrainerIsOwner(memberId: string): Promise<boolean> {
-  const { data } = await sb
-    .from("member_trainers")
-    .select("trainers(role)")
-    .eq("member_id", memberId)
-    .limit(1)
-    .maybeSingle();
-  return (data as unknown as { trainers?: { role?: string } } | null)?.trainers?.role === "owner";
 }
 
 /* --------------------------- payment summary --------------------------- */
@@ -542,12 +506,11 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
       price: null,
       paid: 0,
       outstanding: null,
-      discount: null,
     };
   }
 
   const [{ data: member }, { data: ms }] = await Promise.all([
-    sb.from("members").select("name, discount_id, discounts(id, name)").eq("id", memberId).maybeSingle(),
+    sb.from("members").select("name").eq("id", memberId).maybeSingle(),
     sb
       .from("memberships")
       .select("id, product, price")
@@ -569,8 +532,6 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
     outstanding = bal.outstanding;
   }
 
-  const discount = (member as unknown as { discounts?: { id: string; name: string } | null } | null)?.discounts ?? null;
-
   return {
     membershipId: ms?.id ?? null,
     memberId,
@@ -581,7 +542,6 @@ export async function getPaymentSummary(memberId?: string): Promise<PaymentSumma
     price,
     paid,
     outstanding,
-    discount,
   };
 }
 

@@ -26,13 +26,10 @@ export function SettingsClient({ me }: { me: Me }) {
   const router = useRouter();
   const [logoutOpen, setLogoutOpen] = useState(false);
 
+  // 운영성 메뉴(강사 관리·회원 등록·회원권 상품·공지사항)는 운영 탭(/t/perf)으로 이동 — 여긴 환경 설정만.
   const rows: Row[] = [
-    { icon: "persons", label: "강사 관리", sub: "강사 초대·권한 관리", href: "/t/staff", emphasized: true },
-    { icon: "person-plus", label: "회원 등록", sub: "신규 회원 추가", href: "/t/members/register" },
-    { icon: "ticket-fill", label: "회원권 상품", sub: "상품 카탈로그 관리", href: "/t/settings/products" },
     { icon: "tag-fill", label: "운동 종목", sub: "종목 목록 관리", href: "/t/settings/exercises" },
     { icon: "tune", label: "노쇼·취소 정책", sub: "차감·환불 기준", href: "/t/settings/policy" },
-    { icon: "megaphone", label: "공지사항", sub: "회원 앱 공지 작성", href: "/t/settings/notices" },
     { icon: "bell", label: "알림 설정", sub: "알림톡·푸시 발송", href: "/t/settings/notifications" },
   ];
 
@@ -68,11 +65,11 @@ export function SettingsClient({ me }: { me: Me }) {
           </div>
         </Card>
 
-        {/* owner operations */}
+        {/* owner settings */}
         {me.isOwner ? (
           <>
             <div className="mb-2.5">
-              <Kicker>운영 관리 · 대표 전용</Kicker>
+              <Kicker>환경 설정 · 대표 전용</Kicker>
             </div>
             <Card className="mb-6 shrink-0 overflow-hidden">
               {rows.map((r, i) => (
@@ -90,7 +87,7 @@ export function SettingsClient({ me }: { me: Me }) {
           </>
         ) : (
           <div className="mb-6">
-            <Banner tone="neutral">운영 메뉴는 대표만 사용할 수 있어요.</Banner>
+            <Banner tone="neutral">설정 메뉴는 대표만 사용할 수 있어요.</Banner>
           </div>
         )}
 

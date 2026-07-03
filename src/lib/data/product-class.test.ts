@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { productTier, productType, tierMatches, composeProductName, isDiscountProduct } from "./product-class";
+import { productTier, productType, matchesPickerFilter, composeProductName, isDiscountProduct } from "./product-class";
 
 test("productTier: 대표/강사/공용 분류", () => {
   expect(productTier("대표 1:1 PT 10회권")).toBe("owner");
@@ -14,13 +14,16 @@ test("productType: 1:1/2:1/기타", () => {
   expect(productType("이벤트 5회권")).toBeNull();
 });
 
-test("tierMatches: 담당 기반 자동 필터 (공용은 항상 노출)", () => {
-  expect(tierMatches("대표 1:1 PT 10회권", true)).toBe(true);
-  expect(tierMatches("대표 1:1 PT 10회권", false)).toBe(false);
-  expect(tierMatches("강사 1:1 PT 10회권", false)).toBe(true);
-  expect(tierMatches("강사 1:1 PT 10회권", true)).toBe(false);
-  expect(tierMatches("1:1 PT 10회권", true)).toBe(true);
-  expect(tierMatches("1:1 PT 10회권", false)).toBe(true);
+test("matchesPickerFilter: 1:1/2:1/특별할인 3분류", () => {
+  expect(matchesPickerFilter("대표 1:1 PT 10회권", "1on1")).toBe(true);
+  expect(matchesPickerFilter("대표 1:1 PT 10회권", "2on1")).toBe(false);
+  expect(matchesPickerFilter("강사 2:1 PT 20회권", "2on1")).toBe(true);
+  expect(matchesPickerFilter("특별할인 1:1 PT 10회권", "discount")).toBe(true);
+  expect(matchesPickerFilter("특별할인 1:1 PT 10회권", "1on1")).toBe(false); // 특별할인은 전용 칩에서만
+  expect(matchesPickerFilter("1:1 PT 10회권", "discount")).toBe(false);
+  // 유형 표기 없는 커스텀 상품은 1:1/2:1 어디서든 노출
+  expect(matchesPickerFilter("여름 이벤트 5회권", "1on1")).toBe(true);
+  expect(matchesPickerFilter("여름 이벤트 5회권", "2on1")).toBe(true);
 });
 
 test("composeProductName: 토글 조합 → 규칙 준수 이름", () => {

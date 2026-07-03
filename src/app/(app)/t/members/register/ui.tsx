@@ -13,8 +13,8 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember } from "@/lib/data/groups/owner-ops-actions";
-import { productType, tierMatches, isDiscountProduct } from "@/lib/data/product-class";
-import type { Gender, PaymentMethod, MembershipProduct, DiscountItem } from "@/lib/types";
+import { productType, matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
+import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -35,12 +35,10 @@ export function MemberRegisterClient({
   ownerId,
   products,
   trainers,
-  discounts,
 }: {
   ownerId: string;
   products: MembershipProduct[];
   trainers: { id: string; name: string }[];
-  discounts: DiscountItem[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -55,12 +53,10 @@ export function MemberRegisterClient({
   const [trainerId, setTrainerId] = useState(ownerId);
   const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
-  const [productFilter, setProductFilter] = useState<"all" | "1on1" | "2on1">("all");
-  const [allTiers, setAllTiers] = useState(false); // 담당 기반 자동 필터 해제(예외 발급용)
+  const [productFilter, setProductFilter] = useState<PickerFilter>("1on1");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
-  const [discountId, setDiscountId] = useState(""); // "" = 할인 없음(무자격). 회원 속성으로 저장 + 발급 시 특별할인 상품 자동 필터.
   const [pending, setPending] = useState(false);
 
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
@@ -77,12 +73,6 @@ export function MemberRegisterClient({
     } else {
       setPayAmount("");
     }
-  }
-
-  // 자격 변경 시 상품 필터가 바뀐다(자격 있으면 특별할인 상품만) — 선택 상품이 숨겨지면 해제.
-  function onDiscountChange(id: string) {
-    setDiscountId(id);
-    resetIfHidden(trainerId, allTiers, id);
   }
 
   async function onSubmit() {
@@ -111,7 +101,6 @@ export function MemberRegisterClient({
       gender,
       slots,
       trainerId,
-      discountId: discountId || undefined, // 회원 속성 저장 + 발급 시 결제 라벨 스냅샷(서버가 라벨 합성)
       product: productArg,
       payment: paymentArg,
     });
@@ -142,34 +131,15 @@ export function MemberRegisterClient({
   // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
   const is2on1 = classType === "2on1";
 
-  // 담당 + 할인 자격 자동 필터: 담당(대표/강사)에 맞는 상품 중, 자격 있으면 특별할인 상품만·없으면 특별할인 상품 숨김.
-  const trainerIsOwner = trainerId === ownerId;
-  const qualified = discountId !== "";
-  const tierVisible = products.filter(
-    (p) => allTiers || (tierMatches(p.name, trainerIsOwner) && isDiscountProduct(p.name) === qualified),
-  );
-
-  /** 담당/자격/필터 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
-  function resetIfHidden(nextTrainerId: string, nextAllTiers: boolean, nextDiscountId: string) {
+  /** 칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
+  function onFilterChange(next: PickerFilter) {
+    setProductFilter(next);
     if (selectedProduct === "later") return;
     const p = products.find((pp) => pp.id === selectedProduct);
-    if (!p) return;
-    const shown =
-      nextAllTiers ||
-      (tierMatches(p.name, nextTrainerId === ownerId) && isDiscountProduct(p.name) === (nextDiscountId !== ""));
-    if (!shown) {
+    if (p && !matchesPickerFilter(p.name, next)) {
       setSelectedProduct("later");
       setPayAmount("");
     }
-  }
-  function onTrainerChange(v: string) {
-    setTrainerId(v);
-    resetIfHidden(v, allTiers, discountId);
-  }
-  function onToggleAllTiers() {
-    const next = !allTiers;
-    setAllTiers(next);
-    resetIfHidden(trainerId, next, discountId);
   }
 
   return (
@@ -177,7 +147,7 @@ export function MemberRegisterClient({
       <Body>
         {/* header */}
         <div className="mb-5 flex items-center gap-3">
-          <BackButton fallback="/t/settings" />
+          <BackButton fallback="/t/perf" />
           <span className="text-[19px] font-bold text-ink">회원 등록</span>
         </div>
 
@@ -215,7 +185,7 @@ export function MemberRegisterClient({
             <Select
               value={trainerId}
               options={staffOptions}
-              onChange={onTrainerChange}
+              onChange={setTrainerId}
             />
           </div>
 
@@ -304,35 +274,26 @@ export function MemberRegisterClient({
           </Banner>
         )}
 
-        {/* 회원권 상품 선택 — 담당(대표/강사) 기준 자동 필터 + 유형 토글 */}
-        <div className="mb-2.5 mt-6 flex items-center">
+        {/* 회원권 상품 선택 — 1:1/2:1/특별할인 3분류 칩 */}
+        <div className="mb-2.5 mt-6">
           <Kicker>회원권 상품</Kicker>
-          {tierVisible.length !== products.length || allTiers ? (
-            <button
-              type="button"
-              onClick={onToggleAllTiers}
-              className="tappable ml-auto text-[12px] font-semibold text-muted5 underline underline-offset-2"
-            >
-              {allTiers ? `${trainerIsOwner ? "대표" : "강사"} 상품만 보기` : "전체 상품 보기"}
-            </button>
-          ) : null}
         </div>
         {products.length > 0 ? (
           <div className="mb-2.5">
             <SegmentedToggle
               options={[
-                { value: "all", label: "전체" },
                 { value: "1on1", label: "1:1" },
                 { value: "2on1", label: "2:1" },
+                { value: "discount", label: "특별할인" },
               ]}
               value={productFilter}
-              onChange={setProductFilter}
+              onChange={onFilterChange}
             />
           </div>
         ) : null}
         <div className="mb-4 flex flex-col gap-2.5">
-          {tierVisible
-            .filter((p) => productFilter === "all" || productType(p.name) === productFilter)
+          {products
+            .filter((p) => matchesPickerFilter(p.name, productFilter))
             .map((p) => (
             <RadioOption
               key={p.id}
@@ -354,21 +315,6 @@ export function MemberRegisterClient({
             <span className="text-[14px] font-semibold text-muted">나중에 발급</span>
           </RadioOption>
         </div>
-
-        {/* 특별 할인 자격 — 회원 속성으로 저장(가족/군경소방 등). 자격 선택 시 특별할인 상품만 노출. */}
-        {discounts.length > 0 ? (
-          <div className="mb-4">
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">특별 할인 자격</div>
-            <Select
-              value={discountId}
-              options={[
-                { value: "", label: "할인 없음" },
-                ...discounts.map((d) => ({ value: d.id, label: d.name })),
-              ]}
-              onChange={onDiscountChange}
-            />
-          </div>
-        ) : null}
 
         {/* 결제 정보 (상품 선택 시) */}
         {selectedProduct !== "later" && selectedProductData && (
