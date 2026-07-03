@@ -74,7 +74,7 @@ export function SettingsClient({ me }: { me: Me }) {
             <div className="mb-2.5">
               <Kicker>운영 관리 · 대표 전용</Kicker>
             </div>
-            <Card className="mb-6 overflow-hidden">
+            <Card className="mb-6 shrink-0 overflow-hidden">
               {rows.map((r, i) => (
                 <Link
                   key={r.label}

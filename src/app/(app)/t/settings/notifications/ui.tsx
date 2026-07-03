@@ -54,7 +54,7 @@ export function NotificationsClient({ settings }: { settings: StudioSettings }) 
         <div className="mb-2.5">
           <Kicker>알림 항목</Kicker>
         </div>
-        <Card className="overflow-hidden">
+        <Card className="shrink-0 overflow-hidden">
           {ROWS.map((row, i) => (
             <div
               key={row.key}
