@@ -4,14 +4,15 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, PBtn, OBtn, DPill, ConsoleModal, MicroLabel, won, pill } from "@/components/console/ui";
 import { loadMemberDetail, consoleIssueMembership } from "@/lib/data/groups/console-actions";
 import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
 import { listMemberMeals } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
-import { extendMembership, previewRefund, refundMembership } from "@/lib/data/groups/membership-actions";
-import { createMember, deleteMember } from "@/lib/data/groups/owner-ops-actions";
+import { extendMembership, previewRefund, refundMembership, pauseMembership, resumeMembership, transferMembership } from "@/lib/data/groups/membership-actions";
+import { createMember, deleteMember, updateMember, setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
 import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
@@ -33,6 +34,11 @@ const METHODS: { v: PaymentMethod; l: string }[] = [
   { v: "account", l: "계좌이체" },
 ];
 const EVENT_LABEL: Record<string, string> = { issue: "발급", extend: "연장", refund: "환불", transfer: "양도", pause: "정지", resume: "재개" };
+const STATUS_OPTS: { v: "active" | "rest" | "inactive"; l: string }[] = [
+  { v: "active", l: "활성" },
+  { v: "rest", l: "휴면" },
+  { v: "inactive", l: "탈퇴" },
+];
 
 export function MembersClient({
   items,
@@ -57,6 +63,7 @@ export function MembersClient({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("all");
   const [selectedId, setSelectedId] = useState(initialId);
@@ -64,8 +71,12 @@ export function MembersClient({
   const [files, setFiles] = useState<MemberFileView[]>(initialFiles);
   const [meals, setMeals] = useState<MealLog[]>(initialMeals);
   const [, startLoad] = useTransition();
-  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team" | "delete">(null);
+  const [modal, setModal] = useState<null | "add" | "bulk" | "issue" | "extend" | "refund" | "schedule" | "team" | "delete" | "edit" | "transfer">(null);
   const [busy, setBusy] = useState(false);
+
+  // 회원 정보 수정 폼 — birth는 선택 입력(변경 시 비번 초기화), 저장 후 비운다.
+  const [ef, setEf] = useState({ name: "", phone: "", gender: "female" as Gender, injury: "", birth: "" });
+  const [transferPhone, setTransferPhone] = useState("");
 
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, trainerId: ownerId, productId: "", method: "card" as PaymentMethod, amount: "" });
@@ -196,6 +207,82 @@ export function MembersClient({
     router.refresh();
   }
 
+  function openEdit() {
+    if (!d) return;
+    setEf({ name: d.name, phone: d.phone, gender: (d.gender ?? "female") as Gender, injury: d.injury ?? "", birth: "" });
+    setModal("edit");
+  }
+  async function doEdit() {
+    if (busy || !selectedId) return;
+    if (!ef.name.trim() || !ef.phone.trim()) return toast("이름·연락처를 입력해주세요", "error");
+    setBusy(true);
+    const r = await updateMember(selectedId, { name: ef.name, phone: ef.phone, gender: ef.gender, injuryNote: ef.injury, birth: ef.birth });
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "수정에 실패했어요", "error");
+    setEf((s) => ({ ...s, birth: "" })); // 저장 후 비움 — stale 생년월일이 다음 편집서 재차 비번 초기화 트리거하지 않도록
+    toast("회원 정보를 수정했어요");
+    setModal(null);
+    await reload();
+    router.refresh();
+  }
+
+  async function changeStatus(next: "active" | "rest" | "inactive") {
+    if (busy || !selectedId || next === (d?.memberStatus ?? "active")) return;
+    if (
+      next === "inactive" &&
+      !(await confirm({ title: "이 회원을 탈퇴 처리할까요?", description: "정기 수업(1:1)이 자동으로 중지돼요.", confirmLabel: "탈퇴 처리", tone: "warn" }))
+    )
+      return;
+    setBusy(true);
+    const r = await setMemberStatus(selectedId, next);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "상태 변경에 실패했어요", "error");
+    toast(next === "active" ? "활성으로 전환했어요" : next === "rest" ? "휴면으로 전환했어요" : "탈퇴 처리했어요");
+    await reload();
+    router.refresh();
+  }
+
+  async function doPause() {
+    if (busy || !d?.activeMembershipId) return;
+    // 2:1 팀은 한 명만 정지해도 팀 수업은 계속 생성되나 출석 확정이 막힌다 — 파트너 일정도 함께 조정하도록 알린다.
+    if (d.isTeam && !(await confirm({ title: "2:1 팀 수업 중인 회원이에요", description: "정지하면 팀 수업 진행이 막혀요. 파트너 일정도 함께 조정해주세요.", confirmLabel: "정지" }))) return;
+    setBusy(true);
+    const r = await pauseMembership(d.activeMembershipId);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "정지에 실패했어요", "error");
+    toast("회원권을 일시정지했어요");
+    await reload();
+    router.refresh();
+  }
+  async function doResume() {
+    if (busy || !d?.activeMembershipId) return;
+    setBusy(true);
+    const r = await resumeMembership(d.activeMembershipId);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "재개에 실패했어요", "error");
+    toast("회원권을 재개했어요 (정지기간만큼 연장)");
+    await reload();
+    router.refresh();
+  }
+
+  function openTransfer() {
+    if (!d?.activeMembershipId) return;
+    setTransferPhone("");
+    setModal("transfer");
+  }
+  async function doTransfer() {
+    if (busy || !d?.activeMembershipId) return;
+    if (transferPhone.replace(/\D/g, "").length < 10) return toast("휴대폰 번호를 확인해주세요", "error");
+    setBusy(true);
+    const r = await transferMembership({ membershipId: d.activeMembershipId, toPhone: transferPhone.replace(/\D/g, "") });
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "양도에 실패했어요", "error");
+    toast("양도했어요 (잔여 회차 이전 완료)");
+    setModal(null);
+    await reload();
+    router.refresh();
+  }
+
   const d = detail;
 
   return (
@@ -275,6 +362,32 @@ export function MembersClient({
                   </div>
                   <div className="mt-0.5 truncate text-[13px] font-medium text-[#847A66]">{d.schedule}</div>
                 </div>
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  aria-label="회원 정보 수정"
+                  className="flex-none rounded-[10px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-3 py-[9px] text-[12.5px] font-semibold text-[#5B6452] transition hover:bg-[#F4F0E8]"
+                >
+                  <Icon name="pencil" size={15} />
+                </button>
+              </div>
+
+              {/* 회원 상태 — 활성/휴면/탈퇴 */}
+              <div className="mb-4 flex items-center gap-1.5 rounded-[13px] border border-[rgba(75,59,46,0.08)] bg-white px-2 py-2">
+                {STATUS_OPTS.map((o) => {
+                  const on = (d.memberStatus ?? "active") === o.v;
+                  return (
+                    <button
+                      key={o.v}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => changeStatus(o.v)}
+                      className={`flex-1 rounded-[10px] py-2 text-[13px] font-bold transition disabled:opacity-50 ${on ? "bg-sage text-white" : "text-[#847A66] hover:bg-[rgba(75,59,46,0.04)]"}`}
+                    >
+                      {o.l}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* membership card */}
@@ -301,10 +414,18 @@ export function MembersClient({
               )}
 
               {/* actions */}
-              <div className="mb-3 grid grid-cols-3 gap-[9px]">
+              <div className="mb-2.5 grid grid-cols-3 gap-[9px]">
                 <OBtn icon="calendar" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={() => setModal("extend")}>기간 연장</OBtn>
                 <OBtn icon="coins" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={openRefund}>환불</OBtn>
                 <PBtn className="whitespace-nowrap !px-2" onClick={openIssue}>회원권 발급</PBtn>
+              </div>
+              <div className="mb-3 grid grid-cols-2 gap-[9px]">
+                {d.membershipPaused ? (
+                  <OBtn icon="play" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={doResume}>재개</OBtn>
+                ) : (
+                  <OBtn icon="pause" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={doPause}>일시정지</OBtn>
+                )}
+                <OBtn icon="arrow-right" className="whitespace-nowrap !px-2" disabled={!d.activeMembershipId} onClick={openTransfer}>양도</OBtn>
               </div>
 
               {/* 정기 수업 일정 */}
@@ -563,7 +684,40 @@ export function MembersClient({
           <p className="text-[13.5px] leading-relaxed text-[#766D60]">
             <b className="text-ink">{d.name}</b> 회원을 삭제할까요? 회원권·결제·출석·기록·사진·식단이 모두 영구 삭제돼요. <b className="text-terracotta">되돌릴 수 없어요.</b>
           </p>
-          <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3"><Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" /><span className="text-[12px] font-medium leading-relaxed text-[#766D60]">이용을 멈추되 기록을 남기려면 삭제 대신 &lsquo;탈퇴&rsquo; 처리를 쓰세요(모바일 회원 상세).</span></div>
+          <div className="mt-3 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3"><Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" /><span className="text-[12px] font-medium leading-relaxed text-[#766D60]">이용을 멈추되 기록을 남기려면 삭제 대신 위의 &lsquo;탈퇴&rsquo; 처리를 쓰세요.</span></div>
+        </ConsoleModal>
+      ) : null}
+
+      {modal === "edit" && d ? (
+        <ConsoleModal
+          title="회원 정보 수정"
+          onClose={() => setModal(null)}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={doEdit}>저장</PBtn></>}
+        >
+          <ModalField label="이름"><Input value={ef.name} onChange={(v) => setEf({ ...ef, name: v })} placeholder="회원 이름" /></ModalField>
+          <ModalField label="연락처"><Input value={formatPhone(ef.phone)} onChange={(v) => setEf({ ...ef, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
+          <ModalField label="성별">
+            <div className="flex gap-2">
+              {([["female", "여성"], ["male", "남성"]] as const).map(([g, l]) => (
+                <button key={g} onClick={() => setEf({ ...ef, gender: g })} className={`flex-1 rounded-[12px] py-[11px] text-[13.5px] font-semibold transition ${ef.gender === g ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>{l}</button>
+              ))}
+            </div>
+          </ModalField>
+          <ModalField label="생년월일 변경 (선택)"><Input value={ef.birth} onChange={(v) => setEf({ ...ef, birth: v.replace(/\D/g, "").slice(0, 6) })} placeholder="변경할 때만 입력 (예: 900325)" /></ModalField>
+          <p className="mb-3.5 -mt-1.5 text-[11.5px] font-medium text-[#A89F92]">생년월일을 바꾸면 로그인 비밀번호도 새 생년월일 6자리로 초기화돼요.</p>
+          <ModalField label="부상 메모 (선택)"><Input value={ef.injury} onChange={(v) => setEf({ ...ef, injury: v })} placeholder="예: 오른쪽 무릎 주의" /></ModalField>
+        </ConsoleModal>
+      ) : null}
+
+      {modal === "transfer" && d ? (
+        <ConsoleModal
+          title="회원권 양도"
+          onClose={() => setModal(null)}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} disabled={transferPhone.replace(/\D/g, "").length < 10} onClick={doTransfer}>양도</PBtn></>}
+        >
+          <MemberStripe d={d} />
+          <p className="mb-3.5 text-[12.5px] font-medium leading-relaxed text-[#766D60]">잔여 회차만 이전돼요. 정기 일정은 양도 후 따로 설정해주세요.</p>
+          <ModalField label="양도받을 회원의 휴대폰 번호"><Input value={formatPhone(transferPhone)} onChange={(v) => setTransferPhone(v.replace(/\D/g, "").slice(0, 11))} placeholder="010-0000-0000" /></ModalField>
         </ConsoleModal>
       ) : null}
     </>

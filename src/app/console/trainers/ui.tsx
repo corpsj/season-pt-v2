@@ -6,6 +6,7 @@ import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { addInstructor, issueInstructorLogin, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword } from "@/lib/auth/trainer-actions";
 import { setTrainerRates } from "@/lib/data/groups/settlement-actions";
+import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import { formatPhone } from "@/components/ui/Field";
 
 function Input({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
@@ -74,20 +75,21 @@ function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
 }
 
 export function TrainerActions({
-  id, name, phone, active, isOwner, isMe, memberCount, hasLogin,
+  id, name, phone, active, isOwner, isMe, memberCount, hasLogin, reassignTargets = [],
 }: {
-  id: string; name: string; phone: string; active: boolean; isOwner: boolean; isMe: boolean; memberCount: number; hasLogin: boolean;
+  id: string; name: string; phone: string; active: boolean; isOwner: boolean; isMe: boolean; memberCount: number; hasLogin: boolean; reassignTargets?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
-  const [modal, setModal] = useState<null | "edit" | "delete" | "issue">(null);
+  const [modal, setModal] = useState<null | "edit" | "delete" | "issue" | "reassign">(null);
   const [busy, setBusy] = useState(false);
   const [eName, setEName] = useState(name);
   const [ePhone, setEPhone] = useState(phone);
   const [tempPw, setTempPw] = useState<string | null>(null);
   const [issueUsername, setIssueUsername] = useState("");
   const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
+  const [reassignTo, setReassignTo] = useState("");
 
   // 다른 대표 계정은 손대지 않음(잠금·권한 사고 방지). 본인 대표 계정은 정보 수정만 허용(삭제·비활성화는 아래에서 숨김).
   if (isOwner && !isMe) {
@@ -131,6 +133,17 @@ export function TrainerActions({
     if (!r.ok) return toast(r.error ?? "초기화에 실패했어요", "error");
     setTempPw(r.tempPassword ?? null);
   }
+  async function reassign() {
+    if (busy || !reassignTo) return;
+    if (!(await confirm({ title: `${name} 강사의 회원을 이관할까요?`, description: "담당 회원·정기수업·채팅이 선택한 강사에게 넘어가요.", confirmLabel: "이관" }))) return;
+    setBusy(true);
+    const r = await reassignMembers(id, reassignTo);
+    setBusy(false);
+    if (!r.ok) return toast(r.error ?? "이관에 실패했어요", "error");
+    toast(`회원 ${r.moved ?? 0}명을 이관했어요`);
+    setModal(null);
+    router.refresh();
+  }
   async function remove() {
     setBusy(true);
     const r = await deleteInstructor(id);
@@ -160,6 +173,11 @@ export function TrainerActions({
           </>
         ) : null}
       </div>
+
+      {/* 회원 이관(퇴사 인수인계) — 담당 회원이 있고 넘길 강사가 있을 때만. 대표 계정은 위에서 이미 걸러진다. */}
+      {!isOwner && memberCount > 0 && reassignTargets.length > 0 ? (
+        <OBtn icon="persons" className="mt-2.5 w-full" onClick={() => { setReassignTo(""); setModal("reassign"); }}>담당 회원 {memberCount}명 이관</OBtn>
+      ) : null}
 
       {!hasLogin ? (
         <div className="mt-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3 text-[12px] font-medium leading-relaxed text-[#766D60]">
@@ -211,6 +229,25 @@ export function TrainerActions({
               <Input value={issueUsername} onChange={setIssueUsername} placeholder="trainer01" />
             </>
           )}
+        </ConsoleModal>
+      ) : null}
+
+      {modal === "reassign" ? (
+        <ConsoleModal
+          title="회원 이관"
+          onClose={() => setModal(null)}
+          footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="persons" className="flex-[1.6]" pending={busy} disabled={!reassignTo} onClick={reassign}>이관</PBtn></>}
+        >
+          <p className="mb-3 text-[13px] leading-relaxed text-[#8A8175]"><b className="text-ink">{name}</b> 강사의 담당 {memberCount}명과 정기수업·채팅을 다른 강사에게 넘겨요. 지난 출석·정산 기록은 원래 강사에 남아요.</p>
+          <Label>이관 받을 강사</Label>
+          <select
+            value={reassignTo}
+            onChange={(e) => setReassignTo(e.target.value)}
+            className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[13px] text-[14px] font-medium text-ink outline-none"
+          >
+            <option value="">강사 선택</option>
+            {reassignTargets.map((tt) => <option key={tt.id} value={tt.id}>{tt.name}</option>)}
+          </select>
         </ConsoleModal>
       ) : null}
 

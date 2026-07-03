@@ -28,6 +28,11 @@ export default async function ConsoleTrainersPage({
     ? await Promise.all([getStaffMember(selId), getTrainerConsoleDetail(selId)])
     : [null, null];
 
+  // 회원 이관(퇴사 인수인계) 대상: 선택 강사를 제외한 활성 강사·대표(모바일 강사 상세와 동일 기준).
+  const reassignTargets = detail
+    ? staff.filter((s) => s.id !== detail.id && (s.role === "instructor" || s.role === "owner")).map((s) => ({ id: s.id, name: s.name }))
+    : [];
+
   const activeCount = staff.filter((s) => s.role !== "invited").length;
   const pendingCount = staff.filter((s) => s.role === "invited").length;
   const totalSessions = perf.reduce((s, p) => s + p.sessions, 0);
@@ -129,7 +134,7 @@ export default async function ConsoleTrainersPage({
                     {!detail.isOwner ? <TrainerRates id={detail.id} rate1on1={detail.rate1on1} rate2on1={detail.rate2on1} /> : null}
 
                     <div className="mt-[18px]">
-                      <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} />
+                      <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} reassignTargets={reassignTargets} />
                     </div>
                   </>
                 )}

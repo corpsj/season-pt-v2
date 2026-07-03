@@ -67,7 +67,7 @@ export default async function ConsoleDashboard() {
 
   const todos: { icon: IconName; bg: string; color: string; title: string; desc: string; href: string; action: string }[] = [];
   if (retention.expiringCount > 0)
-    todos.push({ icon: "triangle-exclamation", bg: "#FBF3E9", color: "#C67352", title: `만료 임박 회원 ${retention.expiringCount}명`, desc: "재등록 안내가 필요해요", href: "/console/members", action: "회원" });
+    todos.push({ icon: "triangle-exclamation", bg: "#FBF3E9", color: "#C67352", title: `만료 임박 회원 ${retention.expiringCount}명`, desc: "재등록 안내가 필요해요", href: "/console/retention", action: "안내" });
   if (ops.pendingRequests > 0)
     todos.push({ icon: "refresh", bg: "#FBF3E9", color: "#C67352", title: `처리 대기 요청 ${ops.pendingRequests}건`, desc: "일정 변경·취소 요청", href: "/console/requests", action: "확인" });
   if (chatUnread > 0)
@@ -225,7 +225,7 @@ export default async function ConsoleDashboard() {
           <div className="flex flex-col gap-[18px]">
             {/* 만료 임박 회원 */}
             <Card className="px-5 pb-4 pt-5">
-              <CardHead title="만료 임박 회원" right={<Link href="/console/members" className="text-[12.5px] font-semibold text-sage-deep">전체</Link>} className="mb-3.5" />
+              <CardHead title="만료 임박 회원" right={<Link href="/console/retention" className="text-[12.5px] font-semibold text-sage-deep">전체</Link>} className="mb-3.5" />
               {expiringList.length > 0 ? (
                 <div className="flex flex-col gap-[9px]">
                   {expiringList.map((m) => (
