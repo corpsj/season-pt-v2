@@ -1,0 +1,116 @@
+"use client";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Body, Footer } from "@/components/shell/Body";
+import { BackButton } from "@/components/shell/BackButton";
+import { Field, TextInput } from "@/components/ui/Field";
+import { PrimaryButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/icon";
+import { useToast } from "@/components/ui/Toast";
+import { setTrainerPassword } from "@/lib/auth/trainer-actions";
+
+export function SetPasswordClient({ needsUsername }: { needsUsername: boolean }) {
+  const router = useRouter();
+  const toast = useToast();
+  const [username, setUsername] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    setError(null);
+    if (needsUsername && !/^[a-z0-9._-]{3,20}$/.test(username.trim().toLowerCase())) {
+      setError("아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요");
+      return;
+    }
+    if (pw.length === 0 || pw !== pw2) {
+      setError("비밀번호가 일치하지 않아요");
+      return;
+    }
+    startTransition(async () => {
+      const res = await setTrainerPassword(pw, needsUsername ? username.trim().toLowerCase() : undefined);
+      if (res.ok) {
+        toast(needsUsername ? "아이디·비밀번호가 설정되었어요" : "비밀번호가 설정되었어요");
+        router.push("/t");
+        router.refresh();
+      } else {
+        setError(res.error ?? "설정에 실패했어요");
+      }
+    });
+  }
+
+  return (
+    <div className="scr flex min-h-0 flex-1 flex-col">
+      <Body pad="form">
+        <div className="mb-6 flex items-center">
+          <BackButton fallback="/login/instructor" />
+        </div>
+
+        <div className="flex h-[52px] w-[52px] items-center justify-center rounded-[15px] bg-sage-banner2">
+          <Icon name="lock-fill" size={24} className="text-sage-deep" />
+        </div>
+
+        <h1 className="mt-4 text-[25px] font-bold tracking-[-0.01em] text-ink">
+          {needsUsername ? "아이디·비밀번호 설정" : "비밀번호 설정"}
+        </h1>
+        <p className="mt-2 text-[14px] leading-[1.6] text-muted2">
+          {needsUsername
+            ? "앞으로 로그인할 때 사용할 아이디와 비밀번호를 정해요."
+            : "앞으로 로그인할 때 사용할 새 비밀번호를 정해요."}
+        </p>
+
+        <div className="mt-7 flex flex-col gap-3.5">
+          {needsUsername ? (
+            <Field icon="person" label="아이디" hint="영문 소문자·숫자, 3~20자">
+              <TextInput
+                placeholder="trainer01"
+                autoCapitalize="none"
+                autoCorrect="off"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </Field>
+          ) : null}
+          <Field icon="lock" label="새 비밀번호">
+            <TextInput
+              type="password"
+              placeholder="••••••••"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+            />
+          </Field>
+          <Field icon="lock" label="새 비밀번호 확인">
+            <TextInput
+              type="password"
+              placeholder="••••••••"
+              value={pw2}
+              onChange={(e) => setPw2(e.target.value)}
+            />
+          </Field>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
+            <Icon name="circle-check-fill" size={17} className="flex-none text-sage" />
+            <span className="text-[12.5px] font-medium text-muted2">8자 이상</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Icon name="circle-check-fill" size={17} className="flex-none text-sage" />
+            <span className="text-[12.5px] font-medium text-muted2">영문과 숫자 포함</span>
+          </div>
+        </div>
+
+        {error ? (
+          <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
+        ) : null}
+      </Body>
+
+      <Footer pad="form">
+        <PrimaryButton icon="check-bold" onClick={submit} pending={pending}>
+          {needsUsername ? "설정 완료" : "비밀번호 설정 완료"}
+        </PrimaryButton>
+      </Footer>
+    </div>
+  );
+}

@@ -85,7 +85,7 @@ export function TrainerLoginForm({ showOwnerSignup }: { showOwnerSignup: boolean
           >
             <Icon name="lock" size={18} className="flex-none text-sage" />
             <span className="flex-1 text-[13.5px] font-semibold text-ink">
-              강사 첫 로그인 (임시 비밀번호)
+              강사 첫 로그인 (전화번호로)
             </span>
             <Icon name="chevron-right" size={15} className="text-chevron" />
           </Link>

@@ -87,8 +87,7 @@ export function TrainerActions({
   const [eName, setEName] = useState(name);
   const [ePhone, setEPhone] = useState(phone);
   const [tempPw, setTempPw] = useState<string | null>(null);
-  const [issueUsername, setIssueUsername] = useState("");
-  const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
+  const [issued, setIssued] = useState<{ username: string } | null>(null);
   const [reassignTo, setReassignTo] = useState("");
 
   // 다른 대표 계정은 손대지 않음(잠금·권한 사고 방지). 본인 대표 계정은 정보 수정만 허용(삭제·비활성화는 아래에서 숨김).
@@ -98,12 +97,11 @@ export function TrainerActions({
 
   async function issueLogin() {
     if (busy) return;
-    if (!issueUsername.trim()) return toast("아이디를 입력해주세요", "error");
     setBusy(true);
-    const r = await issueInstructorLogin(id, issueUsername);
+    const r = await issueInstructorLogin(id);
     setBusy(false);
-    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요", "error");
-    setIssued({ username: r.username, tempPassword: r.tempPassword });
+    if (!r.ok || !r.username) return toast(r.error ?? "계정 발급에 실패했어요", "error");
+    setIssued({ username: r.username });
     router.refresh();
   }
 
@@ -167,7 +165,7 @@ export function TrainerActions({
                 <OBtn icon="lock" className="flex-1" disabled={busy || isMe} onClick={resetPassword}>비번 초기화</OBtn>
               </>
             ) : (
-              <OBtn icon="lock" className="flex-[2]" disabled={busy} onClick={() => { setIssued(null); setIssueUsername(""); setModal("issue"); }}>로그인 계정 발급</OBtn>
+              <OBtn icon="lock" className="flex-[2]" disabled={busy} onClick={() => { setIssued(null); setModal("issue"); }}>로그인 계정 발급</OBtn>
             )}
             <button onClick={() => setModal("delete")} disabled={busy || isMe} className="flex-none rounded-[12px] border-[1.4px] border-[rgba(198,115,82,0.4)] bg-white px-4 text-[13.5px] font-semibold text-terracotta transition hover:bg-[#FBF3E9] disabled:opacity-40">삭제</button>
           </>
@@ -208,26 +206,24 @@ export function TrainerActions({
           footer={
             issued ? (
               <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>확인</PBtn>
-            ) : (
+            ) : phone ? (
               <><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="lock-fill" className="flex-[1.6]" pending={busy} onClick={issueLogin}>발급하기</PBtn></>
+            ) : (
+              <PBtn icon="check-bold" className="flex-1" onClick={() => setModal(null)}>확인</PBtn>
             )
           }
         >
           {issued ? (
             <div>
-              <p className="mb-4 text-[13px] leading-relaxed text-[#8A8175]">아래 아이디·임시 비밀번호를 <b className="text-ink">{name}</b> 강사에게 전달하세요. 첫 로그인 후 본인이 비밀번호를 바꿉니다.</p>
+              <p className="mb-4 text-[13px] leading-relaxed text-[#8A8175]">비밀번호 없이 본인 전화번호만 입력하면 로그인돼요. 로그인 후 본인이 진짜 아이디·비밀번호를 설정해요.</p>
               <div className="rounded-[14px] bg-[#FBF7F1] px-5 py-4">
-                <Row k="아이디" v={issued.username} />
-                <div className="my-2.5 h-px bg-[rgba(75,59,46,0.07)]" />
-                <Row k="임시 비밀번호" v={issued.tempPassword} mono />
+                <Row k="로그인 아이디(전화번호)" v={issued.username} />
               </div>
             </div>
+          ) : phone ? (
+            <p className="text-[13px] leading-relaxed text-[#8A8175]"><b className="text-ink">{name}</b> 강사의 전화번호(<b className="text-ink">{formatPhone(phone)}</b>)가 로그인 아이디가 돼요. 비밀번호는 필요 없어요.</p>
           ) : (
-            <>
-              <p className="mb-3 text-[13px] leading-relaxed text-[#8A8175]"><b className="text-ink">{name}</b> 강사의 로그인 아이디를 정하면 임시 비밀번호가 발급돼요.</p>
-              <Label>아이디 (영문 소문자·숫자, 3~20자)</Label>
-              <Input value={issueUsername} onChange={setIssueUsername} placeholder="trainer01" />
-            </>
+            <p className="text-[13px] leading-relaxed text-[#8A8175]">먼저 <b className="text-ink">{name}</b> 강사의 연락처를 등록해주세요. 전화번호가 로그인 아이디가 돼요.</p>
           )}
         </ConsoleModal>
       ) : null}

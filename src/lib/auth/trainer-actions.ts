@@ -92,7 +92,8 @@ export async function trainerLogin(username: string, password: string): Promise<
   return { ok: true, mustChangePassword: !!data?.must_change_password };
 }
 
-export async function setTrainerPassword(newPassword: string): Promise<Result> {
+/** newUsername이 오면(첫 로그인 시 전화번호 자리 아이디를 진짜 아이디로 교체) 아이디도 함께 확정. */
+export async function setTrainerPassword(newPassword: string, newUsername?: string): Promise<Result> {
   const sb = await createSupabaseServer();
   const {
     data: { user },
@@ -100,56 +101,61 @@ export async function setTrainerPassword(newPassword: string): Promise<Result> {
   if (!user) return { ok: false, error: "세션이 만료됐어요. 다시 로그인해주세요" };
   if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword))
     return { ok: false, error: "비밀번호는 8자 이상, 영문과 숫자를 포함해주세요" };
-  const { error } = await sb.auth.updateUser({ password: newPassword });
-  if (error) return { ok: false, error: error.message };
   const admin = createSupabaseAdmin();
+  let uname: string | undefined;
+  if (newUsername !== undefined) {
+    uname = newUsername.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,20}$/.test(uname))
+      return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
+    const { data: dup } = await admin.from("trainers").select("id").eq("username", uname).neq("auth_user_id", user.id).maybeSingle();
+    if (dup) return { ok: false, error: "이미 사용 중인 아이디예요" };
+  }
+  // uname이 있으면(전화번호 자리 아이디 확정) 로그인 이메일(=아이디@도메인)도 같이 바꿔야
+  // 새 아이디로 로그인할 수 있다 — trainers.username만 바꾸면 실제 Auth 이메일은 그대로라 로그인 불가.
+  const { error } = await admin.auth.admin.updateUserById(user.id, {
+    password: newPassword,
+    ...(uname ? { email: toEmail(uname), email_confirm: true } : {}),
+  });
+  if (error) return { ok: false, error: error.message };
   // 초대(invited) 강사의 첫 비번 설정만 active로 전환. 대표가 비활성(inactive)한 강사가
   // 비번 변경으로 스스로 재활성화하는 것은 막는다.
   const { data: tr } = await admin.from("trainers").select("status").eq("auth_user_id", user.id).maybeSingle();
-  const patch: { must_change_password: boolean; status?: string; credential_enc: string } = {
+  const patch: { must_change_password: boolean; status?: string; credential_enc: string; username?: string } = {
     must_change_password: false,
     credential_enc: encryptCredential(newPassword),
   };
   if (tr?.status === "invited") patch.status = "active";
-  await admin.from("trainers").update(patch).eq("auth_user_id", user.id);
+  if (uname) patch.username = uname;
+  const { error: upErr } = await admin.from("trainers").update(patch).eq("auth_user_id", user.id);
+  if (upErr) return { ok: false, error: "아이디 설정에 실패했어요. 다른 아이디를 입력해주세요" };
   return { ok: true };
 }
 
-export async function inviteInstructor(
-  name: string,
-  phone: string,
-  username: string
-): Promise<Result & { username?: string; tempPassword?: string }> {
-  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
-  const uname = username.trim().toLowerCase();
-  if (!/^[a-z0-9._-]{3,20}$/.test(uname))
-    return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
+/**
+ * 강사 첫 로그인: 비밀번호 없이 본인 전화번호만으로 로그인. issueInstructorLogin이 만든 auth 계정은
+ * 비밀번호가 없는 상태라 signInWithPassword를 못 쓰므로, 이 요청 안에서만 쓰고 버릴 1회성 랜덤
+ * 비밀번호를 설정한 뒤 곧바로 그 값으로 로그인한다(임시비번을 따로 발급·전달·저장할 필요가 없어짐).
+ * must_change_password가 여전히 true인(=아직 진짜 아이디·비번을 설정 안 한) 계정만 대상.
+ */
+export async function trainerFirstLogin(phone: string): Promise<Result> {
+  const uname = phone.replace(/\D/g, "");
+  if (uname.length < 9) return { ok: false, error: "전화번호를 정확히 입력해주세요" };
   const admin = createSupabaseAdmin();
-  const { data: exists } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
-  if (exists) return { ok: false, error: "이미 사용 중인 아이디예요" };
-  const tempPassword = genTempPassword();
-  const { data: created, error } = await admin.auth.admin.createUser({
-    email: toEmail(uname),
-    password: tempPassword,
-    email_confirm: true,
-  });
-  if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 생성에 실패했어요" };
-  const { error: insErr } = await admin.from("trainers").insert({
-    auth_user_id: created.user.id,
-    username: uname,
-    display_name: name.trim() || uname,
-    role: "instructor",
-    status: "invited",
-    must_change_password: true,
-    phone: phone.trim() || null,
-    credential_enc: encryptCredential(tempPassword),
-  });
-  if (insErr) {
-    // 실패했는데 임시비밀번호와 함께 성공 반환되고 고아 auth 계정이 남던 문제(감사 #19).
-    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
-    return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
-  }
-  return { ok: true, username: uname, tempPassword };
+  const { data: tr } = await admin
+    .from("trainers")
+    .select("auth_user_id, status")
+    .eq("username", uname)
+    .eq("must_change_password", true)
+    .maybeSingle();
+  if (!tr?.auth_user_id) return { ok: false, error: "등록된 강사 전화번호가 아니거나 이미 설정을 마쳤어요" };
+  if (tr.status === "inactive") return { ok: false, error: "비활성화된 계정이에요. 대표에게 문의해주세요." };
+  const ephemeral = genTempPassword() + genTempPassword();
+  const { error: pwErr } = await admin.auth.admin.updateUserById(tr.auth_user_id, { password: ephemeral });
+  if (pwErr) return { ok: false, error: "로그인에 실패했어요. 다시 시도해주세요." };
+  const sb = await createSupabaseServer();
+  const { error: signErr } = await sb.auth.signInWithPassword({ email: toEmail(uname), password: ephemeral });
+  if (signErr) return { ok: false, error: "로그인에 실패했어요. 다시 시도해주세요." };
+  return { ok: true, mustChangePassword: true };
 }
 
 /**
@@ -183,45 +189,34 @@ export async function addInstructor(name: string, phone?: string): Promise<Resul
 }
 
 /**
- * 명단에만 있던 강사(로그인 계정 없음)에게 로그인 아이디·임시비번을 발급. inviteInstructor와 동일하게
- * auth 계정을 만들되, INSERT 대신 기존 강사 행을 UPDATE한다. 첫 로그인 시 비번 변경이 강제된다.
+ * 명단에만 있던 강사(로그인 계정 없음)에게 로그인 계정을 발급. 로그인 아이디는 강사 본인 전화번호로
+ * 고정(대표가 따로 아이디를 정할 필요 없음) — 비밀번호는 만들지 않는다(첫 로그인은 trainerFirstLogin이
+ * 전화번호만으로 처리). 첫 로그인 후 본인이 진짜 아이디·비밀번호를 설정한다(setTrainerPassword).
  */
-export async function issueInstructorLogin(
-  id: string,
-  username: string,
-): Promise<Result & { username?: string; tempPassword?: string }> {
+export async function issueInstructorLogin(id: string): Promise<Result & { username?: string }> {
   if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
-  const uname = username.trim().toLowerCase();
-  if (!/^[a-z0-9._-]{3,20}$/.test(uname))
-    return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
   const admin = createSupabaseAdmin();
   const { data: target } = await admin
     .from("trainers")
-    .select("id, role, auth_user_id")
+    .select("id, role, auth_user_id, phone")
     .eq("id", id)
     .maybeSingle();
   if (!target) return { ok: false, error: "강사를 찾을 수 없어요" };
   if (target.role === "owner") return { ok: false, error: "대표 계정이에요" };
   if (target.auth_user_id) return { ok: false, error: "이미 로그인 계정이 있는 강사예요" };
+  const uname = (target.phone ?? "").replace(/\D/g, "");
+  if (uname.length < 9) return { ok: false, error: "강사 연락처가 없어요. 먼저 연락처를 등록해주세요" };
   const { data: dup } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
-  if (dup) return { ok: false, error: "이미 사용 중인 아이디예요" };
+  if (dup) return { ok: false, error: "이미 같은 전화번호로 발급된 계정이 있어요" };
 
-  const tempPassword = genTempPassword();
   const { data: created, error } = await admin.auth.admin.createUser({
     email: toEmail(uname),
-    password: tempPassword,
     email_confirm: true,
   });
-  if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 발급에 실패했어요" };
+  if (error || !created.user) return { ok: false, error: "계정 발급에 실패했어요" };
   const { data: updated, error: upErr } = await admin
     .from("trainers")
-    .update({
-      auth_user_id: created.user.id,
-      username: uname,
-      must_change_password: true,
-      status: "invited",
-      credential_enc: encryptCredential(tempPassword),
-    })
+    .update({ auth_user_id: created.user.id, username: uname, must_change_password: true, status: "invited" })
     .eq("id", id)
     .is("auth_user_id", null) // 원자 클레임: 여전히 계정 없을 때만 — 동시/이중 발급 방지
     .select("id");
@@ -233,7 +228,7 @@ export async function issueInstructorLogin(
   revalidatePath("/t/staff");
   revalidatePath(`/t/staff/${id}`);
   revalidatePath("/console/trainers");
-  return { ok: true, username: uname, tempPassword };
+  return { ok: true, username: uname };
 }
 
 export async function trainerLogout(): Promise<void> {

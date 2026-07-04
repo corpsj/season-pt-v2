@@ -11,6 +11,8 @@ export interface TrainerContext {
   displayName: string;
   role: "owner" | "instructor";
   mustChangePassword: boolean;
+  /** 로그인 아이디가 아직 본인 전화번호(발급 시 임시 아이디)인 채로 남아있는지 — true면 set-password에서 진짜 아이디도 함께 설정받아야 한다. */
+  needsUsername: boolean;
 }
 
 /**
@@ -27,7 +29,7 @@ export const getTrainerContext = cache(async (): Promise<TrainerContext | null> 
   const admin = createSupabaseAdmin();
   const { data } = await admin
     .from("trainers")
-    .select("id, username, display_name, role, must_change_password, status")
+    .select("id, username, display_name, role, must_change_password, status, phone")
     .eq("auth_user_id", user.id)
     .maybeSingle();
   if (!data) return null;
@@ -38,6 +40,7 @@ export const getTrainerContext = cache(async (): Promise<TrainerContext | null> 
     displayName: data.display_name,
     role: data.role,
     mustChangePassword: data.must_change_password,
+    needsUsername: !!data.phone && data.username === data.phone,
   };
 });
 

@@ -40,16 +40,15 @@ export function StaffDetailClient({
   const [busy, setBusy] = useState(false);
   const [reassignTo, setReassignTo] = useState("");
   const [tempPw, setTempPw] = useState<string | null>(null);
-  const [issueUsername, setIssueUsername] = useState("");
-  const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
+  const [issued, setIssued] = useState<{ username: string } | null>(null);
 
   async function onIssueLogin() {
-    if (busy || !issueUsername.trim()) return;
+    if (busy) return;
     setBusy(true);
-    const r = await issueInstructorLogin(member.id, issueUsername);
+    const r = await issueInstructorLogin(member.id);
     setBusy(false);
-    if (!r.ok || !r.username || !r.tempPassword) return toast(r.error ?? "계정 발급에 실패했어요", "error");
-    setIssued({ username: r.username, tempPassword: r.tempPassword });
+    if (!r.ok || !r.username) return toast(r.error ?? "계정 발급에 실패했어요", "error");
+    setIssued({ username: r.username });
     toast("로그인 계정을 발급했어요");
     router.refresh();
   }
@@ -157,7 +156,7 @@ export function StaffDetailClient({
             {member.status === "invited" && member.hasLogin ? (
               <div className="mb-4">
                 <Banner tone="neutral">
-                  아직 첫 로그인 전이에요. 강사가 임시 비밀번호로 접속하면 자동으로 활성화돼요.
+                  아직 첫 로그인 전이에요. 강사가 본인 전화번호로 접속하면 자동으로 활성화돼요.
                 </Banner>
               </div>
             ) : null}
@@ -216,17 +215,12 @@ export function StaffDetailClient({
                 </div>
                 <Card className="overflow-hidden">
                   <div className="flex items-center gap-2.5 px-4 py-[14px]">
-                    <Icon name="person" size={18} className="flex-none text-sage" />
-                    <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
+                    <Icon name="phone" size={18} className="flex-none text-sage" />
+                    <span className="flex-1 text-[12.5px] font-semibold text-muted5">로그인 아이디(전화번호)</span>
                     <span className="text-[14px] font-bold text-ink">{issued.username}</span>
                   </div>
-                  <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
-                    <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
-                    <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
-                    <span className="select-all text-[14px] font-bold text-ink">{issued.tempPassword}</span>
-                  </div>
                   <div className="border-t border-ink/[0.07] px-4 py-3 text-[12px] font-medium leading-[1.5] text-muted">
-                    지금 강사에게 전달하세요. 첫 로그인 시 비밀번호 변경이 강제돼요.
+                    비밀번호 없이 본인 전화번호만 입력하면 로그인돼요. 로그인 후 본인이 진짜 아이디·비밀번호를 설정해요.
                   </div>
                 </Card>
               </>
@@ -252,20 +246,18 @@ export function StaffDetailClient({
                 <div className="mb-2.5 mt-7">
                   <Kicker>로그인 계정 발급</Kicker>
                 </div>
-                <Field icon="person-fill" label="아이디 (로그인 ID)" hint="영문·숫자">
-                  <TextInput
-                    placeholder="instructor01"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    value={issueUsername}
-                    onChange={(e) => setIssueUsername(e.target.value)}
-                  />
-                </Field>
-                <div className="mt-3.5">
-                  <PrimaryButton icon="lock-fill" onClick={onIssueLogin} disabled={busy || !issueUsername.trim()}>
-                    로그인 계정 발급
-                  </PrimaryButton>
-                </div>
+                {member.phone ? (
+                  <>
+                    <p className="mb-3 text-[12.5px] font-medium leading-[1.5] text-muted">
+                      본인 전화번호({member.phone})가 로그인 아이디가 돼요. 비밀번호는 필요 없어요 — 로그인 후 본인이 아이디·비밀번호를 설정해요.
+                    </p>
+                    <PrimaryButton icon="lock-fill" onClick={onIssueLogin} disabled={busy}>
+                      로그인 계정 발급
+                    </PrimaryButton>
+                  </>
+                ) : (
+                  <Banner tone="warn">먼저 위에서 연락처를 입력하고 저장해주세요. 전화번호가 로그인 아이디가 돼요.</Banner>
+                )}
               </>
             )}
 
