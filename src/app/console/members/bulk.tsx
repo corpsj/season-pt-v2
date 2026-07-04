@@ -251,13 +251,16 @@ export function BulkAddModal({
             <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
               상품을 고르면 <b className="font-semibold text-[#5B5345]">등록일 + 상품 유효기간</b>으로 만료일이 자동 계산돼요.
               잔여횟수는 기존 회원 이관 시 남은 횟수로 고쳐주세요. 결제는 기록되지 않아 매출에 잡히지 않아요 — 신규 결제는 등록 후 결제 화면에서 기록해주세요.
-              <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤, 행에 마우스를 올리면 나오는 <b className="font-semibold text-[#5B5345]">[2:1 팀으로 묶기]</b>를 누르세요 — 팀 일정·담당은 위 행 기준이에요.
+              <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤 행 왼쪽의 <b className="font-semibold text-[#5B5345]">[2:1]</b> 버튼을 누르세요 — 팀 일정·담당은 위 행 기준이에요.
             </span>
           </div>
 
-          {/* header */}
-          <div className={`${COLS} sticky top-0 z-10 -mx-1 rounded-[8px] bg-white px-1 pb-1.5 pt-1 text-[11px] font-semibold tracking-[0.02em] text-[#9A917F]`}>
-            <span>이름</span><span>연락처</span><span>생년월일</span><span>성별</span><span>상품</span><span>잔여</span><span>등록일</span><span>수업 일정</span><span>담당강사</span><span />
+          {/* header — 좌측 거터(팀 묶기/해제 레일) 폭만큼 밀어 컬럼 정렬 */}
+          <div className="sticky top-0 z-10 -mx-1 flex gap-x-1.5 rounded-[8px] bg-white px-1 pb-1.5 pt-1">
+            <div className="w-7 shrink-0" />
+            <div className={`${COLS} min-w-0 flex-1 text-[11px] font-semibold tracking-[0.02em] text-[#9A917F]`}>
+              <span>이름</span><span>연락처</span><span>생년월일</span><span>성별</span><span>상품</span><span>잔여</span><span>등록일</span><span>수업 일정</span><span>담당강사</span><span />
+            </div>
           </div>
 
           <div className="flex flex-col gap-[7px]">
@@ -332,19 +335,20 @@ export function BulkAddModal({
               };
               return units.map((u) => {
                 if (u.length === 2) {
+                  // 팀 유닛: 좌측 레일에 2:1 배지·해제, 두 행은 바로 붙여 압축. (중간 설명 행 제거 —
+                  // '담당·일정은 위 행 기준'은 둘째 행의 '팀 일정 = 위 행' 셀·비활성 담당셀이 이미 보여줌)
                   return (
-                    <div key={`team-${u[0].key}`} className="flex flex-col gap-[6px] rounded-[12px] bg-[#F3F7EC] p-[6px] ring-1 ring-sage/40">
-                      {renderRow(u[0])}
-                      <div className="flex items-center gap-2 pl-1">
-                        <span className="inline-flex items-center gap-1 rounded-[7px] bg-sage px-2 py-[3px] text-[10.5px] font-bold text-white">
-                          <Icon name="persons" size={11} /> 2:1 팀
-                        </span>
-                        <span className="text-[11px] font-medium text-[#77836B]">팀 일정·담당은 위 행 기준이에요</span>
-                        <button type="button" onClick={() => unlinkTeam(u[0].teamKey!)} className="ml-auto rounded-[7px] px-2 py-[3px] text-[11px] font-semibold text-[#9A917F] transition hover:bg-white hover:text-terracotta">
-                          해제
+                    <div key={`team-${u[0].key}`} className="flex gap-x-1.5 rounded-[12px] bg-[#F3F7EC] p-[5px] pl-[3px] ring-1 ring-sage/40">
+                      <div className="flex w-7 shrink-0 flex-col items-center justify-center gap-1.5">
+                        <span className="rounded-[6px] bg-sage px-1 py-[3px] text-[10px] font-bold leading-none text-white" title="2:1 팀">2:1</span>
+                        <button type="button" onClick={() => unlinkTeam(u[0].teamKey!)} title="2:1 팀 해제" aria-label="2:1 팀 해제" className="flex h-5 w-5 items-center justify-center rounded-full text-[#9A917F] transition hover:bg-white hover:text-terracotta">
+                          <Icon name="close" size={12} />
                         </button>
                       </div>
-                      {renderRow(u[1], u[0])}
+                      <div className="flex min-w-0 flex-1 flex-col gap-[6px]">
+                        {renderRow(u[0])}
+                        {renderRow(u[1], u[0])}
+                      </div>
                     </div>
                   );
                 }
@@ -353,22 +357,22 @@ export function BulkAddModal({
                 const nx = rows[idx + 1];
                 const canLink = nx && !isEmpty(r) && !isEmpty(nx) && r.teamKey == null && nx.teamKey == null;
                 return (
-                  // 묶기 버튼은 흐름에서 빼(absolute) 행 구분선에 겹치고, 이 행 hover 시에만 노출 —
-                  // 1:1 행이 많아도 세로 공간을 차지하지 않게.
-                  <div key={r.key} className="group relative">
-                    {renderRow(r)}
-                    {canLink ? (
-                      <div className="pointer-events-none absolute left-1/2 top-full z-[3] -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+                  // 묶기 버튼은 좌측 고정 거터에 항상 노출(발견성 확보) — 세로 공간은 차지하지 않음.
+                  <div key={r.key} className="flex items-start gap-x-1.5">
+                    <div className="flex w-7 shrink-0 justify-center pt-[6px]">
+                      {canLink ? (
                         <button
                           type="button"
                           onClick={() => linkRows(r, nx)}
-                          title="위·아래 행을 2:1 팀으로 묶기"
-                          className="pointer-events-none inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(138,111,62,0.45)] bg-[#FBF7EF] px-3 py-[4px] text-[11.5px] font-bold text-[#8A6F3E] shadow-sm transition hover:border-solid hover:bg-[#F6EFE2] hover:text-[#7A6338] group-hover:pointer-events-auto"
+                          title="아래 행과 2:1 팀으로 묶기"
+                          aria-label="아래 행과 2:1 팀으로 묶기"
+                          className="rounded-[7px] border border-dashed border-[rgba(138,111,62,0.5)] bg-[#FBF7EF] px-[5px] py-[3px] text-[10px] font-bold leading-none text-[#8A6F3E] shadow-sm transition hover:border-solid hover:bg-[#F6EFE2] hover:text-[#7A6338]"
                         >
-                          <Icon name="persons" size={12} /> 2:1 팀으로 묶기
+                          2:1
                         </button>
-                      </div>
-                    ) : null}
+                      ) : null}
+                    </div>
+                    <div className="min-w-0 flex-1">{renderRow(r)}</div>
                   </div>
                 );
               });
