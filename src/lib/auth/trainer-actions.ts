@@ -102,32 +102,36 @@ export async function setTrainerPassword(newPassword: string, newUsername?: stri
   if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword))
     return { ok: false, error: "비밀번호는 8자 이상, 영문과 숫자를 포함해주세요" };
   const admin = createSupabaseAdmin();
-  let uname: string | undefined;
+  const { data: tr } = await admin.from("trainers").select("status, username").eq("auth_user_id", user.id).maybeSingle();
+  let uname = tr?.username; // 로그인 이메일·재로그인에 쓸 최종 아이디(변경 없으면 현재 값)
   if (newUsername !== undefined) {
-    uname = newUsername.trim().toLowerCase();
-    if (!/^[a-z0-9._-]{3,20}$/.test(uname))
+    const u = newUsername.trim().toLowerCase();
+    if (!/^[a-z0-9._-]{3,20}$/.test(u))
       return { ok: false, error: "아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요" };
-    const { data: dup } = await admin.from("trainers").select("id").eq("username", uname).neq("auth_user_id", user.id).maybeSingle();
+    const { data: dup } = await admin.from("trainers").select("id").eq("username", u).neq("auth_user_id", user.id).maybeSingle();
     if (dup) return { ok: false, error: "이미 사용 중인 아이디예요" };
+    uname = u;
   }
-  // uname이 있으면(전화번호 자리 아이디 확정) 로그인 이메일(=아이디@도메인)도 같이 바꿔야
-  // 새 아이디로 로그인할 수 있다 — trainers.username만 바꾸면 실제 Auth 이메일은 그대로라 로그인 불가.
+  // 아이디가 바뀌면 로그인 이메일(=아이디@도메인)도 같이 바꿔야 새 아이디로 로그인된다
+  // — trainers.username만 바꾸면 실제 Auth 이메일은 그대로라 로그인 불가.
   const { error } = await admin.auth.admin.updateUserById(user.id, {
     password: newPassword,
-    ...(uname ? { email: toEmail(uname), email_confirm: true } : {}),
+    ...(newUsername !== undefined && uname ? { email: toEmail(uname), email_confirm: true } : {}),
   });
   if (error) return { ok: false, error: error.message };
   // 초대(invited) 강사의 첫 비번 설정만 active로 전환. 대표가 비활성(inactive)한 강사가
   // 비번 변경으로 스스로 재활성화하는 것은 막는다.
-  const { data: tr } = await admin.from("trainers").select("status").eq("auth_user_id", user.id).maybeSingle();
   const patch: { must_change_password: boolean; status?: string; credential_enc: string; username?: string } = {
     must_change_password: false,
     credential_enc: encryptCredential(newPassword),
   };
   if (tr?.status === "invited") patch.status = "active";
-  if (uname) patch.username = uname;
+  if (newUsername !== undefined) patch.username = uname;
   const { error: upErr } = await admin.from("trainers").update(patch).eq("auth_user_id", user.id);
   if (upErr) return { ok: false, error: "아이디 설정에 실패했어요. 다른 아이디를 입력해주세요" };
+  // 이메일·비번을 admin으로 바꾸면 브라우저가 들고 있던 기존 세션이 무효화된다(Auth session missing).
+  // 새 자격증명으로 서버에서 다시 로그인해 쿠키를 갱신해야 이후 /t 이동이 정상 동작한다(ownerSignup과 동일).
+  if (uname) await sb.auth.signInWithPassword({ email: toEmail(uname), password: newPassword });
   return { ok: true };
 }
 
