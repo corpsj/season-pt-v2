@@ -57,6 +57,7 @@ export function MemberCalendarClient({
   const dayMeals = dayInfo?.meals ?? [];
   const dayFiles = dayInfo?.files ?? [];
   const isToday = selected === today;
+  const canLog = selected <= today; // 오늘·지난 날만 기록 추가(미래 날짜 제외)
   const hasRecords = dayWorkouts.length + dayMeals.length + dayFiles.length > 0;
 
   return (
@@ -154,18 +155,18 @@ export function MemberCalendarClient({
           </RecordSection>
         ) : null}
 
-        {dayMeals.length || isToday ? (
+        {dayMeals.length || canLog ? (
           <RecordSection title="식단" href="/m/my/meals">
             {dayMeals.map((m) => (
               <DayMealCard key={m.id} meal={m} />
             ))}
-            {isToday ? (
+            {canLog ? (
               <Link
-                href="/m/my/meals?add=1"
+                href={isToday ? "/m/my/meals?add=1" : `/m/my/meals?add=1&date=${selected}`}
                 className="tappable flex items-center justify-center gap-2 rounded-[13px] border-[1.4px] border-dashed border-ink/[0.14] bg-card px-3.5 py-3"
               >
                 <Icon name="plus-bold" size={14} className="text-sage-deep" />
-                <span className="text-[13px] font-semibold text-muted">오늘 먹은 식단 기록하기</span>
+                <span className="text-[13px] font-semibold text-muted">{isToday ? "오늘 먹은 식단 기록하기" : "이 날 식단 기록하기"}</span>
               </Link>
             ) : null}
           </RecordSection>
