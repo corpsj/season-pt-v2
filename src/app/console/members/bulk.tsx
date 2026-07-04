@@ -416,23 +416,35 @@ function DateCell({
   );
 }
 
-/* ----- 수업 일정 셀: 칩 + 팝오버(요일 다중선택 → 시각 → 추가) ----- */
+/* ----- 수업 일정 셀: 칩 + 팝오버(요일 다중선택 → 요일마다 시각 → 추가) ----- */
 function SlotsCell({ value, onChange, error }: { value: CarrySlot[]; onChange: (v: CarrySlot[]) => void; error?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [days, setDays] = useState<number[]>([]);
-  const [hour, setHour] = useState(19);
-  const [minute, setMinute] = useState<0 | 30>(0);
+  const [picks, setPicks] = useState<CarrySlot[]>([]);
+  // 새로 고른 요일이 물려받을 직전 시각(요일별로 다르게 바꿔도, 다음 요일 기본값은 마지막 설정값).
+  const [lastTime, setLastTime] = useState<{ hour: number; minute: 0 | 30 }>({ hour: 19, minute: 0 });
+
+  function toggleDay(weekday: number) {
+    setPicks((prev) =>
+      prev.some((p) => p.weekday === weekday)
+        ? prev.filter((p) => p.weekday !== weekday)
+        : [...prev, { weekday, ...lastTime }].sort(slotSort),
+    );
+  }
+  function setPickTime(weekday: number, part: { hour?: number; minute?: 0 | 30 }) {
+    setPicks((prev) => prev.map((p) => (p.weekday === weekday ? { ...p, ...part } : p)));
+    setLastTime((lt) => ({ ...lt, ...part }));
+  }
 
   function add() {
-    if (days.length === 0) return;
+    if (picks.length === 0) return;
     const merged = [...value];
-    for (const weekday of days) {
-      if (!merged.some((s) => s.weekday === weekday && s.hour === hour && s.minute === minute)) {
-        merged.push({ weekday, hour, minute });
+    for (const p of picks) {
+      if (!merged.some((s) => s.weekday === p.weekday && s.hour === p.hour && s.minute === p.minute)) {
+        merged.push(p);
       }
     }
     onChange(merged.sort(slotSort));
-    setDays([]); // 요일만 리셋 — 같은 시각으로 연속 추가 가능
+    setPicks([]); // 요일만 리셋 — 연속 추가 가능
   }
   function remove(s: CarrySlot) {
     onChange(value.filter((v) => !(v.weekday === s.weekday && v.hour === s.hour && v.minute === s.minute)));
@@ -467,32 +479,41 @@ function SlotsCell({ value, onChange, error }: { value: CarrySlot[]; onChange: (
       {open ? (
         <>
           <div className="fixed inset-0 z-[80]" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-[calc(100%+4px)] z-[81] w-[290px] rounded-[14px] border border-ink/[0.08] bg-white p-3.5" style={{ boxShadow: "0 16px 40px -12px rgba(38,35,30,0.35)" }}>
+          <div className="absolute left-0 top-[calc(100%+4px)] z-[81] w-[310px] rounded-[14px] border border-ink/[0.08] bg-white p-3.5" style={{ boxShadow: "0 16px 40px -12px rgba(38,35,30,0.35)" }}>
             <div className="mb-2 text-[11px] font-semibold text-[#9A917F]">요일 선택</div>
             <div className="mb-3 flex gap-1">
               {WD_ORDER.map((w) => {
-                const on = days.includes(w);
+                const on = picks.some((p) => p.weekday === w);
                 return (
-                  <button key={w} type="button" onClick={() => setDays(on ? days.filter((d) => d !== w) : [...days, w])} className={`h-8 w-8 rounded-[9px] text-[12.5px] font-bold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"} ${w === 0 ? "text-sunday" : ""} ${on && w === 0 ? "text-white" : ""}`}>
+                  <button key={w} type="button" onClick={() => toggleDay(w)} className={`h-8 w-8 rounded-[9px] text-[12.5px] font-bold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"} ${w === 0 && !on ? "text-sunday" : ""}`}>
                     {WD_KO[w]}
                   </button>
                 );
               })}
             </div>
-            <div className="mb-2 text-[11px] font-semibold text-[#9A917F]">시각</div>
-            <div className="mb-3 flex items-center gap-1.5">
-              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className={`flex-1 cursor-pointer appearance-none rounded-[10px] border bg-[#FBF9F5] py-[8px] text-center text-[13px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 ${OK_B}`}>
-                {HOURS.map((h) => <option key={h} value={h}>{h}시</option>)}
-              </select>
-              {([0, 30] as const).map((m) => (
-                <button key={m} type="button" onClick={() => setMinute(m)} className={`w-[62px] flex-none rounded-[10px] py-[8px] text-[12.5px] font-semibold transition ${minute === m ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>
-                  {m === 0 ? "정각" : "30분"}
-                </button>
-              ))}
-            </div>
+            {picks.length > 0 ? (
+              <>
+                <div className="mb-2 text-[11px] font-semibold text-[#9A917F]">요일별 시각</div>
+                <div className="mb-3 flex flex-col gap-1.5">
+                  {picks.map((p) => (
+                    <div key={p.weekday} className="flex items-center gap-1.5">
+                      <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] bg-sage text-[12.5px] font-bold text-white">{WD_KO[p.weekday]}</span>
+                      <select value={p.hour} onChange={(e) => setPickTime(p.weekday, { hour: Number(e.target.value) })} className={`flex-1 cursor-pointer appearance-none rounded-[10px] border bg-[#FBF9F5] py-[8px] text-center text-[13px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 ${OK_B}`}>
+                        {HOURS.map((h) => <option key={h} value={h}>{h}시</option>)}
+                      </select>
+                      {([0, 30] as const).map((m) => (
+                        <button key={m} type="button" onClick={() => setPickTime(p.weekday, { minute: m })} className={`w-[46px] flex-none rounded-[10px] py-[8px] text-[12px] font-semibold transition ${p.minute === m ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>
+                          {m === 0 ? "정각" : ":30"}
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
             <div className="flex gap-1.5">
-              <button type="button" onClick={add} disabled={days.length === 0} className="flex-1 rounded-[10px] bg-sage py-[9px] text-[12.5px] font-semibold text-white transition hover:brightness-[1.06] disabled:opacity-40">
-                {days.length > 0 ? `${days.map((w) => WD_KO[w]).join("·")} ${hour}:${minute === 30 ? "30" : "00"} 추가` : "요일을 선택하세요"}
+              <button type="button" onClick={add} disabled={picks.length === 0} className="flex-1 rounded-[10px] bg-sage py-[9px] text-[12.5px] font-semibold text-white transition hover:brightness-[1.06] disabled:opacity-40">
+                {picks.length > 0 ? `${picks.map((p) => WD_KO[p.weekday]).join("·")} 추가` : "요일을 선택하세요"}
               </button>
               <button type="button" onClick={() => setOpen(false)} className="rounded-[10px] border border-[rgba(75,59,46,0.14)] bg-white px-3 text-[12.5px] font-semibold text-[#766D60] transition hover:bg-[#F4F0E8]">
                 완료
