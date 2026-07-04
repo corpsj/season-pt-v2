@@ -180,7 +180,7 @@ export function ConsoleModal({
           </button>
         </div>
         {children}
-        {footer ? <div className="mt-1 flex gap-[9px]">{footer}</div> : null}
+        {footer ? <div className="mt-5 flex gap-[9px] border-t border-[rgba(75,59,46,0.08)] pt-[18px]">{footer}</div> : null}
       </div>
     </div>
   );
