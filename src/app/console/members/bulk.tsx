@@ -251,7 +251,7 @@ export function BulkAddModal({
             <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
               상품을 고르면 <b className="font-semibold text-[#5B5345]">등록일 + 상품 유효기간</b>으로 만료일이 자동 계산돼요.
               잔여횟수는 기존 회원 이관 시 남은 횟수로 고쳐주세요. 결제는 기록되지 않아 매출에 잡히지 않아요 — 신규 결제는 등록 후 결제 화면에서 기록해주세요.
-              <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤 행 사이 <b className="font-semibold text-[#5B5345]">[2:1 팀으로 묶기]</b>를 누르세요 — 팀 일정·담당은 위 행 기준이에요.
+              <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤, 행에 마우스를 올리면 나오는 <b className="font-semibold text-[#5B5345]">[2:1 팀으로 묶기]</b>를 누르세요 — 팀 일정·담당은 위 행 기준이에요.
             </span>
           </div>
 
@@ -353,16 +353,19 @@ export function BulkAddModal({
                 const nx = rows[idx + 1];
                 const canLink = nx && !isEmpty(r) && !isEmpty(nx) && r.teamKey == null && nx.teamKey == null;
                 return (
-                  <div key={r.key} className="flex flex-col">
+                  // 묶기 버튼은 흐름에서 빼(absolute) 행 구분선에 겹치고, 이 행 hover 시에만 노출 —
+                  // 1:1 행이 많아도 세로 공간을 차지하지 않게.
+                  <div key={r.key} className="group relative">
                     {renderRow(r)}
                     {canLink ? (
-                      <div className="relative z-[1] my-[3px] flex justify-center">
+                      <div className="pointer-events-none absolute left-1/2 top-full z-[3] -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-100 group-hover:opacity-100">
                         <button
                           type="button"
                           onClick={() => linkRows(r, nx)}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(138,111,62,0.45)] bg-[#FBF7EF] px-3.5 py-[6px] text-[12px] font-bold text-[#8A6F3E] shadow-sm transition hover:border-solid hover:bg-[#F6EFE2] hover:text-[#7A6338]"
+                          title="위·아래 행을 2:1 팀으로 묶기"
+                          className="pointer-events-none inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(138,111,62,0.45)] bg-[#FBF7EF] px-3 py-[4px] text-[11.5px] font-bold text-[#8A6F3E] shadow-sm transition hover:border-solid hover:bg-[#F6EFE2] hover:text-[#7A6338] group-hover:pointer-events-auto"
                         >
-                          <Icon name="persons" size={13} /> 위·아래 행을 2:1 팀으로 묶기
+                          <Icon name="persons" size={12} /> 2:1 팀으로 묶기
                         </button>
                       </div>
                     ) : null}
