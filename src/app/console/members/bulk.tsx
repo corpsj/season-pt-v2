@@ -1,5 +1,5 @@
 // client-only(부모 ui.tsx가 "use client" 경계) — 직접 서버 컴포넌트에서 import하지 말 것.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { OBtn, PBtn, ConsoleModal } from "@/components/console/ui";
 import { bulkAddMembers } from "@/lib/data/groups/carryover-actions";
@@ -47,6 +47,7 @@ const slotSort = (a: CarrySlot, b: CarrySlot) =>
 const isEmpty = (r: Draft) => !r.name.trim() && !r.phone.trim() && !r.birth.trim() && !r.productId && r.slots.length === 0;
 
 let keySeq = 0; // React key 전용 증가 카운터(행 식별에만 사용, 렌더 값 아님)
+const DRAFT_KEY = "spt.bulk-add.draft"; // 세션 초안 저장 키(탭 세션 한정 → 오래된 초안 자연 소멸)
 
 type Field = "name" | "phone" | "birth" | "remaining" | "startDate";
 function rowErrors(r: Draft, products: MembershipProduct[]): Set<Field> {
@@ -91,6 +92,35 @@ export function BulkAddModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<{ created: number; failed: { name: string; error: string }[] } | null>(null);
+  const [restored, setRestored] = useState(false);
+
+  // 세션 초안 복원 — 실수로 닫거나 새로고침해도 입력이 남게. 마운트 후에만 읽어 하이드레이션 불일치 방지.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Draft[];
+      if (Array.isArray(saved) && saved.some((r) => !isEmpty(r))) {
+        keySeq = Math.max(0, ...saved.map((r) => r.key)) + 1; // 이후 새 행 key 충돌 방지
+        setRows(saved);
+        setRestored(true);
+      }
+    } catch { /* 손상된 초안은 무시 */ }
+  }, []);
+
+  // 입력이 있을 때만 저장(빈 폼은 저장 안 함). 등록 완료(result) 후엔 저장 중단.
+  useEffect(() => {
+    if (result) return;
+    if (!rows.some((r) => !isEmpty(r))) return;
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(rows)); } catch { /* 저장 불가 브라우저 무시 */ }
+  }, [rows, result]);
+
+  function clearDraft() {
+    keySeq = 0;
+    setRows(Array.from({ length: 5 }, fresh));
+    setRestored(false);
+    try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
+  }
 
   // 스프레드시트처럼: 마지막 행에 입력이 생기면 빈 행 자동 추가.
   function patch(key: number, part: Partial<Draft>) {
@@ -158,6 +188,7 @@ export function BulkAddModal({
       return;
     }
     setResult({ created: res.created, failed: res.failed });
+    try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* noop */ } // 등록 성공 → 초안 소멸
     onDone();
   }
 
@@ -206,6 +237,15 @@ export function BulkAddModal({
         </div>
       ) : (
         <div>
+          {restored ? (
+            <div className="mb-3 flex items-center gap-2 rounded-[13px] bg-[#EDF4E3] px-4 py-2.5 text-[12px] font-semibold text-[#5B6452]">
+              <Icon name="clock" size={15} className="flex-none text-sage-deep" />
+              임시저장된 입력을 불러왔어요
+              <button type="button" onClick={clearDraft} className="ml-auto rounded-[8px] px-2.5 py-1 text-[11.5px] font-semibold text-[#9A917F] transition hover:bg-white hover:text-terracotta">
+                비우기
+              </button>
+            </div>
+          ) : null}
           <div className="mb-3.5 flex items-start gap-2.5 rounded-[13px] bg-[#F8F4EC] px-4 py-3">
             <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
             <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">

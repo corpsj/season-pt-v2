@@ -158,9 +158,12 @@ export function ConsoleModal({
   footer?: React.ReactNode;
   width?: number;
 }) {
+  // 배경 클릭은 "누르기 시작한 곳도 배경일 때"만 닫는다 — 셀 안에서 텍스트를 드래그하다
+  // 배경에서 손을 떼도 닫히지 않게. (이 파일은 서버 컴포넌트에서도 import되므로 hook 대신 DOM dataset 사용)
   return (
     <div
-      onClick={onClose}
+      onMouseDown={(e) => { e.currentTarget.dataset.pressSelf = String(e.target === e.currentTarget); }}
+      onClick={(e) => { if (e.target === e.currentTarget && e.currentTarget.dataset.pressSelf === "true") onClose(); }}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(38,35,30,0.42)] p-5"
     >
       <div
