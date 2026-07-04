@@ -25,7 +25,7 @@ export function StaffInviteClient() {
       toast(res.error ?? "강사 등록에 실패했어요", "error");
       return;
     }
-    toast("강사를 등록했어요");
+    toast("강사를 등록하고 로그인 계정을 발급했어요");
     router.push("/t/staff/" + res.id);
     router.refresh();
   }
@@ -39,27 +39,32 @@ export function StaffInviteClient() {
           <span className="text-[19px] font-bold text-ink">강사 추가</span>
         </div>
         <p className="mb-6 text-[13.5px] leading-[1.6] text-muted2">
-          이름만 등록하면 바로 회원의 담당 강사로 지정할 수 있어요. 로그인 아이디는 준비되면 강사 상세에서 발급하세요.
+          이름과 전화번호를 등록하면 바로 로그인 계정이 발급돼요. 담당 배정도 지금 바로 할 수 있어요.
         </p>
 
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="강사 이름">
             <TextInput placeholder="정하늘" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field icon="phone" label="연락처 (선택)">
+          <Field icon="phone" label="전화번호 (로그인 아이디)">
             <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
           </Field>
         </div>
 
         <div className="h-4" />
         <Banner tone="neutral">
-          로그인 계정 없이 명단에만 등록돼요. 강사가 앱을 쓸 준비가 되면 상세 화면에서 아이디·임시 비밀번호를 발급하세요.
+          전화번호가 로그인 아이디가 돼요. 강사는 비밀번호 없이 전화번호로 첫 로그인한 뒤, 본인이 아이디·비밀번호를 설정해요.
         </Banner>
         <div className="h-3.5" />
       </Body>
 
       <Footer>
-        <PrimaryButton icon="person-plus" onClick={onSubmit} pending={pending}>
+        <PrimaryButton
+          icon="person-plus"
+          onClick={onSubmit}
+          pending={pending}
+          disabled={!name.trim() || phone.replace(/\D/g, "").length < 9}
+        >
           강사 등록
         </PrimaryButton>
       </Footer>

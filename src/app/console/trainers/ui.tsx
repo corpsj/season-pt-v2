@@ -34,11 +34,12 @@ export function AddTrainerButton() {
   async function submit() {
     if (busy) return;
     if (!name.trim()) return toast("강사 이름을 입력해주세요", "error");
+    if (phone.replace(/\D/g, "").length < 9) return toast("전화번호를 입력해주세요. 전화번호가 로그인 아이디가 돼요", "error");
     setBusy(true);
     const r = await addInstructor(name, phone);
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
-    toast("강사를 등록했어요");
+    toast("강사를 등록하고 로그인 계정을 발급했어요");
     setOpen(false);
     router.refresh();
   }
@@ -54,10 +55,10 @@ export function AddTrainerButton() {
             <><OBtn className="flex-1" onClick={() => setOpen(false)}>취소</OBtn><PBtn icon="person-plus" className="flex-[1.6]" pending={busy} onClick={submit}>강사 등록</PBtn></>
           }
         >
-          <p className="mb-3 text-[13px] leading-relaxed text-[#8A8175]">이름만 등록하면 바로 회원의 담당 강사로 지정할 수 있어요. 로그인 아이디는 준비되면 강사 상세에서 발급하세요.</p>
+          <p className="mb-3 text-[13px] leading-relaxed text-[#8A8175]">이름과 전화번호를 등록하면 바로 로그인 계정이 발급돼요. 강사는 전화번호로 첫 로그인한 뒤 본인이 아이디·비밀번호를 설정해요.</p>
           <Label>강사 이름</Label>
           <Input value={name} onChange={setName} placeholder="이름" />
-          <Label>연락처 (선택)</Label>
+          <Label>전화번호 (로그인 아이디)</Label>
           <Input value={formatPhone(phone)} onChange={(v) => setPhone(v.replace(/\D/g, "").slice(0, 11))} placeholder="010-0000-0000" />
         </ConsoleModal>
       ) : null}

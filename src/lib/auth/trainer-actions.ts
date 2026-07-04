@@ -163,33 +163,42 @@ export async function trainerFirstLogin(phone: string): Promise<Result> {
 }
 
 /**
- * 강사를 "명단에만" 등록(로그인 계정 없이). 대표가 회원을 한꺼번에 등록하기 전에 강사 이름부터
- * 올려두고 담당 배정을 할 수 있게 한다. 로그인 아이디·임시비번은 준비되면 issueInstructorLogin으로 발급.
- * username은 not-null·unique 제약을 만족시키기 위한 임시 슬러그(로그인엔 미사용, 발급 시 실제 아이디로 교체).
+ * 강사 등록 = 로그인 계정 발급까지 한 번에. 전화번호가 로그인 아이디가 되고(비밀번호는 만들지 않음),
+ * 강사는 전화번호만으로 첫 로그인(trainerFirstLogin) 후 본인이 진짜 아이디·비밀번호를 설정한다.
+ * 전화번호는 필수 — 로그인 아이디로 쓰이기 때문.
  */
-export async function addInstructor(name: string, phone?: string): Promise<Result & { id?: string }> {
+export async function addInstructor(name: string, phone?: string): Promise<Result & { id?: string; username?: string }> {
   if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
   const display = name.trim();
   if (!display) return { ok: false, error: "강사 이름을 입력해주세요" };
+  const uname = (phone ?? "").replace(/\D/g, "");
+  if (uname.length < 9) return { ok: false, error: "강사 전화번호를 입력해주세요. 전화번호가 로그인 아이디가 돼요" };
   const admin = createSupabaseAdmin();
-  const placeholderUsername = `pending_${genTempPassword()}`; // unique·미표시(발급 전까지)
-  const { data, error } = await admin
+  const { data: dup } = await admin.from("trainers").select("id").eq("username", uname).maybeSingle();
+  if (dup) return { ok: false, error: "이미 같은 전화번호로 등록된 강사가 있어요" };
+  // 비밀번호 없는 auth 계정 — 첫 로그인은 전화번호만으로, 이후 본인이 아이디·비번을 설정.
+  const { data: created, error } = await admin.auth.admin.createUser({ email: toEmail(uname), email_confirm: true });
+  if (error || !created.user) return { ok: false, error: "계정 발급에 실패했어요. 다시 시도해주세요." };
+  const { data, error: insErr } = await admin
     .from("trainers")
     .insert({
-      auth_user_id: null,
-      username: placeholderUsername,
+      auth_user_id: created.user.id,
+      username: uname,
       display_name: display,
       role: "instructor",
-      status: "invited", // 로그인 전 상태(활성 강사 명단엔 아직 미포함, 담당 배정은 가능)
-      must_change_password: false,
-      phone: phone?.trim() || null,
+      status: "invited", // 첫 로그인 전 — 강사가 전화번호로 접속하면 active로 전환(setTrainerPassword)
+      must_change_password: true,
+      phone: uname,
     })
     .select("id")
     .maybeSingle();
-  if (error || !data) return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
+  if (insErr || !data) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {}); // 고아 auth 계정 방지(감사 #19)
+    return { ok: false, error: "강사 등록에 실패했어요. 다시 시도해주세요." };
+  }
   revalidatePath("/t/staff");
   revalidatePath("/console/trainers");
-  return { ok: true, id: data.id as string };
+  return { ok: true, id: data.id as string, username: uname };
 }
 
 /**
