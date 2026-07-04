@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
-import { addInstructor, issueInstructorLogin, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword, getTrainerCredential } from "@/lib/auth/trainer-actions";
+import { addInstructor, issueInstructorLogin, updateInstructor, setInstructorActive, deleteInstructor, resetInstructorPassword } from "@/lib/auth/trainer-actions";
 import { setTrainerRates } from "@/lib/data/groups/settlement-actions";
 import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import { formatPhone } from "@/components/ui/Field";
@@ -87,7 +87,6 @@ export function TrainerActions({
   const [eName, setEName] = useState(name);
   const [ePhone, setEPhone] = useState(phone);
   const [tempPw, setTempPw] = useState<string | null>(null);
-  const [savedPw, setSavedPw] = useState<string | null>(null);
   const [issueUsername, setIssueUsername] = useState("");
   const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
   const [reassignTo, setReassignTo] = useState("");
@@ -134,14 +133,6 @@ export function TrainerActions({
     if (!r.ok) return toast(r.error ?? "초기화에 실패했어요", "error");
     setTempPw(r.tempPassword ?? null);
   }
-  async function viewSaved() {
-    if (busy) return;
-    setBusy(true);
-    const r = await getTrainerCredential(id);
-    setBusy(false);
-    if (!r.ok) return toast(r.error ?? "조회에 실패했어요", "error");
-    setSavedPw(r.password ?? null);
-  }
   async function reassign() {
     if (busy || !reassignTo) return;
     if (!(await confirm({ title: `${name} 강사의 회원을 이관할까요?`, description: "담당 회원·정기수업·채팅이 선택한 강사에게 넘어가요.", confirmLabel: "이관" }))) return;
@@ -174,7 +165,6 @@ export function TrainerActions({
               <>
                 <OBtn icon={active ? "pause" : "play"} className="flex-1" disabled={busy || isMe} onClick={toggle}>{active ? "비활성화" : "활성화"}</OBtn>
                 <OBtn icon="lock" className="flex-1" disabled={busy || isMe} onClick={resetPassword}>비번 초기화</OBtn>
-                <OBtn icon="lock" className="flex-1" disabled={busy} onClick={viewSaved}>저장된 비번 보기</OBtn>
               </>
             ) : (
               <OBtn icon="lock" className="flex-[2]" disabled={busy} onClick={() => { setIssued(null); setIssueUsername(""); setModal("issue"); }}>로그인 계정 발급</OBtn>
@@ -199,12 +189,6 @@ export function TrainerActions({
         <div className="mt-2.5 rounded-[14px] bg-[#FBF7F1] px-5 py-4">
           <Row k="임시 비밀번호" v={tempPw} mono />
           <div className="mt-2 text-[12px] leading-relaxed text-[#8A8175]">지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.</div>
-        </div>
-      ) : null}
-
-      {savedPw ? (
-        <div className="mt-2.5 rounded-[14px] bg-[#FBF7F1] px-5 py-4">
-          <Row k="현재 비밀번호" v={savedPw} mono />
         </div>
       ) : null}
 

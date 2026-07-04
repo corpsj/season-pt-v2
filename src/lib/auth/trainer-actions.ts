@@ -5,7 +5,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { ensureOwner, OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { getTrainerContext } from "@/lib/auth/context";
-import { encryptCredential, decryptCredential } from "@/lib/auth/credential-crypto";
+import { encryptCredential } from "@/lib/auth/credential-crypto";
 
 const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 const toEmail = (u: string) => `${u.trim().toLowerCase()}@${DOMAIN}`;
@@ -350,17 +350,4 @@ export async function resetInstructorPassword(id: string): Promise<Result & { te
     .eq("id", id);
   if (flagErr) return { ok: false, error: "비밀번호는 바뀌었지만 변경 강제 설정에 실패했어요. 다시 시도해주세요." };
   return { ok: true, tempPassword };
-}
-
-/** 저장된(암호화된) 비밀번호를 대표가 다시 확인. 발급/초기화 화면을 놓쳤을 때 재조회용. 대표 전용. */
-export async function getTrainerCredential(id: string): Promise<Result & { password?: string }> {
-  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
-  const admin = createSupabaseAdmin();
-  const { data } = await admin.from("trainers").select("credential_enc").eq("id", id).maybeSingle();
-  if (!data?.credential_enc) return { ok: false, error: "저장된 비밀번호가 없어요" };
-  try {
-    return { ok: true, password: decryptCredential(data.credential_enc) };
-  } catch {
-    return { ok: false, error: "복호화에 실패했어요" };
-  }
 }

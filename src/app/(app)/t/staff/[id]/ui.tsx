@@ -20,7 +20,6 @@ import {
   deleteInstructor,
   resetInstructorPassword,
   issueInstructorLogin,
-  getTrainerCredential,
 } from "@/lib/auth/trainer-actions";
 import { reassignMembers } from "@/lib/data/groups/owner-ops-actions";
 import type { StaffMemberDetail } from "@/lib/data/groups/owner-ops";
@@ -41,7 +40,6 @@ export function StaffDetailClient({
   const [busy, setBusy] = useState(false);
   const [reassignTo, setReassignTo] = useState("");
   const [tempPw, setTempPw] = useState<string | null>(null);
-  const [savedPw, setSavedPw] = useState<string | null>(null);
   const [issueUsername, setIssueUsername] = useState("");
   const [issued, setIssued] = useState<{ username: string; tempPassword: string } | null>(null);
 
@@ -110,15 +108,6 @@ export function StaffDetailClient({
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "초기화에 실패했어요", "error");
     setTempPw(r.tempPassword ?? null);
-  }
-
-  async function onViewSaved() {
-    if (busy) return;
-    setBusy(true);
-    const r = await getTrainerCredential(member.id);
-    setBusy(false);
-    if (!r.ok) return toast(r.error ?? "조회에 실패했어요", "error");
-    setSavedPw(r.password ?? null);
   }
 
   async function onDelete() {
@@ -246,25 +235,15 @@ export function StaffDetailClient({
                 <div className="mb-2.5 mt-7">
                   <Kicker>비밀번호</Kicker>
                 </div>
-                <div className="flex gap-2.5">
-                  <OutlineButton icon="lock" onClick={onResetPassword} disabled={busy || member.isMe}>
-                    비밀번호 초기화
-                  </OutlineButton>
-                  <OutlineButton icon="lock" onClick={onViewSaved} disabled={busy}>
-                    저장된 비밀번호 보기
-                  </OutlineButton>
-                </div>
+                <OutlineButton icon="lock" onClick={onResetPassword} disabled={busy || member.isMe}>
+                  비밀번호 초기화
+                </OutlineButton>
                 {member.isMe ? (
                   <div className="mt-2.5 text-[12px] font-medium text-muted">본인 계정은 여기서 초기화할 수 없어요</div>
                 ) : null}
                 {tempPw ? (
                   <Banner tone="warn" className="mt-2.5">
                     임시 비밀번호: <b className="select-all">{tempPw}</b> — 지금 강사에게 전달하세요. 첫 로그인 시 변경이 강제돼요.
-                  </Banner>
-                ) : null}
-                {savedPw ? (
-                  <Banner tone="neutral" className="mt-2.5">
-                    현재 비밀번호: <b className="select-all">{savedPw}</b>
                   </Banner>
                 ) : null}
               </>
