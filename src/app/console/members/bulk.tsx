@@ -25,6 +25,7 @@ type Draft = {
   startDate: string; // YYYY-MM-DD
   slots: CarrySlot[];
   trainerId: string;
+  teamKey: number | null; // 같은 값의 인접 두 행 = 2:1 팀 쌍(팀 일정·담당은 위 행 기준)
 };
 
 const WD_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -84,6 +85,7 @@ export function BulkAddModal({
     name: "", phone: "", birth: "", gender: "female",
     productId: "", remaining: "", startDate: kstToday(), slots: [],
     trainerId: trainers[0]?.id ?? "",
+    teamKey: null,
   });
   const [rows, setRows] = useState<Draft[]>(() => Array.from({ length: 5 }, fresh));
   const [busy, setBusy] = useState(false);
@@ -100,13 +102,34 @@ export function BulkAddModal({
   }
   function removeRow(key: number) {
     setRows((prev) => {
-      const next = prev.filter((r) => r.key !== key);
+      const gone = prev.find((r) => r.key === key);
+      const next = prev
+        .filter((r) => r.key !== key)
+        .map((r) => (gone?.teamKey != null && r.teamKey === gone.teamKey ? { ...r, teamKey: null } : r)); // 짝 해제
       return next.length ? next : [fresh()];
     });
   }
 
+  /* ----- 2:1 팀 쌍 — 인접 두 행을 같은 teamKey로 묶는다 ----- */
+  function linkRows(a: Draft, b: Draft) {
+    setRows((prev) => prev.map((r) => (r.key === a.key || r.key === b.key ? { ...r, teamKey: a.key } : r)));
+  }
+  function unlinkTeam(teamKey: number) {
+    setRows((prev) => prev.map((r) => (r.teamKey === teamKey ? { ...r, teamKey: null } : r)));
+  }
+  const pairPartner = (r: Draft) =>
+    r.teamKey == null ? undefined : rows.find((o) => o.key !== r.key && o.teamKey === r.teamKey);
+  /** 팀 행 자체 오류: 짝이 없거나 비었거나, 첫 행(팀 일정 담당 행)에 일정이 없음. */
+  function teamErr(r: Draft): boolean {
+    if (r.teamKey == null) return false;
+    const p = pairPartner(r);
+    if (!p || isEmpty(p)) return true;
+    const isFirst = rows.findIndex((o) => o.teamKey === r.teamKey) === rows.findIndex((o) => o.key === r.key);
+    return isFirst && r.slots.length === 0;
+  }
+
   const filled = rows.filter((r) => !isEmpty(r));
-  const errCount = filled.filter((r) => rowErrors(r, products).size > 0).length;
+  const errCount = filled.filter((r) => rowErrors(r, products).size > 0 || teamErr(r)).length;
   const validCount = filled.length - errCount;
 
   async function submit() {
@@ -114,14 +137,20 @@ export function BulkAddModal({
     setBusy(true);
     setErr(null);
     const res = await bulkAddMembers(
-      filled.map((r) => ({
-        name: r.name, phone: r.phone, birth: r.birth.replace(/\D/g, ""), gender: r.gender,
-        productId: r.productId || null,
-        remaining: r.productId ? Number(r.remaining) : null,
-        startDate: r.productId ? r.startDate : null,
-        slots: r.slots,
-        trainerId: r.trainerId || null,
-      })),
+      filled.map((r) => {
+        // 팀 쌍의 둘째 행: 일정·담당은 첫 행 기준(개인 1:1 스케줄이 따로 생기지 않게 slots는 비운다).
+        const p = pairPartner(r);
+        const isSecond = !!p && rows.findIndex((o) => o.key === p.key) < rows.findIndex((o) => o.key === r.key);
+        return {
+          name: r.name, phone: r.phone, birth: r.birth.replace(/\D/g, ""), gender: r.gender,
+          productId: r.productId || null,
+          remaining: r.productId ? Number(r.remaining) : null,
+          startDate: r.productId ? r.startDate : null,
+          slots: isSecond ? [] : r.slots,
+          trainerId: (isSecond ? p!.trainerId : r.trainerId) || null,
+          teamKey: r.teamKey,
+        };
+      }),
     );
     setBusy(false);
     if (!res.ok && res.created === 0 && res.failed.length === 0) {
@@ -182,6 +211,7 @@ export function BulkAddModal({
             <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
               상품을 고르면 <b className="font-semibold text-[#5B5345]">등록일 + 상품 유효기간</b>으로 만료일이 자동 계산돼요.
               잔여횟수는 기존 회원 이관 시 남은 횟수로 고쳐주세요. 결제는 기록되지 않아 매출에 잡히지 않아요 — 신규 결제는 등록 후 결제 화면에서 기록해주세요.
+              <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤 행 사이 <b className="font-semibold text-[#5B5345]">[2:1 팀으로 묶기]</b>를 누르세요 — 팀 일정·담당은 위 행 기준이에요.
             </span>
           </div>
 
@@ -191,54 +221,116 @@ export function BulkAddModal({
           </div>
 
           <div className="flex flex-col gap-[7px]">
-            {rows.map((r) => {
-              const empty = isEmpty(r);
-              const errs = empty ? new Set<Field>() : rowErrors(r, products);
-              const prod = products.find((p) => p.id === r.productId);
-              const end = prod && r.startDate ? addDays(r.startDate, prod.durationDays) : null;
-              const b = (f: Field) => (errs.has(f) ? ERR_B : OK_B);
-              return (
-                <div key={r.key} className={COLS}>
-                  <input value={r.name} onChange={(e) => patch(r.key, { name: e.target.value })} placeholder="이름" className={`${CELL} ${b("name")}`} />
-                  <input value={formatPhone(r.phone)} onChange={(e) => patch(r.key, { phone: e.target.value.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" inputMode="tel" className={`${CELL} ${b("phone")}`} />
-                  <input value={r.birth} onChange={(e) => patch(r.key, { birth: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" inputMode="numeric" className={`${CELL} ${b("birth")}`} />
-                  {/* 성별: 클릭마다 여↔남 토글 — 드롭다운보다 빠름 */}
-                  <button
-                    type="button"
-                    onClick={() => patch(r.key, { gender: r.gender === "female" ? "male" : "female" })}
-                    aria-label="성별 전환"
-                    title="클릭하여 여/남 전환"
-                    className={`rounded-[10px] border py-[8px] text-[13px] font-semibold transition ${OK_B} ${r.gender === "female" ? "bg-[#FBF9F5] text-[#8A6F5B]" : "bg-[#F0F3F6] text-[#48586A]"}`}
-                  >
-                    {r.gender === "female" ? "여" : "남"}
-                  </button>
-                  <select
-                    value={r.productId}
-                    onChange={(e) => {
-                      const p = products.find((pp) => pp.id === e.target.value);
-                      patch(r.key, { productId: e.target.value, remaining: p ? String(p.sessions) : "" });
-                    }}
-                    className={`${CELL} ${OK_B} cursor-pointer appearance-none`}
-                  >
-                    <option value="">상품 없음</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <input value={r.remaining} onChange={(e) => patch(r.key, { remaining: e.target.value.replace(/\D/g, "") })} disabled={!r.productId} inputMode="numeric" placeholder={prod ? String(prod.sessions) : "—"} className={`${CELL} text-center ${b("remaining")}`} />
-                  <div>
-                    {/* 키보드 숫자 입력 + 우측 달력 아이콘(브라우저 캘린더) — 네이티브 date input */}
-                    <input type="date" value={r.startDate} onChange={(e) => patch(r.key, { startDate: e.target.value })} disabled={!r.productId} className={`${CELL} ${b("startDate")}`} />
-                    {end ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">만료 {end.slice(2).replace(/-/g, ".")}</div> : null}
+            {(() => {
+              // 인접한 같은 teamKey 두 행 = 한 팀 유닛으로 묶어 렌더
+              const units: Draft[][] = [];
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                const nx = rows[i + 1];
+                if (r.teamKey != null && nx && nx.teamKey === r.teamKey) {
+                  units.push([r, nx]);
+                  i++;
+                } else units.push([r]);
+              }
+              const renderRow = (r: Draft, pairFirst?: Draft) => {
+                const empty = isEmpty(r);
+                const errs = empty ? new Set<Field>() : rowErrors(r, products);
+                const prod = products.find((p) => p.id === r.productId);
+                const end = prod && r.startDate ? addDays(r.startDate, prod.durationDays) : null;
+                const b = (f: Field) => (errs.has(f) ? ERR_B : OK_B);
+                // 팀 첫 행인데 팀 일정이 비어 있으면 일정 셀에 오류 표시
+                const slotsErr = !pairFirst && r.teamKey != null && !empty && r.slots.length === 0;
+                return (
+                  <div key={r.key} className={COLS}>
+                    <input value={r.name} onChange={(e) => patch(r.key, { name: e.target.value })} placeholder="이름" className={`${CELL} ${b("name")}`} />
+                    <input value={formatPhone(r.phone)} onChange={(e) => patch(r.key, { phone: e.target.value.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" inputMode="tel" className={`${CELL} ${b("phone")}`} />
+                    <input value={r.birth} onChange={(e) => patch(r.key, { birth: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" inputMode="numeric" className={`${CELL} ${b("birth")}`} />
+                    {/* 성별: 클릭마다 여↔남 토글 — 드롭다운보다 빠름 */}
+                    <button
+                      type="button"
+                      onClick={() => patch(r.key, { gender: r.gender === "female" ? "male" : "female" })}
+                      aria-label="성별 전환"
+                      title="클릭하여 여/남 전환"
+                      className={`rounded-[10px] border py-[8px] text-[13px] font-semibold transition ${OK_B} ${r.gender === "female" ? "bg-[#FBF9F5] text-[#8A6F5B]" : "bg-[#F0F3F6] text-[#48586A]"}`}
+                    >
+                      {r.gender === "female" ? "여" : "남"}
+                    </button>
+                    <select
+                      value={r.productId}
+                      onChange={(e) => {
+                        const p = products.find((pp) => pp.id === e.target.value);
+                        patch(r.key, { productId: e.target.value, remaining: p ? String(p.sessions) : "" });
+                      }}
+                      className={`${CELL} ${OK_B} cursor-pointer appearance-none`}
+                    >
+                      <option value="">상품 없음</option>
+                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <input value={r.remaining} onChange={(e) => patch(r.key, { remaining: e.target.value.replace(/\D/g, "") })} disabled={!r.productId} inputMode="numeric" placeholder={prod ? String(prod.sessions) : "—"} className={`${CELL} text-center ${b("remaining")}`} />
+                    <div>
+                      {/* 키보드 숫자 입력 + 우측 달력 아이콘(브라우저 캘린더) — 네이티브 date input */}
+                      <input type="date" value={r.startDate} onChange={(e) => patch(r.key, { startDate: e.target.value })} disabled={!r.productId} className={`${CELL} ${b("startDate")}`} />
+                      {end ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">만료 {end.slice(2).replace(/-/g, ".")}</div> : null}
+                    </div>
+                    {pairFirst ? (
+                      <div className={`${CELL} ${OK_B} flex min-h-[36px] items-center bg-[#F4F0E8] text-[12px] font-semibold text-[#9A917F]`}>팀 일정 = 위 행</div>
+                    ) : (
+                      <SlotsCell value={r.slots} onChange={(slots) => patch(r.key, { slots })} error={slotsErr} />
+                    )}
+                    <select
+                      value={pairFirst ? pairFirst.trainerId : r.trainerId}
+                      disabled={!!pairFirst}
+                      onChange={(e) => patch(r.key, { trainerId: e.target.value })}
+                      className={`${CELL} ${OK_B} cursor-pointer appearance-none`}
+                    >
+                      {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <button type="button" onClick={() => removeRow(r.key)} aria-label="행 삭제" className="mt-[9px] flex h-5 w-5 items-center justify-center justify-self-center rounded-full text-[#C2BAAD] transition hover:bg-[#F4EFE6] hover:text-terracotta">
+                      <Icon name="close" size={12} />
+                    </button>
                   </div>
-                  <SlotsCell value={r.slots} onChange={(slots) => patch(r.key, { slots })} />
-                  <select value={r.trainerId} onChange={(e) => patch(r.key, { trainerId: e.target.value })} className={`${CELL} ${OK_B} cursor-pointer appearance-none`}>
-                    {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                  <button type="button" onClick={() => removeRow(r.key)} aria-label="행 삭제" className="mt-[9px] flex h-5 w-5 items-center justify-center justify-self-center rounded-full text-[#C2BAAD] transition hover:bg-[#F4EFE6] hover:text-terracotta">
-                    <Icon name="close" size={12} />
-                  </button>
-                </div>
-              );
-            })}
+                );
+              };
+              return units.map((u) => {
+                if (u.length === 2) {
+                  return (
+                    <div key={`team-${u[0].key}`} className="flex flex-col gap-[6px] rounded-[12px] bg-[#F3F7EC] p-[6px] ring-1 ring-sage/40">
+                      {renderRow(u[0])}
+                      <div className="flex items-center gap-2 pl-1">
+                        <span className="inline-flex items-center gap-1 rounded-[7px] bg-sage px-2 py-[3px] text-[10.5px] font-bold text-white">
+                          <Icon name="persons" size={11} /> 2:1 팀
+                        </span>
+                        <span className="text-[11px] font-medium text-[#77836B]">팀 일정·담당은 위 행 기준이에요</span>
+                        <button type="button" onClick={() => unlinkTeam(u[0].teamKey!)} className="ml-auto rounded-[7px] px-2 py-[3px] text-[11px] font-semibold text-[#9A917F] transition hover:bg-white hover:text-terracotta">
+                          해제
+                        </button>
+                      </div>
+                      {renderRow(u[1], u[0])}
+                    </div>
+                  );
+                }
+                const r = u[0];
+                const idx = rows.findIndex((o) => o.key === r.key);
+                const nx = rows[idx + 1];
+                const canLink = nx && !isEmpty(r) && !isEmpty(nx) && r.teamKey == null && nx.teamKey == null;
+                return (
+                  <div key={r.key} className="flex flex-col">
+                    {renderRow(r)}
+                    {canLink ? (
+                      <div className="-mb-[5px] mt-[1px] flex justify-center">
+                        <button
+                          type="button"
+                          onClick={() => linkRows(r, nx)}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-[2px] text-[10.5px] font-semibold text-[#B3AA9C] transition hover:bg-[#F4F0E8] hover:text-sage-deep"
+                        >
+                          <Icon name="persons" size={10} /> 위·아래 행을 2:1 팀으로 묶기
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           <button type="button" onClick={() => setRows((prev) => [...prev, fresh()])} className="mt-2.5 inline-flex items-center gap-1.5 rounded-[10px] px-2 py-1.5 text-[12.5px] font-semibold text-sage-deep transition hover:bg-[#F4F0E8]">
@@ -253,7 +345,7 @@ export function BulkAddModal({
 }
 
 /* ----- 수업 일정 셀: 칩 + 팝오버(요일 다중선택 → 시각 → 추가) ----- */
-function SlotsCell({ value, onChange }: { value: CarrySlot[]; onChange: (v: CarrySlot[]) => void }) {
+function SlotsCell({ value, onChange, error }: { value: CarrySlot[]; onChange: (v: CarrySlot[]) => void; error?: boolean }) {
   const [open, setOpen] = useState(false);
   const [days, setDays] = useState<number[]>([]);
   const [hour, setHour] = useState(19);
@@ -279,7 +371,7 @@ function SlotsCell({ value, onChange }: { value: CarrySlot[]; onChange: (v: Carr
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`${CELL} ${OK_B} flex min-h-[36px] cursor-pointer flex-wrap items-center gap-1 text-left`}
+        className={`${CELL} ${error ? ERR_B : OK_B} flex min-h-[36px] cursor-pointer flex-wrap items-center gap-1 text-left`}
       >
         {value.length === 0 ? (
           <span className="text-[#B3AA9C]">일정 추가</span>

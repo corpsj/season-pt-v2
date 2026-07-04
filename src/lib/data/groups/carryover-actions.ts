@@ -4,6 +4,7 @@ import { sb, getTrainerContext, todayISO, weekdayKo, parseBirth6 } from "@/lib/d
 import { hashPassword } from "@/lib/auth/password";
 import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { parseEndDate, type CarrySlot } from "@/lib/import/carryover-parse";
+import { createTeamSchedule } from "@/lib/data/groups/owner-ops-actions";
 import type { Gender } from "@/lib/types";
 
 type Result = { ok: boolean; error?: string };
@@ -20,6 +21,7 @@ export type BulkMemberInput = {
   startDate: string | null; // YYYY-MM-DD(등록일). null → 오늘. 만료 = 등록일 + 상품 유효기간
   slots: CarrySlot[];
   trainerId: string | null; // null → 대표 본인
+  teamKey?: number | null; // 같은 값의 두 행 = 2:1 팀 쌍. 팀 일정은 쌍의 첫 행 slots(둘째 행은 빈 slots로 옴).
 };
 
 /**
@@ -45,6 +47,12 @@ export async function bulkAddMembers(
 
   const failed: { name: string; error: string }[] = [];
   let created = 0;
+
+  // 2:1 팀 쌍: teamKey를 공유하는 행이 정확히 2개일 때만 팀으로 취급(그 외는 개인으로 폴백).
+  const teamCount = new Map<number, number>();
+  for (const r of rows) if (r.teamKey != null) teamCount.set(r.teamKey, (teamCount.get(r.teamKey) ?? 0) + 1);
+  // 쌍의 첫 행이 등록되면 여기 대기 — 둘째 행 등록 후 createTeamSchedule로 묶는다.
+  const teamPending = new Map<number, { memberId: string; name: string; slots: CarrySlot[] }>();
 
   for (const r of rows) {
     const name = r.name.trim();
@@ -135,14 +143,30 @@ export async function bulkAddMembers(
       continue;
     }
 
-    // 3) 정기 스케줄
-    for (const s of r.slots) {
-      const { data: sched } = await sb
-        .from("schedules")
-        .insert({ trainer_id: trainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
-        .select("id")
-        .single();
-      if (sched) await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: member.id });
+    // 3) 정기 스케줄 — 2:1 팀 쌍이면 개인 1:1 대신 팀(2on1)으로 묶는다.
+    const isTeam = r.teamKey != null && teamCount.get(r.teamKey) === 2;
+    if (isTeam) {
+      const mate = teamPending.get(r.teamKey!);
+      if (!mate) {
+        teamPending.set(r.teamKey!, { memberId: member.id, name, slots: r.slots });
+      } else {
+        teamPending.delete(r.teamKey!);
+        const slots = mate.slots.length ? mate.slots : r.slots;
+        if (slots.length > 0) {
+          const team = await createTeamSchedule({ memberIds: [mate.memberId, member.id], slots });
+          if (!team.ok)
+            failed.push({ name: `${mate.name}·${name}`, error: `회원은 등록됐지만 팀 일정 생성 실패(${team.error ?? "알 수 없는 오류"}) — 회원 상세 [2:1 팀으로 묶기]에서 묶어주세요` });
+        }
+      }
+    } else {
+      for (const s of r.slots) {
+        const { data: sched } = await sb
+          .from("schedules")
+          .insert({ trainer_id: trainerId, type: "1on1", weekday: s.weekday, hour: s.hour, minute: s.minute, active: true })
+          .select("id")
+          .single();
+        if (sched) await sb.from("schedule_members").insert({ schedule_id: sched.id, member_id: member.id });
+      }
     }
 
     // 4) 회원권(선택): 잔여·등록일 그대로, 상품 연결, 결제 미기록 → 매출 중립
@@ -166,6 +190,11 @@ export async function bulkAddMembers(
       }
     }
     created++;
+  }
+
+  // 파트너 행이 실패해 짝을 못 이룬 팀 첫 행 — 회원은 등록됐지만(일정 없이) 팀은 못 묶음.
+  for (const p of teamPending.values()) {
+    failed.push({ name: p.name, error: "파트너 행이 등록되지 않아 팀으로 못 묶었어요 — 파트너 등록 후 회원 상세 [2:1 팀으로 묶기]에서 묶어주세요" });
   }
 
   revalidatePath("/console/members");
