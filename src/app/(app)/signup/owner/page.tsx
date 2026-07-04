@@ -91,6 +91,10 @@ export default function OwnerSignupPage() {
           </Field>
         </div>
 
+        <Banner tone="positive" icon="lock-fill" className="mt-5">
+          입력하신 비밀번호는 <b>암호화되어 안전하게 저장</b>돼요. 안심하고 가입하세요.
+        </Banner>
+
         {error ? (
           <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
         ) : null}

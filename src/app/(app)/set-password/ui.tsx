@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Field, TextInput } from "@/components/ui/Field";
+import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
@@ -100,6 +101,10 @@ export function SetPasswordClient({ needsUsername }: { needsUsername: boolean })
             <span className="text-[12.5px] font-medium text-muted2">영문과 숫자 포함</span>
           </div>
         </div>
+
+        <Banner tone="positive" icon="lock-fill" className="mt-5">
+          입력하신 비밀번호는 <b>암호화되어 안전하게 저장</b>돼요. 안심하고 설정하세요.
+        </Banner>
 
         {error ? (
           <p className="mt-4 text-[13px] font-medium text-terracotta">{error}</p>
