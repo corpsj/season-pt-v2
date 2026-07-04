@@ -580,6 +580,7 @@ export interface MemberWorkoutRecord {
   timeLabel: string; // "오후 9:00"
   exercises: WorkoutExercise[];
   comment?: string;
+  editable: boolean; // 회원 본인이 직접 남긴(수업 아님) 기록 — 삭제 가능
 }
 export interface MemberWorkoutView {
   records: MemberWorkoutRecord[];

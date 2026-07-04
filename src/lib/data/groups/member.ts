@@ -223,9 +223,10 @@ export async function getMemberCalendar(
 /* -------- 캘린더 날짜별 기록 (운동·식단·체형) — 마이탭 상세 화면의 요약본 -------- */
 export type MemberDayWorkout = {
   id: string;
-  time: string; // "오후 7:00" (수업 시각)
+  time: string; // "오후 7:00" (수업 시각 / 자유 운동은 기록 시각)
   exercises: WorkoutExercise[];
   comment: string | null;
+  isFree?: boolean; // 수업과 무관하게 회원이 직접 남긴 기록
 };
 export type MemberDayMeal = {
   id: string;
@@ -311,7 +312,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
   const { startISO: monthStartUtc, endISO: monthEndUtc } = monthBoundsFromKst(
     new Date(Date.UTC(year, month - 1, 1)),
   );
-  const [mlRes, mfRes, wrRes] = await Promise.all([
+  const [mlRes, mfRes, wrRes, freeWrRes] = await Promise.all([
     sb
       .from("meal_logs")
       .select("id, photo_path, memo, meal_type, eaten_at, feedback")
@@ -330,6 +331,14 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     sessionIds.length
       ? sb.from("workout_records").select("id, session_id, exercises, comment").in("session_id", sessionIds)
       : Promise.resolve({ data: null }),
+    // 회원이 직접 남긴 자유 운동(session_id null) — created_at 기준으로 이 달 것만.
+    sb
+      .from("workout_records")
+      .select("id, exercises, comment, created_at")
+      .eq("member_id", me.memberId)
+      .is("session_id", null)
+      .gte("created_at", monthStartUtc)
+      .lt("created_at", monthEndUtc),
   ]);
   const mealRows = (mlRes.data ?? []) as unknown as {
     id: string; photo_path: string | null; memo: string | null; meal_type: string | null; eaten_at: string; feedback: string | null;
@@ -339,6 +348,9 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
   }[];
   const workoutRows = (wrRes.data ?? []) as unknown as {
     id: string; session_id: string; exercises: unknown; comment: string | null;
+  }[];
+  const freeWorkoutRows = (freeWrRes.data ?? []) as unknown as {
+    id: string; exercises: unknown; comment: string | null; created_at: string;
   }[];
 
   // 서명 URL은 한 번에(batch) — 건당 왕복이면 한 달치 사진에서 수십 회 왕복이 된다.
@@ -360,6 +372,12 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     const d = kstDateISO(at);
     const arr = workoutsByDay.get(d) ?? [];
     arr.push({ id: w.id, time: clockLabel(at), exercises: parseExercises(w.exercises), comment: w.comment ?? null });
+    workoutsByDay.set(d, arr);
+  }
+  for (const w of freeWorkoutRows) {
+    const d = kstDateISO(w.created_at);
+    const arr = workoutsByDay.get(d) ?? [];
+    arr.push({ id: w.id, time: clockLabel(w.created_at), exercises: parseExercises(w.exercises), comment: w.comment ?? null, isFree: true });
     workoutsByDay.set(d, arr);
   }
   const mealsByDay = new Map<string, MemberDayMeal[]>();
@@ -1165,7 +1183,7 @@ export async function getMemberWorkoutRecords(): Promise<MemberWorkoutView> {
   const me = await requireMember();
   const { data } = await sb
     .from("workout_records")
-    .select("id, exercises, comment, created_at, sessions(scheduled_at)")
+    .select("id, exercises, comment, created_at, created_by, sessions(scheduled_at)")
     .eq("member_id", me.memberId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -1176,6 +1194,7 @@ export async function getMemberWorkoutRecords(): Promise<MemberWorkoutView> {
       exercises: unknown;
       comment: string | null;
       created_at: string;
+      created_by: string | null;
       sessions?: { scheduled_at: string } | null;
     };
     const when = row.sessions?.scheduled_at ?? row.created_at;
@@ -1188,6 +1207,7 @@ export async function getMemberWorkoutRecords(): Promise<MemberWorkoutView> {
       timeLabel: clockLabel(when),
       exercises,
       comment: row.comment ?? undefined,
+      editable: row.created_by === null, // 강사 작성 기록(created_by 있음)은 회원이 못 지운다
     };
   });
   return { records };

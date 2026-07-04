@@ -137,11 +137,20 @@ export function MemberCalendarClient({
           <EmptyState icon="calendar" title={selected <= today ? "이 날은 수업과 기록이 없어요" : "이 날은 수업이 없어요"} />
         ) : null}
 
-        {dayWorkouts.length ? (
+        {dayWorkouts.length || isToday ? (
           <RecordSection title="운동 기록" href="/m/my/records">
             {dayWorkouts.map((w) => (
               <DayWorkoutCard key={w.id} workout={w} showTime={dayWorkouts.length > 1} />
             ))}
+            {isToday ? (
+              <Link
+                href="/m/my/records?add=1"
+                className="tappable flex items-center justify-center gap-2 rounded-[13px] border-[1.4px] border-dashed border-ink/[0.14] bg-card px-3.5 py-3"
+              >
+                <Icon name="plus-bold" size={14} className="text-sage-deep" />
+                <span className="text-[13px] font-semibold text-muted">오늘 운동 기록하기</span>
+              </Link>
+            ) : null}
           </RecordSection>
         ) : null}
 
@@ -195,8 +204,10 @@ function RecordSection({ title, href, children }: { title: string; href: string;
 function DayWorkoutCard({ workout, showTime }: { workout: MemberDayWorkout; showTime: boolean }) {
   return (
     <Card className="p-[15px]">
-      {showTime ? (
-        <div className="mb-2 text-[12px] font-semibold text-muted">{workout.time} 수업</div>
+      {showTime || workout.isFree ? (
+        <div className="mb-2 text-[12px] font-semibold text-muted">
+          {workout.time} {workout.isFree ? "· 직접 기록" : "수업"}
+        </div>
       ) : null}
       {workout.exercises.length > 0 ? (
         <div className="flex flex-col gap-2">
