@@ -210,7 +210,8 @@ export function MembersClient({
       .map(([wd, t]) => ({ weekday: Number(wd), hour: t.hour, minute: t.minute }))
       .sort((a, b) => a.weekday - b.weekday);
     const product = f.productId ? { productId: f.productId } : undefined;
-    const payment = f.productId ? { method: f.method, amount: Number(f.amount) } : undefined;
+    // 입력값은 합계(2:1이면 두 회원 합). 회원당 결제 1건이라 듀엣은 절반씩 나눠 기록한다.
+    const payment = f.productId ? { method: f.method, amount: is2on1 ? Math.round(Number(f.amount) / 2) : Number(f.amount) } : undefined;
     setBusy(true);
     const r = is2on1
       ? await createDuetMembers({
@@ -552,6 +553,22 @@ export function MembersClient({
           onClose={() => setModal(null)}
           footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={doAdd}>등록</PBtn></>}
         >
+          {/* 회원권 (선택) — 맨 위에서 고르면 1:1/2:1이 정해진다. 2:1이면 아래 파트너 입력이 열림 */}
+          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
+          <ProductPicker
+            products={products}
+            selected={f.productId}
+            showPrice
+            onPick={(id) => {
+              const newId = f.productId === id ? "" : id;
+              const p = products.find((pp) => pp.id === newId);
+              setF({ ...f, productId: newId, amount: p ? String(isDuetProduct(p.name) ? p.price * 2 : p.price) : f.amount });
+            }}
+            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
+          />
+
+          {/* 회원 정보 */}
+          <div className="mb-2 mt-5 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "회원 1" : "회원 정보"}</div>
           <ModalField label="이름"><Input value={f.name} onChange={(v) => setF({ ...f, name: v })} placeholder="회원 이름" /></ModalField>
           <ModalField label="연락처"><Input value={formatPhone(f.phone)} onChange={(v) => setF({ ...f, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
           <div className="grid grid-cols-2 gap-2.5">
@@ -564,22 +581,11 @@ export function MembersClient({
               </div>
             </ModalField>
           </div>
-          <ModalField label="담당 강사">
-            <select
-              value={f.trainerId}
-              onChange={(e) => setF({ ...f, trainerId: e.target.value })}
-              className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
-            >
-              {trainers.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </ModalField>
 
-          {/* 듀엣 파트너 — 2:1 회원권 선택 시 회원 입력창 바로 아래에서 파트너를 함께 등록 */}
+          {/* 회원 2 (듀엣 파트너) — 2:1 회원권 선택 시 함께 등록 */}
           {is2on1 ? (
-            <div className="mb-3.5 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
-              <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">듀엣 파트너 · 2:1 회원권</div>
+            <div className="mb-3.5 mt-1 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
+              <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">회원 2 · 듀엣 파트너</div>
               <ModalField label="이름"><Input value={p2.name} onChange={(v) => setP2({ ...p2, name: v })} placeholder="파트너 이름" /></ModalField>
               <ModalField label="연락처"><Input value={formatPhone(p2.phone)} onChange={(v) => setP2({ ...p2, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
               <div className="grid grid-cols-2 gap-2.5">
@@ -596,38 +602,30 @@ export function MembersClient({
             </div>
           ) : null}
 
-          {/* 회원권 (선택) — 2:1 상품을 고르면 위 파트너 입력이 열린다 */}
-          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){is2on1 ? " · 두 회원에게 각각 발급" : ""}</div>
-          <ProductPicker
-            products={products}
-            selected={f.productId}
-            showPrice
-            onPick={(id) => {
-              const newId = f.productId === id ? "" : id;
-              const p = products.find((pp) => pp.id === newId);
-              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
-            }}
-            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
-          />
+          {/* 담당 강사 */}
+          <ModalField label="담당 강사">
+            <select
+              value={f.trainerId}
+              onChange={(e) => setF({ ...f, trainerId: e.target.value })}
+              className="w-full rounded-[13px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40"
+            >
+              {trainers.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </ModalField>
 
-          {/* 결제 (상품 선택 시) */}
+          {/* 결제 (상품 선택 시) — 2:1은 두 회원 합계 금액 */}
           {f.productId ? (
-            <div className="mt-3">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "결제 금액 (1인당)" : "결제 금액"}</div>
+            <div className="mt-1">
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
               <input
                 value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
                 onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
                 inputMode="numeric"
                 placeholder="₩ 금액"
-                className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+                className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
               />
-              {is2on1 && Number(f.amount) > 0 ? (
-                <div className="mb-3.5 mt-2 rounded-[11px] bg-[#EDF4E3] px-3.5 py-2.5 text-[12.5px] font-medium text-[#5B6452]">
-                  2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 → <span className="font-bold">2명 합계 {(Number(f.amount) * 2).toLocaleString("ko-KR")}원</span>
-                </div>
-              ) : (
-                <div className="mb-3.5" />
-              )}
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
               <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
             </div>

@@ -74,11 +74,11 @@ export function MemberRegisterClient({
   const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
   const visibleProducts = products.filter((p) => matchesQuad(p.name, activeTab) || isUnclassified(p.name));
 
-  // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
+  // 결제 금액은 상품 가격 그대로. 2:1은 두 회원 합계로 보여준다(상품가 × 2).
   function onProductChange(id: string | "later") {
     setSelectedProduct(id);
     const p = id !== "later" ? products.find((pp) => pp.id === id) : undefined;
-    setPayAmount(p ? String(p.price) : "");
+    setPayAmount(p ? String(isDuetProduct(p.name) ? p.price * 2 : p.price) : "");
   }
 
   /** 탭 변경 — 선택 상품이 새 탭에 안 보이면 선택 해제(조용히 엉뚱한 상품이 발급되는 것 방지). */
@@ -102,11 +102,14 @@ export function MemberRegisterClient({
     setPending(true);
     const productArg =
       selectedProduct !== "later" ? { productId: selectedProduct } : undefined;
+    // 입력값은 합계(2:1이면 두 회원 합). 회원당 결제 1건이라 듀엣은 절반씩 나눠 기록한다.
+    const total = payAmount ? Number(payAmount.replace(/[^\d]/g, "")) : undefined;
+    const perMember = is2on1 && total ? Math.round(total / 2) : total;
     const paymentArg =
       selectedProduct !== "later"
         ? {
             method: payMethod,
-            amount: payAmount ? Number(payAmount.replace(/[^\d]/g, "")) : undefined,
+            amount: perMember,
             paidAt: payDate || undefined,
           }
         : undefined;
@@ -164,86 +167,8 @@ export function MemberRegisterClient({
           <span className="text-[19px] font-bold text-ink">회원 등록</span>
         </div>
 
-        <div className="flex flex-col gap-3.5">
-          <Field icon="person" label="이름">
-            <TextInput placeholder="윤서아" value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field icon="phone" label="연락처 (아이디)">
-            <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
-          </Field>
-          <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
-            <TextInput
-              inputMode="numeric"
-              placeholder="000000"
-              value={birth}
-              onChange={(e) => setBirth(e.target.value)}
-            />
-          </Field>
-
-          <div>
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
-            <SegmentedToggle
-              options={[
-                { value: "female", label: "여성" },
-                { value: "male", label: "남성" },
-              ]}
-              value={gender}
-              onChange={setGender}
-            />
-          </div>
-
-          {/* 담당 강사 */}
-          <div>
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">담당 강사</div>
-            <Select
-              value={trainerId}
-              options={staffOptions}
-              onChange={setTrainerId}
-            />
-          </div>
-        </div>
-
-        {/* 듀엣 파트너 — 2:1 회원권 선택 시 신규 회원 2명 동시 등록(회원 입력창 바로 아래) */}
-        {is2on1 ? (
-          <>
-            <div className="mb-2.5 mt-6">
-              <Kicker>듀엣 파트너</Kicker>
-            </div>
-            <div className="mb-2 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
-              2:1 회원권이에요 · 함께 들을 파트너 회원을 등록하면 두 명이 동시에 만들어져요.
-            </div>
-            <Card className="flex flex-col gap-3.5 p-4">
-              <Field icon="person" label="이름">
-                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
-              </Field>
-              <Field icon="phone" label="연락처 (아이디)">
-                <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
-              </Field>
-              <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
-                <TextInput
-                  inputMode="numeric"
-                  placeholder="000000"
-                  value={p2.birth}
-                  onChange={(e) => setP2({ ...p2, birth: e.target.value })}
-                />
-              </Field>
-              <div>
-                <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
-                <SegmentedToggle
-                  options={[
-                    { value: "female", label: "여성" },
-                    { value: "male", label: "남성" },
-                  ]}
-                  value={p2.gender}
-                  onChange={(v) => setP2({ ...p2, gender: v })}
-                />
-              </div>
-            </Card>
-          </>
-        ) : null}
-
         {/* 회원권 상품 — 담당×유형 4탭. 2:1 상품을 고르면 듀엣(파트너 입력)이 열린다. */}
-        <div className="mb-2.5 mt-6">
+        <div className="mb-2.5">
           <Kicker>회원권 상품</Kicker>
         </div>
         {products.length > 0 ? (
@@ -283,9 +208,87 @@ export function MemberRegisterClient({
           </RadioOption>
         </div>
 
-        {/* 결제 정보 (상품 선택 시) */}
+        {/* 회원 정보 */}
+        <div className="mb-2.5 mt-6">
+          <Kicker>{is2on1 ? "회원 1" : "회원 정보"}</Kicker>
+        </div>
+        <div className="flex flex-col gap-3.5">
+          <Field icon="person" label="이름">
+            <TextInput placeholder="윤서아" value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field icon="phone" label="연락처 (아이디)">
+            <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
+          </Field>
+          <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
+            <TextInput
+              inputMode="numeric"
+              placeholder="000000"
+              value={birth}
+              onChange={(e) => setBirth(e.target.value)}
+            />
+          </Field>
+          <div>
+            <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
+            <SegmentedToggle
+              options={[
+                { value: "female", label: "여성" },
+                { value: "male", label: "남성" },
+              ]}
+              value={gender}
+              onChange={setGender}
+            />
+          </div>
+        </div>
+
+        {/* 듀엣 파트너 — 2:1 회원권 선택 시 함께 등록되는 두 번째 회원 */}
+        {is2on1 ? (
+          <>
+            <div className="mb-2.5 mt-6">
+              <Kicker>회원 2 (듀엣 파트너)</Kicker>
+            </div>
+            <Card className="flex flex-col gap-3.5 p-4">
+              <Field icon="person" label="이름">
+                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
+              </Field>
+              <Field icon="phone" label="연락처 (아이디)">
+                <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
+              </Field>
+              <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
+                <TextInput
+                  inputMode="numeric"
+                  placeholder="000000"
+                  value={p2.birth}
+                  onChange={(e) => setP2({ ...p2, birth: e.target.value })}
+                />
+              </Field>
+              <div>
+                <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
+                <SegmentedToggle
+                  options={[
+                    { value: "female", label: "여성" },
+                    { value: "male", label: "남성" },
+                  ]}
+                  value={p2.gender}
+                  onChange={(v) => setP2({ ...p2, gender: v })}
+                />
+              </div>
+            </Card>
+          </>
+        ) : null}
+
+        {/* 담당 강사 */}
+        <div className="mt-6">
+          <div className="mb-2 text-[12.5px] font-semibold text-muted5">담당 강사</div>
+          <Select
+            value={trainerId}
+            options={staffOptions}
+            onChange={setTrainerId}
+          />
+        </div>
+
+        {/* 결제 정보 (상품 선택 시) — 2:1은 두 회원 합계 금액 */}
         {selectedProduct !== "later" && selectedProductData && (
-          <Card className="mb-4 flex flex-col gap-3 p-4">
+          <Card className="mb-4 mt-6 flex flex-col gap-3 p-4">
             <div>
               <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
               <SegmentedToggle
@@ -298,19 +301,13 @@ export function MemberRegisterClient({
                 onChange={setPayMethod}
               />
             </div>
-            <Field icon="coins" label={is2on1 ? "금액 (1인당)" : "금액"} hint="원">
+            <Field icon="coins" label="결제 금액" hint="원">
               <MoneyInput
-                placeholder={selectedProductData.price.toLocaleString("ko-KR")}
+                placeholder={(is2on1 ? selectedProductData.price * 2 : selectedProductData.price).toLocaleString("ko-KR")}
                 value={payAmount}
                 onValueChange={setPayAmount}
               />
             </Field>
-            {is2on1 && Number(payAmount.replace(/[^\d]/g, "")) > 0 ? (
-              <div className="-mt-1 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
-                2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 →{" "}
-                <span className="font-bold">2명 합계 {(Number(payAmount.replace(/[^\d]/g, "")) * 2).toLocaleString("ko-KR")}원</span>
-              </div>
-            ) : null}
             <Field icon="calendar" label="결제일">
               <TextInput
                 type="date"
