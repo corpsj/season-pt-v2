@@ -166,9 +166,10 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
               {bodyHistory.map((b) => (
                 <div key={b.id} className="flex items-center gap-2 py-2 text-[12.5px]">
                   <span className="w-[52px] flex-none font-medium text-muted">{b.measuredAt.slice(5).replace("-", ".")}</span>
-                  <span className="flex-1 font-semibold text-ink">
+                  <span className="min-w-0 flex-1 font-semibold text-ink">
                     {[b.weight != null ? `${b.weight}kg` : null, b.skeletalMuscle != null ? `골격근 ${b.skeletalMuscle}` : null, b.bodyFat != null ? `체지방 ${b.bodyFat}%` : null].filter(Boolean).join(" · ")}
                   </span>
+                  {b.selfRecorded ? <span className="flex-none rounded-md bg-[#EDF4E3] px-1.5 py-0.5 text-[10px] font-bold text-sage-deep">회원 기록</span> : null}
                 </div>
               ))}
             </div>

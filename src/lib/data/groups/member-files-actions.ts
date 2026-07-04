@@ -87,6 +87,15 @@ export async function uploadMyFile(formData: FormData): Promise<Result> {
   const file = formData.get("file");
   if (!(file instanceof File)) return { ok: false, error: "파일이 없어요" };
 
+  // 찍은 날짜(선택) — 지난 날짜 허용, 미래 거부. 미지정은 DB default(오늘).
+  const takenAtRaw = (formData.get("takenAt") as string | null)?.trim() || null;
+  let takenAt: string | null = null;
+  if (takenAtRaw && /^\d{4}-\d{2}-\d{2}$/.test(takenAtRaw)) {
+    const todayKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    if (takenAtRaw > todayKst) return { ok: false, error: "미래 날짜는 기록할 수 없어요" };
+    takenAt = takenAtRaw;
+  }
+
   const kind: FileKind = "photo"; // 회원 셀프 업로드는 진행 사진만
   const v = validateUpload(kind, file.type, file.size);
   if (!v.ok) return { ok: false, error: v.error };
@@ -101,7 +110,7 @@ export async function uploadMyFile(formData: FormData): Promise<Result> {
 
   const { error: insErr } = await sb
     .from("member_files")
-    .insert({ member_id: me.memberId, kind, storage_path: path, created_by: null });
+    .insert({ member_id: me.memberId, kind, storage_path: path, created_by: null, ...(takenAt ? { taken_at: takenAt } : {}) });
   if (insErr) {
     await sb.storage.from(FILES_BUCKET).remove([path]); // 고아 객체 롤백
     return { ok: false, error: "저장에 실패했어요" };

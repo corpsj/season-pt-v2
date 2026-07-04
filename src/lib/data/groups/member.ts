@@ -241,6 +241,10 @@ export type MemberDayFile = {
   kind: "photo" | "inbody";
   url: string | null;
 };
+export type MemberDayMeasure = {
+  id: string;
+  summary: string; // "체중 72.5kg · 체지방 18%"
+};
 
 /** Per-day data for the selected month so the client can switch days without a round-trip. */
 export type MemberCalendarDayMap = {
@@ -255,6 +259,7 @@ export type MemberCalendarDayMap = {
       workouts: MemberDayWorkout[];
       meals: MemberDayMeal[];
       files: MemberDayFile[];
+      measures: MemberDayMeasure[];
     }
   >;
 };
@@ -312,7 +317,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
   const { startISO: monthStartUtc, endISO: monthEndUtc } = monthBoundsFromKst(
     new Date(Date.UTC(year, month - 1, 1)),
   );
-  const [mlRes, mfRes, wrRes, freeWrRes] = await Promise.all([
+  const [mlRes, mfRes, wrRes, freeWrRes, bcRes] = await Promise.all([
     sb
       .from("meal_logs")
       .select("id, photo_path, memo, meal_type, eaten_at, feedback")
@@ -339,6 +344,14 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
       .is("session_id", null)
       .gte("created_at", monthStartUtc)
       .lt("created_at", monthEndUtc),
+    // 체성분 측정 — measured_at 기준으로 이 달 것만.
+    sb
+      .from("body_compositions")
+      .select("id, weight, skeletal_muscle, body_fat, measured_at")
+      .eq("member_id", me.memberId)
+      .gte("measured_at", monthStartUtc)
+      .lt("measured_at", monthEndUtc)
+      .order("measured_at", { ascending: true }),
   ]);
   const mealRows = (mlRes.data ?? []) as unknown as {
     id: string; photo_path: string | null; memo: string | null; meal_type: string | null; eaten_at: string; feedback: string | null;
@@ -351,6 +364,9 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
   }[];
   const freeWorkoutRows = (freeWrRes.data ?? []) as unknown as {
     id: string; exercises: unknown; comment: string | null; created_at: string;
+  }[];
+  const bodyCompRows = (bcRes.data ?? []) as unknown as {
+    id: string; weight: number | null; skeletal_muscle: number | null; body_fat: number | null; measured_at: string;
   }[];
 
   // 서명 URL은 한 번에(batch) — 건당 왕복이면 한 달치 사진에서 수십 회 왕복이 된다.
@@ -400,6 +416,19 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     arr.push({ id: f.id, kind: f.kind, url: signedByPath.get(f.storage_path) ?? null });
     filesByDay.set(f.taken_at, arr);
   }
+  const measuresByDay = new Map<string, MemberDayMeasure[]>();
+  for (const b of bodyCompRows) {
+    const d = kstDateISO(b.measured_at);
+    const summary = [
+      b.weight != null ? `체중 ${Number(b.weight)}kg` : null,
+      b.skeletal_muscle != null ? `골격근 ${Number(b.skeletal_muscle)}kg` : null,
+      b.body_fat != null ? `체지방 ${Number(b.body_fat)}%` : null,
+    ].filter(Boolean).join(" · ");
+    if (!summary) continue;
+    const arr = measuresByDay.get(d) ?? [];
+    arr.push({ id: b.id, summary });
+    measuresByDay.set(d, arr);
+  }
 
   const days: MemberCalendarDayMap["days"] = {};
   for (let n = 1; n <= daysInMonth; n++) {
@@ -416,6 +445,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
       workouts: workoutsByDay.get(dISO) ?? [],
       meals: mealsByDay.get(dISO) ?? [],
       files: filesByDay.get(dISO) ?? [],
+      measures: measuresByDay.get(dISO) ?? [],
     };
   }
 

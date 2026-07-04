@@ -168,9 +168,10 @@ export function BodyRecordSection({
           {history.map((b) => (
             <div key={b.id} className="flex items-center gap-2 py-2.5 text-[12.5px]">
               <span className="w-[58px] flex-none font-medium text-[#9A917F]">{b.measuredAt.replace(/-/g, ".").slice(2)}</span>
-              <span className="flex-1 font-semibold text-ink">
+              <span className="min-w-0 flex-1 font-semibold text-ink">
                 {[b.weight != null ? `${b.weight}kg` : null, b.skeletalMuscle != null ? `골격근 ${b.skeletalMuscle}` : null, b.bodyFat != null ? `체지방 ${b.bodyFat}%` : null].filter(Boolean).join(" · ")}
               </span>
+              {b.selfRecorded ? <span className="flex-none rounded-md bg-[#EDF4E3] px-1.5 py-0.5 text-[10px] font-bold text-sage-deep">회원 기록</span> : null}
               <button type="button" onClick={() => removeBody(b.id)} disabled={busy} aria-label="삭제" className="flex-none text-[#A89F92] disabled:opacity-50">
                 <Icon name="close" size={15} />
               </button>

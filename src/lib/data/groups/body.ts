@@ -8,12 +8,13 @@ export type BodyMeasurement = {
   skeletalMuscle: number | null;
   bodyFat: number | null;
   measuredAt: string; // YYYY-MM-DD (KST)
+  selfRecorded: boolean; // 회원 본인이 직접 기록(삭제는 본인 기록만)
 };
 
 async function listHistory(memberId: string, limit: number): Promise<BodyMeasurement[]> {
   const { data } = await sb
     .from("body_compositions")
-    .select("id, weight, skeletal_muscle, body_fat, measured_at")
+    .select("id, weight, skeletal_muscle, body_fat, measured_at, self_recorded")
     .eq("member_id", memberId)
     .order("measured_at", { ascending: false })
     .limit(limit);
@@ -23,6 +24,7 @@ async function listHistory(memberId: string, limit: number): Promise<BodyMeasure
     skeletalMuscle: r.skeletal_muscle != null ? Number(r.skeletal_muscle) : null,
     bodyFat: r.body_fat != null ? Number(r.body_fat) : null,
     measuredAt: kstDateISO(r.measured_at as string),
+    selfRecorded: !!r.self_recorded,
   }));
 }
 

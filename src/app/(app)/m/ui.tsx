@@ -43,7 +43,7 @@ export function MemberCalendarClient({
 
   const hasDayRecord = (d: string) => {
     const info = dayMap.days[d];
-    return !!info && info.workouts.length + info.meals.length + info.files.length > 0;
+    return !!info && info.workouts.length + info.meals.length + info.files.length + info.measures.length > 0;
   };
   const calDays = view.calDays.map((d) => ({
     ...d,
@@ -56,9 +56,10 @@ export function MemberCalendarClient({
   const dayWorkouts = dayInfo?.workouts ?? [];
   const dayMeals = dayInfo?.meals ?? [];
   const dayFiles = dayInfo?.files ?? [];
+  const dayMeasures = dayInfo?.measures ?? [];
   const isToday = selected === today;
   const canLog = selected <= today; // 오늘·지난 날만 기록 추가(미래 날짜 제외)
-  const hasRecords = dayWorkouts.length + dayMeals.length + dayFiles.length > 0;
+  const hasRecords = dayWorkouts.length + dayMeals.length + dayFiles.length + dayMeasures.length > 0;
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
@@ -172,8 +173,18 @@ export function MemberCalendarClient({
           </RecordSection>
         ) : null}
 
-        {dayFiles.length ? (
+        {dayFiles.length || dayMeasures.length ? (
           <RecordSection title="체형 기록" href="/m/my/body">
+            {dayMeasures.length ? (
+              <Card className="divide-y divide-ink/[0.06] px-4 py-1">
+                {dayMeasures.map((b) => (
+                  <div key={b.id} className="flex items-center gap-2 py-2.5">
+                    <Icon name="person" size={15} className="flex-none text-sage" />
+                    <span className="text-[13px] font-semibold text-ink">{b.summary}</span>
+                  </div>
+                ))}
+              </Card>
+            ) : null}
             <DayBodyRecords files={dayFiles} />
           </RecordSection>
         ) : null}
