@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Field, MoneyInput, PhoneInput, TextInput } from "@/components/ui/Field";
-import { Kicker } from "@/components/ui/Kicker";
 import { Banner } from "@/components/ui/Banner";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { Select } from "@/components/ui/Select";
@@ -20,6 +19,7 @@ import {
   isDuetProduct,
   isDiscountProduct,
   productShortLabel,
+  productTier,
   type Quad,
 } from "@/lib/data/product-class";
 import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
@@ -38,6 +38,17 @@ const todayStr = () => {
   const d = new Date(Date.now() + 9 * 3600000); // KST
   return d.toISOString().slice(0, 10);
 };
+
+/** 등록 플로우의 번호 섹션 헤더 — ①회원권 ②회원 정보 ③담당·결제 ④정기 요일. */
+function SectionHead({ no, title, hint }: { no: number; title: string; hint?: string }) {
+  return (
+    <div className={`mb-3 flex items-baseline gap-2 ${no === 1 ? "" : "mt-7 border-t border-ink/[0.08] pt-6"}`}>
+      <span className="flex h-[21px] w-[21px] flex-none translate-y-[3px] items-center justify-center rounded-full bg-sage text-[11.5px] font-bold text-surface">{no}</span>
+      <span className="text-[15px] font-bold text-ink">{title}</span>
+      {hint ? <span className="text-[12px] font-medium text-muted5">{hint}</span> : null}
+    </div>
+  );
+}
 
 export function MemberRegisterClient({
   ownerId,
@@ -75,10 +86,19 @@ export function MemberRegisterClient({
   const visibleProducts = products.filter((p) => matchesQuad(p.name, activeTab) || isUnclassified(p.name));
 
   // 결제 금액은 상품 가격 그대로. 2:1은 두 회원 합계로 보여준다(상품가 × 2).
+  // 담당 강사 기본값도 상품 담당(대표/강사)에 맞춘다 — 강제 아님, 이후 자유 변경.
   function onProductChange(id: string | "later") {
     setSelectedProduct(id);
     const p = id !== "later" ? products.find((pp) => pp.id === id) : undefined;
     setPayAmount(p ? String(isDuetProduct(p.name) ? p.price * 2 : p.price) : "");
+    if (p) {
+      const tier = productTier(p.name);
+      if (tier === "owner" && trainerId !== ownerId) setTrainerId(ownerId);
+      else if (tier === "staff" && trainerId === ownerId) {
+        const staff = trainers.find((t) => t.id !== ownerId);
+        if (staff) setTrainerId(staff.id);
+      }
+    }
   }
 
   /** 탭 변경 — 선택 상품이 새 탭에 안 보이면 선택 해제(조용히 엉뚱한 상품이 발급되는 것 방지). */
@@ -167,10 +187,8 @@ export function MemberRegisterClient({
           <span className="text-[19px] font-bold text-ink">회원 등록</span>
         </div>
 
-        {/* 회원권 상품 — 담당×유형 4탭. 2:1 상품을 고르면 듀엣(파트너 입력)이 열린다. */}
-        <div className="mb-2.5">
-          <Kicker>회원권 상품</Kicker>
-        </div>
+        {/* ① 회원권 — 담당×유형 4탭. 2:1 상품을 고르면 듀엣(파트너 입력)이 열린다. */}
+        <SectionHead no={1} title="회원권" hint="나중에 발급해도 돼요" />
         {products.length > 0 ? (
           <div className="mb-2.5">
             <SegmentedToggle
@@ -208,10 +226,9 @@ export function MemberRegisterClient({
           </RadioOption>
         </div>
 
-        {/* 회원 정보 */}
-        <div className="mb-2.5 mt-6">
-          <Kicker>{is2on1 ? "회원 1" : "회원 정보"}</Kicker>
-        </div>
+        {/* ② 회원 정보 */}
+        <SectionHead no={2} title="회원 정보" hint={is2on1 ? "2:1 — 두 명이 함께 등록돼요" : undefined} />
+        {is2on1 ? <div className="mb-2.5 text-[13px] font-bold text-gold">회원 1</div> : null}
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="이름">
             <TextInput placeholder="윤서아" value={name} onChange={(e) => setName(e.target.value)} />
@@ -243,9 +260,7 @@ export function MemberRegisterClient({
         {/* 듀엣 파트너 — 2:1 회원권 선택 시 함께 등록되는 두 번째 회원 */}
         {is2on1 ? (
           <>
-            <div className="mb-2.5 mt-6">
-              <Kicker>회원 2 (듀엣 파트너)</Kicker>
-            </div>
+            <div className="mb-2.5 mt-5 text-[13px] font-bold text-gold">회원 2 · 듀엣 파트너</div>
             <Card className="flex flex-col gap-3.5 p-4">
               <Field icon="person" label="이름">
                 <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
@@ -276,8 +291,13 @@ export function MemberRegisterClient({
           </>
         ) : null}
 
-        {/* 담당 강사 */}
-        <div className="mt-6">
+        {/* ③ 담당 · 결제 — 담당 기본값은 상품 담당(대표/강사)과 연동, 결제란은 상품 선택 시에만 */}
+        <SectionHead
+          no={3}
+          title={selectedProduct !== "later" ? "담당 · 결제" : "담당 강사"}
+          hint={selectedProduct !== "later" && is2on1 ? "두 회원 합계 금액" : undefined}
+        />
+        <div>
           <div className="mb-2 text-[12.5px] font-semibold text-muted5">담당 강사</div>
           <Select
             value={trainerId}
@@ -288,7 +308,7 @@ export function MemberRegisterClient({
 
         {/* 결제 정보 (상품 선택 시) — 2:1은 두 회원 합계 금액 */}
         {selectedProduct !== "later" && selectedProductData && (
-          <Card className="mb-4 mt-6 flex flex-col gap-3 p-4">
+          <Card className="mt-3.5 flex flex-col gap-3 p-4">
             <div>
               <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
               <SegmentedToggle
@@ -318,10 +338,8 @@ export function MemberRegisterClient({
           </Card>
         )}
 
-        {/* 정기 수업 요일 (선택) */}
-        <div className="mb-2.5 mt-2">
-          <Kicker>{is2on1 ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</Kicker>
-        </div>
+        {/* ④ 정기 수업 요일 (선택) */}
+        <SectionHead no={4} title={is2on1 ? "팀 정기 수업 요일" : "정기 수업 요일"} hint="선택" />
         <div className="mb-3 flex gap-1.5">
           {DAYS.map((d, i) => {
             const on = dayTimes[i] != null;

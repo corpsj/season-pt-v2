@@ -13,7 +13,7 @@ import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership, pauseMembership, resumeMembership, transferMembership } from "@/lib/data/groups/membership-actions";
 import { createMember, createDuetMembers, deleteMember, updateMember, setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
-import { QUAD_TABS, matchesQuad, isUnclassified, isDuetProduct, isDiscountProduct, productShortLabel, type Quad } from "@/lib/data/product-class";
+import { QUAD_TABS, matchesQuad, isUnclassified, isDuetProduct, isDiscountProduct, productShortLabel, productTier, type Quad } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
@@ -46,6 +46,7 @@ function hourLabel(h: number) {
   return `오후 ${h - 12}시`;
 }
 const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => ({ value: String(i + 6), label: hourLabel(i + 6) }));
+const todayStr = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // KST
 
 export function MembersClient({
   items,
@@ -89,6 +90,7 @@ export function MembersClient({
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, trainerId: ownerId, productId: "", method: "card" as PaymentMethod, amount: "" });
   // 등록: 수업 형태는 선택한 회원권으로 파생 — 2:1 상품을 고르면 듀엣(파트너 함께 등록).
   const [p2, setP2] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender });
+  const [payDate, setPayDate] = useState(todayStr());
   const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
@@ -183,7 +185,15 @@ export function MembersClient({
   function resetAddForm() {
     setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
     setP2({ name: "", phone: "", birth: "", gender: "female" });
+    setPayDate(todayStr());
     setDayTimes({});
+  }
+  /** 상품 선택 시 담당 강사 기본값을 상품 담당(대표/강사)에 맞춘다 — 강제 아님, 이후 자유 변경. */
+  function trainerForProduct(name: string, current: string): string {
+    const tier = productTier(name);
+    if (tier === "owner" && current !== ownerId) return ownerId;
+    if (tier === "staff" && current === ownerId) return trainers.find((t) => t.id !== ownerId)?.id ?? current;
+    return current;
   }
   function openAdd() {
     resetAddForm();
@@ -211,7 +221,7 @@ export function MembersClient({
       .sort((a, b) => a.weekday - b.weekday);
     const product = f.productId ? { productId: f.productId } : undefined;
     // 입력값은 합계(2:1이면 두 회원 합). 회원당 결제 1건이라 듀엣은 절반씩 나눠 기록한다.
-    const payment = f.productId ? { method: f.method, amount: is2on1 ? Math.round(Number(f.amount) / 2) : Number(f.amount) } : undefined;
+    const payment = f.productId ? { method: f.method, amount: is2on1 ? Math.round(Number(f.amount) / 2) : Number(f.amount), paidAt: payDate || undefined } : undefined;
     setBusy(true);
     const r = is2on1
       ? await createDuetMembers({
@@ -553,8 +563,8 @@ export function MembersClient({
           onClose={() => setModal(null)}
           footer={<><OBtn className="flex-1" onClick={() => setModal(null)}>취소</OBtn><PBtn icon="check-bold" className="flex-[1.6]" pending={busy} onClick={doAdd}>등록</PBtn></>}
         >
-          {/* 회원권 (선택) — 맨 위에서 고르면 1:1/2:1이 정해진다. 2:1이면 아래 파트너 입력이 열림 */}
-          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택)</div>
+          {/* ① 회원권 — 맨 위에서 고르면 1:1/2:1이 정해진다. 2:1이면 아래 파트너 입력이 열림 */}
+          <SectionHead no={1} title="회원권" hint="선택 · 나중에 발급해도 돼요" />
           <ProductPicker
             products={products}
             selected={f.productId}
@@ -562,13 +572,19 @@ export function MembersClient({
             onPick={(id) => {
               const newId = f.productId === id ? "" : id;
               const p = products.find((pp) => pp.id === newId);
-              setF({ ...f, productId: newId, amount: p ? String(isDuetProduct(p.name) ? p.price * 2 : p.price) : f.amount });
+              setF({
+                ...f,
+                productId: newId,
+                amount: p ? String(isDuetProduct(p.name) ? p.price * 2 : p.price) : f.amount,
+                trainerId: p ? trainerForProduct(p.name, f.trainerId) : f.trainerId,
+              });
             }}
             onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
           />
 
-          {/* 회원 정보 */}
-          <div className="mb-2 mt-5 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "회원 1" : "회원 정보"}</div>
+          {/* ② 회원 정보 */}
+          <SectionHead no={2} title="회원 정보" hint={is2on1 ? "2:1 — 두 명이 함께 등록돼요" : undefined} />
+          {is2on1 ? <div className="mb-2 text-[12px] font-bold text-[#7A6338]">회원 1</div> : null}
           <ModalField label="이름"><Input value={f.name} onChange={(v) => setF({ ...f, name: v })} placeholder="회원 이름" /></ModalField>
           <ModalField label="연락처"><Input value={formatPhone(f.phone)} onChange={(v) => setF({ ...f, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
           <div className="grid grid-cols-2 gap-2.5">
@@ -602,7 +618,8 @@ export function MembersClient({
             </div>
           ) : null}
 
-          {/* 담당 강사 */}
+          {/* ③ 담당 · 결제 — 담당 기본값은 상품 담당(대표/강사)과 연동, 결제란은 상품 선택 시에만 */}
+          <SectionHead no={3} title={f.productId ? "담당 · 결제" : "담당 강사"} hint={f.productId && is2on1 ? "두 회원 합계 금액" : undefined} />
           <ModalField label="담당 강사">
             <select
               value={f.trainerId}
@@ -615,24 +632,33 @@ export function MembersClient({
             </select>
           </ModalField>
 
-          {/* 결제 (상품 선택 시) — 2:1은 두 회원 합계 금액 */}
           {f.productId ? (
-            <div className="mt-1">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 금액</div>
-              <input
-                value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
-                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
-                inputMode="numeric"
-                placeholder="₩ 금액"
-                className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
-              />
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
-              <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
-            </div>
+            <>
+              <ModalField label="결제 금액">
+                <input
+                  value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
+                  onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
+                  inputMode="numeric"
+                  placeholder="₩ 금액"
+                  className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+                />
+              </ModalField>
+              <ModalField label="결제 수단">
+                <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
+              </ModalField>
+              <ModalField label="결제일">
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[11px] text-[14px] font-medium text-ink outline-none"
+                />
+              </ModalField>
+            </>
           ) : null}
 
-          {/* 정기 수업 요일 (선택) — 고르면 매주 자동 생성. 2:1은 팀 일정으로 묶인다. */}
-          <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</div>
+          {/* ④ 정기 수업 요일 (선택) — 고르면 매주 자동 생성. 2:1은 팀 일정으로 묶인다. */}
+          <SectionHead no={4} title={is2on1 ? "팀 정기 수업 요일" : "정기 수업 요일"} hint="선택" />
           <div className="mb-2 flex gap-1.5">
             {DAYS.map((d, i) => {
               const on = dayTimes[i] != null;
@@ -827,6 +853,16 @@ function dDayFromBadge(m: MemberListItem): number | null {
   return 9999; // not expiring → renders a calm sage pill via DPill (>14)
 }
 
+/** 등록 모달의 번호 섹션 헤더 — ①회원권 ②회원 정보 ③담당·결제 ④정기 요일. 첫 섹션 외에는 구분선 포함. */
+function SectionHead({ no, title, hint }: { no: number; title: string; hint?: string }) {
+  return (
+    <div className={`mb-3 flex items-baseline gap-2 ${no === 1 ? "" : "mt-5 border-t border-[rgba(75,59,46,0.08)] pt-5"}`}>
+      <span className="flex h-[21px] w-[21px] flex-none translate-y-[3px] items-center justify-center rounded-full bg-sage text-[11.5px] font-bold text-white">{no}</span>
+      <span className="text-[14px] font-bold text-ink">{title}</span>
+      {hint ? <span className="text-[11.5px] font-medium text-[#9A917F]">{hint}</span> : null}
+    </div>
+  );
+}
 function ModalField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-3.5">
