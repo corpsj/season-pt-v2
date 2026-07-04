@@ -317,13 +317,13 @@ export function BulkAddModal({
                   <div key={r.key} className="flex flex-col">
                     {renderRow(r)}
                     {canLink ? (
-                      <div className="-mb-[5px] mt-[1px] flex justify-center">
+                      <div className="relative z-[1] my-[3px] flex justify-center">
                         <button
                           type="button"
                           onClick={() => linkRows(r, nx)}
-                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-[2px] text-[10.5px] font-semibold text-[#B3AA9C] transition hover:bg-[#F4F0E8] hover:text-sage-deep"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-[rgba(138,111,62,0.45)] bg-[#FBF7EF] px-3.5 py-[6px] text-[12px] font-bold text-[#8A6F3E] shadow-sm transition hover:border-solid hover:bg-[#F6EFE2] hover:text-[#7A6338]"
                         >
-                          <Icon name="persons" size={10} /> 위·아래 행을 2:1 팀으로 묶기
+                          <Icon name="persons" size={13} /> 위·아래 행을 2:1 팀으로 묶기
                         </button>
                       </div>
                     ) : null}
