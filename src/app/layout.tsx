@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { SafeAreaInsets } from "@/components/shell/SafeAreaInsets";
+import { NoZoom } from "@/components/shell/NoZoom";
 import { InstallPrompt } from "@/components/shell/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
 import { OfflineBanner } from "@/components/shell/OfflineBanner";
@@ -78,6 +79,7 @@ export default function RootLayout({
     <html lang="ko" className={cormorant.variable}>
       <body>
         <SafeAreaInsets />
+        <NoZoom />
         <OfflineBanner />
         <ServiceWorkerRegister />
         <InstallPrompt />
