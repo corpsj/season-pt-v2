@@ -1,9 +1,9 @@
 // client-only(부모 ui.tsx가 "use client" 경계) — 직접 서버 컴포넌트에서 import하지 말 것.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { OBtn, PBtn, ConsoleModal } from "@/components/console/ui";
 import { bulkAddMembers } from "@/lib/data/groups/carryover-actions";
-import type { CarrySlot } from "@/lib/import/carryover-parse";
+import { parseEndDate, type CarrySlot } from "@/lib/import/carryover-parse";
 import type { Gender, MembershipProduct } from "@/lib/types";
 import { formatPhone } from "@/components/ui/Field";
 
@@ -268,8 +268,7 @@ export function BulkAddModal({
                     </select>
                     <input value={r.remaining} onChange={(e) => patch(r.key, { remaining: e.target.value.replace(/\D/g, "") })} disabled={!r.productId} inputMode="numeric" placeholder={prod ? String(prod.sessions) : "—"} className={`${CELL} text-center ${b("remaining")}`} />
                     <div>
-                      {/* 키보드 숫자 입력 + 우측 달력 아이콘(브라우저 캘린더) — 네이티브 date input */}
-                      <input type="date" value={r.startDate} onChange={(e) => patch(r.key, { startDate: e.target.value })} disabled={!r.productId} className={`${CELL} ${b("startDate")}`} />
+                      <DateCell value={r.startDate} onChange={(iso) => patch(r.key, { startDate: iso })} disabled={!r.productId} error={errs.has("startDate")} />
                       {end ? <div className="mt-[3px] pl-1 text-[10.5px] font-semibold text-sage-deep">만료 {end.slice(2).replace(/-/g, ".")}</div> : null}
                     </div>
                     {pairFirst ? (
@@ -341,6 +340,79 @@ export function BulkAddModal({
         </div>
       )}
     </ConsoleModal>
+  );
+}
+
+function formatDateDigits(digits: string): string {
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+}
+
+/** 등록일 셀: 구분자 없이 "20260606"처럼 이어 쳐도 8자리 채우면 자동으로 날짜 확정. 우측 아이콘은 네이티브 달력 호출. */
+function DateCell({
+  value,
+  onChange,
+  disabled,
+  error,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  disabled?: boolean;
+  error?: boolean;
+}) {
+  const [text, setText] = useState(value);
+  const pickerRef = useRef<HTMLInputElement>(null);
+
+  function handleType(raw: string) {
+    const digits = raw.replace(/\D/g, "").slice(0, 8);
+    setText(formatDateDigits(digits));
+    if (digits.length === 8) {
+      const iso = parseEndDate(digits);
+      if (iso) onChange(iso);
+    }
+  }
+  function openPicker() {
+    const el = pickerRef.current;
+    if (!el) return;
+    try {
+      if (typeof el.showPicker === "function") el.showPicker();
+      else el.click();
+    } catch { /* 지원 안 하는 브라우저 — 아이콘은 무반응, 타이핑 입력은 그대로 동작 */ }
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={text}
+        onChange={(e) => handleType(e.target.value)}
+        disabled={disabled}
+        inputMode="numeric"
+        placeholder="YYYY-MM-DD"
+        maxLength={10}
+        className={`${CELL} ${error ? ERR_B : OK_B} pr-8`}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={openPicker}
+        aria-label="달력에서 선택"
+        className="absolute right-[5px] top-1/2 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-[6px] text-[#9A917F] transition hover:bg-[#F4EFE6] hover:text-sage-deep disabled:opacity-30"
+      >
+        <Icon name="calendar" size={13} />
+      </button>
+      {/* 화면엔 안 보이지만 아이콘 클릭 시 showPicker()로 여는 네이티브 date input — 실제 값 소스는 위 텍스트 필드 */}
+      <input
+        ref={pickerRef}
+        type="date"
+        value={value}
+        onChange={(e) => { setText(e.target.value); onChange(e.target.value); }}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 opacity-0"
+      />
+    </div>
   );
 }
 
