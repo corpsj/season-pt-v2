@@ -155,6 +155,11 @@ img {
   html.kb-open [data-tabbar] {
     display: none;
   }
+  /* 채팅 컴포저: 평소엔 바닥에서 넉넉히 띄우되(홈 인디케이터 위), 키보드가 열리면 키보드
+     바로 위에 붙도록 하단 여백을 줄인다 — 안 그러면 키보드와 입력창 사이가 크게 뜬다. */
+  html.kb-open [data-chat-composer] {
+    padding-bottom: 10px;
+  }
 }
 
 /* Safe-area insets for the edge-to-edge (viewport-fit=cover) shell.
