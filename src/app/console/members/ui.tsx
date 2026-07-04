@@ -576,23 +576,9 @@ export function MembersClient({
             </select>
           </ModalField>
 
-          {/* 회원권 (선택) — 2:1 상품을 고르면 아래에 듀엣 파트너 입력이 열린다 */}
-          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){is2on1 ? " · 두 회원에게 각각 발급" : ""}</div>
-          <ProductPicker
-            products={products}
-            selected={f.productId}
-            showPrice
-            onPick={(id) => {
-              const newId = f.productId === id ? "" : id;
-              const p = products.find((pp) => pp.id === newId);
-              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
-            }}
-            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
-          />
-
-          {/* 듀엣 파트너 — 2:1 회원권 선택 시 파트너를 함께 등록 */}
+          {/* 듀엣 파트너 — 2:1 회원권 선택 시 회원 입력창 바로 아래에서 파트너를 함께 등록 */}
           {is2on1 ? (
-            <div className="mb-3.5 mt-3 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
+            <div className="mb-3.5 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
               <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">듀엣 파트너 · 2:1 회원권</div>
               <ModalField label="이름"><Input value={p2.name} onChange={(v) => setP2({ ...p2, name: v })} placeholder="파트너 이름" /></ModalField>
               <ModalField label="연락처"><Input value={formatPhone(p2.phone)} onChange={(v) => setP2({ ...p2, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
@@ -609,6 +595,20 @@ export function MembersClient({
               <div className="text-[11px] font-medium text-[#9A8772]">두 회원에게 각각 발급·결제돼요.</div>
             </div>
           ) : null}
+
+          {/* 회원권 (선택) — 2:1 상품을 고르면 위 파트너 입력이 열린다 */}
+          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){is2on1 ? " · 두 회원에게 각각 발급" : ""}</div>
+          <ProductPicker
+            products={products}
+            selected={f.productId}
+            showPrice
+            onPick={(id) => {
+              const newId = f.productId === id ? "" : id;
+              const p = products.find((pp) => pp.id === newId);
+              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
+            }}
+            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
+          />
 
           {/* 결제 (상품 선택 시) */}
           {f.productId ? (

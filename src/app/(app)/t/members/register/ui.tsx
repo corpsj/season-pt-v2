@@ -203,6 +203,45 @@ export function MemberRegisterClient({
           </div>
         </div>
 
+        {/* 듀엣 파트너 — 2:1 회원권 선택 시 신규 회원 2명 동시 등록(회원 입력창 바로 아래) */}
+        {is2on1 ? (
+          <>
+            <div className="mb-2.5 mt-6">
+              <Kicker>듀엣 파트너</Kicker>
+            </div>
+            <div className="mb-2 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
+              2:1 회원권이에요 · 함께 들을 파트너 회원을 등록하면 두 명이 동시에 만들어져요.
+            </div>
+            <Card className="flex flex-col gap-3.5 p-4">
+              <Field icon="person" label="이름">
+                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
+              </Field>
+              <Field icon="phone" label="연락처 (아이디)">
+                <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
+              </Field>
+              <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
+                <TextInput
+                  inputMode="numeric"
+                  placeholder="000000"
+                  value={p2.birth}
+                  onChange={(e) => setP2({ ...p2, birth: e.target.value })}
+                />
+              </Field>
+              <div>
+                <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
+                <SegmentedToggle
+                  options={[
+                    { value: "female", label: "여성" },
+                    { value: "male", label: "남성" },
+                  ]}
+                  value={p2.gender}
+                  onChange={(v) => setP2({ ...p2, gender: v })}
+                />
+              </div>
+            </Card>
+          </>
+        ) : null}
+
         {/* 회원권 상품 — 담당×유형 4탭. 2:1 상품을 고르면 듀엣(파트너 입력)이 열린다. */}
         <div className="mb-2.5 mt-6">
           <Kicker>회원권 상품</Kicker>
@@ -243,45 +282,6 @@ export function MemberRegisterClient({
             <span className="text-[14px] font-semibold text-muted">나중에 발급</span>
           </RadioOption>
         </div>
-
-        {/* 듀엣 파트너 — 2:1 회원권 선택 시 신규 회원 2명 동시 등록 */}
-        {is2on1 ? (
-          <>
-            <div className="mb-2 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
-              2:1 회원권이에요 · 함께 들을 파트너 회원을 등록하면 두 명이 동시에 만들어져요.
-            </div>
-            <div className="mb-2.5">
-              <Kicker>듀엣 파트너</Kicker>
-            </div>
-            <Card className="mb-4 flex flex-col gap-3.5 p-4">
-              <Field icon="person" label="이름">
-                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
-              </Field>
-              <Field icon="phone" label="연락처 (아이디)">
-                <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
-              </Field>
-              <Field icon="lock" label="생년월일 (초기 비밀번호)" hint="YYMMDD">
-                <TextInput
-                  inputMode="numeric"
-                  placeholder="000000"
-                  value={p2.birth}
-                  onChange={(e) => setP2({ ...p2, birth: e.target.value })}
-                />
-              </Field>
-              <div>
-                <div className="mb-2 text-[12.5px] font-semibold text-muted5">성별</div>
-                <SegmentedToggle
-                  options={[
-                    { value: "female", label: "여성" },
-                    { value: "male", label: "남성" },
-                  ]}
-                  value={p2.gender}
-                  onChange={(v) => setP2({ ...p2, gender: v })}
-                />
-              </div>
-            </Card>
-          </>
-        ) : null}
 
         {/* 결제 정보 (상품 선택 시) */}
         {selectedProduct !== "later" && selectedProductData && (
