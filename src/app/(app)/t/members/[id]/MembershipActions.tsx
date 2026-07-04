@@ -141,7 +141,7 @@ export function MembershipActions({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 pb-[max(20px,var(--safe-b))] sm:rounded-[20px]"
           >
             <div className="mb-3.5 text-[16px] font-bold text-ink">회원권을 양도할까요?</div>
             <div className="flex flex-col gap-3">
@@ -170,7 +170,7 @@ export function MembershipActions({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 pb-[max(20px,var(--safe-b))] sm:rounded-[20px]"
           >
             <div className="mb-3.5 text-[16px] font-bold text-ink">환불을 진행할까요?</div>
             <div className="flex flex-col gap-3">

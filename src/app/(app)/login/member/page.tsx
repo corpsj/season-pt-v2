@@ -51,11 +51,16 @@ export default function MemberLoginPage() {
             <PhoneInput placeholder="010-2345-6789" value={phone} onValueChange={setPhone} />
           </Field>
           <Field icon="lock" label="생년월일 6자리 (비밀번호)" hint="YYMMDD">
+            {/* iOS는 password 필드에서 inputMode를 무시(문자 키보드) → text로 숫자패드를 띄우고
+                -webkit-text-security로 값을 가려 비번처럼 보이게 한다. */}
             <TextInput
-              type="password"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
               maxLength={6}
               placeholder="••••••"
+              className="[-webkit-text-security:disc]"
               value={birth}
               onChange={(e) => setBirth(e.target.value)}
             />

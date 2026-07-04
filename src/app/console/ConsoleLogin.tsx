@@ -65,6 +65,9 @@ export function ConsoleLogin({ notOwner, showOwnerSignup }: { notOwner: boolean;
                 onChange={(e) => setId(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("console-pw")?.focus(); }}
                 autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 autoComplete="username"
                 placeholder="아이디"
                 className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[13px] text-[14px] font-medium text-ink outline-none transition focus:border-sage placeholder:text-[#B3AA9C]"

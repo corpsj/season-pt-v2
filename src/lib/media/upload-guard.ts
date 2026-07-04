@@ -10,6 +10,14 @@ export function fitDimensions(w: number, h: number, max: number): { w: number; h
   return { w: Math.round(w * scale), h: Math.round(h * scale) };
 }
 
+/** 저장 가능한(=확장자·contentType가 확정되는) 이미지 MIME. */
+export const UPLOADABLE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+/** 다운스케일 결과(또는 폴백된 원본)가 저장 가능한 이미지 타입인지 — iPhone HEIC 등 차단. */
+export function isUploadableImage(type: string): boolean {
+  return (UPLOADABLE_IMAGE_TYPES as readonly string[]).includes(type);
+}
+
 /** 저장소에 닿기 전 업로드 검증. 순수 함수 — 서버·클라이언트 공용. */
 export function validateUpload(
   kind: FileKind,

@@ -37,11 +37,15 @@ export function Field({
 
 /** Bare text input styled for use inside <Field>. */
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  // iOS는 type=date/time을 네이티브 크롬으로 렌더해 행 높이가 텍스트 입력과 달라 튄다.
+  // appearance-none으로 리셋하고 텍스트 행과 같은 최소 높이를 준다.
+  const isDateTime = props.type === "date" || props.type === "time" || props.type === "datetime-local";
   return (
     <input
       {...props}
       className={cn(
         "w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder",
+        isDateTime && "min-h-[22px] appearance-none",
         props.className
       )}
     />

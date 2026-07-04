@@ -9,6 +9,7 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
+import { isUploadableImage } from "@/lib/media/upload-guard";
 import { logMeal, updateMeal, deleteMeal, loadMoreMeals } from "@/lib/data/groups/meals-actions";
 import type { MealLog } from "@/lib/data/groups/meals";
 
@@ -104,7 +105,12 @@ export function MemberMealsClient({
       if (memo.trim()) fd.set("memo", memo.trim());
       // 오늘이면 서버가 now()로 기록(실제 시각 보존), 지난 날짜만 eatenAt 전달(정오 KST).
       if (date && date !== todayKstDate()) fd.set("eatenAt", date);
-      if (photo) fd.set("photo", await downscaleImage(photo), "meal.jpg");
+      if (photo) {
+        const blob = await downscaleImage(photo);
+        // 축소 실패로 원본(HEIC 등)이 그대로면 jpg 이름·이형 contentType로 올라가므로 차단
+        if (!isUploadableImage(blob.type)) return toast("지원하지 않는 사진 형식이에요. 다시 선택해 주세요.", "error");
+        fd.set("photo", blob, "meal.jpg");
+      }
       const r = await logMeal(fd);
       if (!r.ok) return toast(r.error ?? "기록에 실패했어요", "error");
       toast("식단을 기록했어요");
@@ -251,8 +257,11 @@ export function MemberMealsClient({
                 {g.items.map((m) => (
                   <Card key={m.id} className="overflow-hidden">
                     {m.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.photoUrl} alt="식단" className="max-h-[240px] w-full object-cover" />
+                      // NoZoom로 인라인 핀치가 막히므로 새 탭(Safari 기본 뷰어)에서 확대하도록 감쌈
+                      <a href={m.photoUrl} target="_blank" rel="noreferrer" className="block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.photoUrl} alt="식단" className="max-h-[240px] w-full object-cover" />
+                      </a>
                     ) : null}
                     <div className="p-[15px]">
                       <div className="mb-1 flex items-center gap-2">

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { SafeAreaInsets } from "@/components/shell/SafeAreaInsets";
+import { KeyboardInsets } from "@/components/shell/KeyboardInsets";
 import { NoZoom } from "@/components/shell/NoZoom";
 import { InstallPrompt } from "@/components/shell/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
@@ -78,8 +79,19 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" className={cormorant.variable}>
+      {/* Pretendard(동적 서브셋) 원격 CSS — 예전엔 globals.css @import(첫 CSS문)라 CSS 뒤에
+          체이닝돼 발견이 늦었다. HTML 파싱 시점에 발견되도록 head로 옮김(preconnect + link).
+          precedence를 줘야 React 19가 <head>로 호이스트한다. 전체 가변폰트 셀프호스팅은
+          한국어 동적 서브셋 이점을 잃으므로 하지 않는다. */}
+      <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        precedence="default"
+      />
       <body>
         <SafeAreaInsets />
+        <KeyboardInsets />
         <NoZoom />
         <OfflineBanner />
         <ServiceWorkerRegister />

@@ -25,6 +25,11 @@ export default function OwnerSignupPage() {
       setError("이름을 입력해주세요");
       return;
     }
+    // set-password와 동일 규칙 — 잘못된 아이디가 그대로 저장되지 않게 클라이언트에서 먼저 검사
+    if (!/^[a-z0-9._-]{3,20}$/.test(id.trim())) {
+      setError("아이디는 영문 소문자·숫자·점(.)으로 3~20자로 입력해주세요");
+      return;
+    }
     if (!matched) {
       setError("비밀번호가 일치하지 않아요");
       return;
@@ -63,6 +68,10 @@ export default function OwnerSignupPage() {
           <Field icon="person" label="아이디">
             <TextInput
               placeholder="season.master"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="username"
               value={id}
               onChange={(e) => setId(e.target.value)}
             />

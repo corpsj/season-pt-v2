@@ -34,8 +34,21 @@ export function Body({
   const router = useRouter();
   const ref = useRef<HTMLDivElement>(null);
   const startY = useRef<number | null>(null);
+  const pullRef = useRef(0); // 네이티브 리스너가 최신 당김 거리를 참조·판정하도록
+  const moveRef = useRef<((e: TouchEvent) => void) | null>(null);
   const [pull, setPull] = useState(0);
   const [refreshing, startTransition] = useTransition();
+
+  const setPullVal = (v: number) => {
+    pullRef.current = v;
+    setPull(v);
+  };
+
+  function detachMove() {
+    const el = ref.current;
+    if (el && moveRef.current) el.removeEventListener("touchmove", moveRef.current);
+    moveRef.current = null;
+  }
 
   function onTouchStart(e: React.TouchEvent) {
     const el = ref.current;
@@ -46,23 +59,30 @@ export function Body({
     const scrollable = t.closest(".overflow-y-auto");
     if (scrollable && scrollable !== el) return;
     startY.current = e.touches[0].clientY;
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    if (startY.current == null) return;
-    const el = ref.current;
-    if (!el) return;
-    const dy = e.touches[0].clientY - startY.current;
-    if (dy <= 0 || el.scrollTop > 0) {
-      if (pull !== 0) setPull(0);
-      return;
-    }
-    setPull(Math.min(72, dy * 0.35));
+
+    // 당기는 동안에만 스크롤러(el)에 non-passive touchmove를 걸어 iOS 고무줄을 preventDefault로
+    // 막는다(당김 인디케이터와 이중 스크롤 방지). 제스처 동안만 부착 → 평소 스크롤은 passive 유지.
+    detachMove();
+    const onMove = (ev: TouchEvent) => {
+      if (startY.current == null || !el) return;
+      const dy = ev.touches[0].clientY - startY.current;
+      // 최상단에서 아래로, 한 손가락으로 당길 때만 고무줄 차단
+      if (dy <= 0 || el.scrollTop > 0 || ev.touches.length > 1) {
+        if (pullRef.current !== 0) setPullVal(0);
+        return;
+      }
+      ev.preventDefault();
+      setPullVal(Math.min(72, dy * 0.35));
+    };
+    moveRef.current = onMove;
+    el.addEventListener("touchmove", onMove, { passive: false });
   }
   function onTouchEnd() {
+    detachMove();
     if (startY.current == null) return;
     startY.current = null;
-    if (pull >= PULL_TRIGGER) startTransition(() => router.refresh());
-    setPull(0);
+    if (pullRef.current >= PULL_TRIGGER) startTransition(() => router.refresh());
+    setPullVal(0);
   }
 
   const indicator = refreshing ? 40 : pull;
@@ -70,7 +90,6 @@ export function Body({
     <div
       ref={ref}
       onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onTouchCancel={onTouchEnd}
       className={cn("no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain", PAD[pad], className)}

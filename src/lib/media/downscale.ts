@@ -6,7 +6,9 @@ import { fitDimensions } from "./upload-guard";
  */
 export async function downscaleImage(file: File, maxPx = 1600, quality = 0.8): Promise<Blob> {
   try {
-    const bitmap = await createImageBitmap(file);
+    // imageOrientation:"from-image" — EXIF 회전을 반영해 그린다(이미 반영하는 엔진에선 무해).
+    // 옵션 백을 못 알아듣는 구형 엔진은 throw → 아래 catch가 원본을 그대로 반환.
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     const { w, h } = fitDimensions(bitmap.width, bitmap.height, maxPx);
     const canvas = document.createElement("canvas");
     canvas.width = w;

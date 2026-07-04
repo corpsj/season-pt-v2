@@ -58,7 +58,7 @@ export function BodyEntryButton({ memberId, today }: { memberId: string; today: 
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+            className="w-full max-w-[420px] rounded-t-[20px] bg-card p-5 pb-[max(20px,var(--safe-b))] sm:rounded-[20px]"
           >
             <div className="mb-3.5 text-[16px] font-bold text-ink">체성분 기록</div>
             <div className="flex flex-col gap-3">

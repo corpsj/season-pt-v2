@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
+import { isUploadableImage } from "@/lib/media/upload-guard";
 import { uploadMyFile, deleteMyFile } from "@/lib/data/groups/member-files-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 
@@ -41,6 +42,8 @@ export function MyPhotos({ initial }: { initial: MemberFileView[] }) {
     setBusy(true);
     try {
       const blob = await downscaleImage(pending.file);
+      // 축소 실패로 원본(HEIC 등)이 그대로면 jpg 이름·이형 contentType로 올라가므로 차단
+      if (!isUploadableImage(blob.type)) return toast("지원하지 않는 사진 형식이에요. 다시 선택해 주세요.", "error");
       const fd = new FormData();
       fd.set("file", blob, "photo.jpg");
       if (pending.date && pending.date !== todayKstDate()) fd.set("takenAt", pending.date);
@@ -138,10 +141,11 @@ export function MyPhotos({ initial }: { initial: MemberFileView[] }) {
             <div className="grid grid-cols-2 gap-2">
               {pair.map((f) => (
                 <div key={f.id}>
-                  <div className="overflow-hidden rounded-[11px] bg-ink/[0.04]">
+                  <a href={f.url!} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-[11px] bg-ink/[0.04]">
+                    {/* NoZoom로 인라인 핀치가 막히므로 새 탭(Safari 기본 뷰어)에서 확대하도록 감쌈 */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={f.url!} alt={f.takenAt} className="aspect-[3/4] w-full object-cover" />
-                  </div>
+                  </a>
                   <div className="mt-1 text-center text-[11px] font-semibold text-muted2">{dateLabel(f.takenAt)}</div>
                 </div>
               ))}

@@ -60,6 +60,13 @@ export function MemberChatClient({
     scrollToBottom();
   }, [messages]);
 
+  // iOS 키보드가 열리면(KeyboardInsets가 spt:kbopen 발행) 셸이 줄며 최신 메시지가 가려지므로 다시 하단으로.
+  useEffect(() => {
+    const onKb = () => requestAnimationFrame(scrollToBottom);
+    window.addEventListener("spt:kbopen", onKb);
+    return () => window.removeEventListener("spt:kbopen", onKb);
+  }, []);
+
   usePolling(async () => {
     let incoming: ChatMessageView[] = [];
     try {

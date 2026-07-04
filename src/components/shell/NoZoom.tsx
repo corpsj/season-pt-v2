@@ -8,11 +8,13 @@ import { useEffect } from "react";
  * Android / Chromium / desktop are handled declaratively by the viewport export in
  * layout.tsx (`maximum-scale=1, user-scalable=no`). This component is the backstop for
  * engines that IGNORE user-scalable:
- *  - iOS Safari / WKWebView (since iOS 10): block the `gesture*` (pinch) events and
- *    multi-touch `touchmove`, plus `touch-action: manipulation` to kill double-tap zoom.
+ *  - iOS Safari / WKWebView (since iOS 10): block the `gesture*` (pinch) events, plus
+ *    `touch-action: manipulation` to kill double-tap zoom.
  *  - Desktop: also block ctrl/⌘ + wheel and ctrl/⌘ + [+ - = 0] as a hardening measure.
  *
- * Single-finger scrolling is untouched (we only preventDefault when >1 touch).
+ * NOTE: 예전엔 document에 non-passive `touchmove`(2-finger 차단)도 걸었으나, 모든 스크롤
+ * 프레임에 동기 JS를 강제해 성능을 깎았다. iOS 핀치는 gesture* preventDefault로 이미
+ * 막히고, Android/데스크톱은 viewport meta가 처리하므로 제거했다. 스크롤은 온전히 passive.
  */
 export function NoZoom() {
   useEffect(() => {
@@ -21,11 +23,8 @@ export function NoZoom() {
     const prevTouchAction = rootEl.style.touchAction;
     rootEl.style.touchAction = "manipulation";
 
-    // iOS pinch: block gesture* + 2-finger touchmove. Desktop: ctrl/⌘ zoom.
+    // iOS pinch: block gesture*. Desktop: ctrl/⌘ zoom.
     const blockGesture = (e: Event) => e.preventDefault();
-    const blockPinch = (e: TouchEvent) => {
-      if (e.touches.length > 1) e.preventDefault();
-    };
     const blockWheelZoom = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) e.preventDefault();
     };
@@ -39,7 +38,6 @@ export function NoZoom() {
     document.addEventListener("gesturestart", blockGesture, opts);
     document.addEventListener("gesturechange", blockGesture, opts);
     document.addEventListener("gestureend", blockGesture, opts);
-    document.addEventListener("touchmove", blockPinch, opts);
     document.addEventListener("wheel", blockWheelZoom, opts);
     document.addEventListener("keydown", blockKeyZoom);
 
@@ -48,7 +46,6 @@ export function NoZoom() {
       document.removeEventListener("gesturestart", blockGesture);
       document.removeEventListener("gesturechange", blockGesture);
       document.removeEventListener("gestureend", blockGesture);
-      document.removeEventListener("touchmove", blockPinch);
       document.removeEventListener("wheel", blockWheelZoom);
       document.removeEventListener("keydown", blockKeyZoom);
     };

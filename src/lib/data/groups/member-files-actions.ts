@@ -30,7 +30,10 @@ export async function uploadMemberFile(formData: FormData): Promise<Result> {
   const v = validateUpload(kind, file.type, file.size);
   if (!v.ok) return { ok: false, error: v.error };
 
-  const ext = EXT[file.type] ?? (kind === "inbody" ? "pdf" : "jpg");
+  // 확장자와 contentType를 검증된 MIME에서 함께 도출 — 파일명(.jpg)과 실제 타입(image/heic)이
+  // 어긋나 저장되는 것을 막는다. EXT에 없는 타입(HEIC 등)은 여기서 거부.
+  const ext = EXT[file.type];
+  if (!ext) return { ok: false, error: "지원하지 않는 파일 형식이에요" };
   const path = `${memberId}/${kind}/${crypto.randomUUID()}.${ext}`;
 
   const { error: upErr } = await sb.storage
@@ -100,7 +103,9 @@ export async function uploadMyFile(formData: FormData): Promise<Result> {
   const v = validateUpload(kind, file.type, file.size);
   if (!v.ok) return { ok: false, error: v.error };
 
-  const ext = EXT[file.type] ?? "jpg";
+  // 확장자·contentType를 검증된 MIME에서 함께 도출(HEIC 등 이형 저장 방지)
+  const ext = EXT[file.type];
+  if (!ext) return { ok: false, error: "지원하지 않는 사진 형식이에요" };
   const path = `${me.memberId}/${kind}/${crypto.randomUUID()}.${ext}`;
 
   const { error: upErr } = await sb.storage

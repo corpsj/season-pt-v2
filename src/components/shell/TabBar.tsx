@@ -44,7 +44,7 @@ export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: 
     : tabs;
 
   return (
-    <nav className="flex flex-none border-t border-ink/10 bg-surface/95 px-3 pt-2.5 pb-[max(20px,calc(var(--safe-b)_-_14px))] shadow-[0_-1px_10px_-6px_rgba(75,59,46,0.16)]">
+    <nav data-tabbar className="flex flex-none border-t border-ink/10 bg-surface/95 px-3 pt-2.5 pb-[max(20px,calc(var(--safe-b)_-_14px))] shadow-[0_-1px_10px_-6px_rgba(75,59,46,0.16)]">
       {/* ponytail: bottom hugs the edge. var(--safe-b) is the FULL iPhone home-indicator
           inset (~34px) → using it whole left the bar visibly floating once the app went
           truly fullscreen. Subtract ~14px so items clear the (translucent) indicator

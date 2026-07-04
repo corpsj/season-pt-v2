@@ -37,7 +37,7 @@ const SHARE_TEXT =
 export function InstallPrompt() {
   const [plat, setPlat] = useState<Plat>(null);
   const [ready, setReady] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<false | "ok" | "fail">(false);
   const [canPrompt, setCanPrompt] = useState(false);
   const deferred = useRef<BIPEvent | null>(null);
 
@@ -113,10 +113,11 @@ export function InstallPrompt() {
     }
     try {
       await navigator.clipboard.writeText(`${SHARE_TEXT}\n\n${url}`);
-      setCopied(true);
+      setCopied("ok");
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      /* blocked */
+      setCopied("fail"); // 복사 실패 시 침묵하지 않고 수동 복사 안내
+      setTimeout(() => setCopied(false), 2600);
     }
   };
 
@@ -217,7 +218,7 @@ export function InstallPrompt() {
                 onClick={shareApp}
                 className="tappable mt-1 text-[12px] font-semibold text-sage-deep underline underline-offset-2"
               >
-                {copied ? "복사됨!" : "다른 사람에게 보내기 (Safari 안내 포함)"}
+                {copied === "ok" ? "복사됨!" : copied === "fail" ? "복사 실패 — 주소를 길게 눌러 복사해 주세요" : "다른 사람에게 보내기 (Safari 안내 포함)"}
               </button>
             </>
           ) : (
@@ -234,7 +235,7 @@ export function InstallPrompt() {
                 onClick={shareApp}
                 className="tappable mt-3 w-full rounded-[15px] bg-sage py-[14px] text-[14.5px] font-bold text-surface active:scale-[0.98]"
               >
-                {copied ? "복사됨!" : canShare ? "링크 보내기" : "링크 복사"}
+                {copied === "ok" ? "복사됨!" : copied === "fail" ? "복사 실패 — 주소를 길게 눌러 복사해 주세요" : canShare ? "링크 보내기" : "링크 복사"}
               </button>
             </>
           )}

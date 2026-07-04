@@ -6,7 +6,7 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { downscaleImage } from "@/lib/media/downscale";
-import { validateUpload } from "@/lib/media/upload-guard";
+import { validateUpload, isUploadableImage } from "@/lib/media/upload-guard";
 import { uploadMemberFile, deleteMemberFile } from "@/lib/data/groups/member-files-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
 
@@ -46,6 +46,8 @@ export function MemberFilesSection({
     setBusy(true);
     try {
       const blob = kind === "photo" ? await downscaleImage(file) : file;
+      // 사진 축소 실패로 원본(HEIC 등)이 그대로면 jpg 이름·이형 contentType로 올라가므로 차단
+      if (kind === "photo" && !isUploadableImage(blob.type)) return toast("지원하지 않는 사진 형식이에요. 다시 선택해 주세요.", "error");
       const fd = new FormData();
       fd.set("memberId", memberId);
       fd.set("kind", kind);

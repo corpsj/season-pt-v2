@@ -1,4 +1,3 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 @import "tailwindcss";
 
 /* 숫자 전용 가독 폰트(Inter 서브셋, 9.7KB 셀프호스팅). unicode-range로 숫자·₩·, 등
@@ -115,6 +114,14 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* 이미지 롱프레스 저장/드래그 메뉴를 막아 PWA 앱 느낌을 유지한다. 확대는 사진을
+   <a target="_blank">로 감싸 Safari 기본 뷰어에서(핀치) 하도록 유도한다. */
+img {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 /* Mobile (the product) is a fixed app shell: lock the document so ONLY the inner
    screen Body scrolls. Without this the whole page — including the bottom tab bar —
    scrolls with the content. Desktop keeps normal scrolling to view the phone frame.
@@ -122,9 +129,31 @@ body {
 @media (max-width: 639px) {
   html,
   body {
+    height: 100vh; /* dvh 미지원 구형 Safari(≤15.3) 폴백 — 아래 dvh 줄이 무시되면 이 값 사용 */
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
+  }
+
+  /* iOS 키보드가 열리면(.kb-open, KeyboardInsets가 토글) 앱 셸 높이를 '보이는 뷰포트'로
+     줄여, 흐름상 하단 행(ChatInput·Footer)이 키보드 위로 올라오게 한다. Frame의 dvh
+     유틸은 그대로 두고, --kb(키보드 높이)만큼 여기서만 덮어쓴다. */
+  html.kb-open,
+  html.kb-open body {
+    height: calc(100vh - var(--kb, 0px));
+    height: calc(100dvh - var(--kb, 0px));
+  }
+  html.kb-open .h-dvh {
+    height: calc(100vh - var(--kb, 0px));
+    height: calc(100dvh - var(--kb, 0px));
+  }
+  html.kb-open .min-h-dvh {
+    min-height: calc(100vh - var(--kb, 0px));
+    min-height: calc(100dvh - var(--kb, 0px));
+  }
+  /* 키보드가 열리면 하단 탭바는 키보드 위에 뜨므로 숨긴다(원래도 가려짐). */
+  html.kb-open [data-tabbar] {
+    display: none;
   }
 }
 
@@ -216,14 +245,17 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* fill-mode는 backwards만 — forwards로 끝 프레임의 transform(translateY(0)/scale(1))을
+     유지하면 그 값이 계속 남아, 화면(.scr)이 position:fixed 자식(바텀시트)의 컨테이닝
+     블록이 되어버린다. to 상태가 자연 상태와 같으므로 backwards여도 최종 화면은 동일. */
   .scr {
-    animation: ptUp 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+    animation: ptUp 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) backwards;
   }
   .pt-pop {
-    animation: ptPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+    animation: ptPop 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.35) backwards;
   }
   .pt-grow {
-    animation: ptGrow 1.2s cubic-bezier(0.45, 0, 0.1, 1) both;
+    animation: ptGrow 1.2s cubic-bezier(0.45, 0, 0.1, 1) backwards;
   }
   .pt-live {
     animation: ptPulse 1.5s ease-in-out infinite;

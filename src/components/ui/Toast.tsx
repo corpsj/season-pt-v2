@@ -28,7 +28,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <div
           role={toast.tone === "error" ? "alert" : "status"}
           aria-live={toast.tone === "error" ? "assertive" : "polite"}
-          className="toast-in absolute bottom-9 left-1/2 z-50 flex w-max max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-[14px] bg-frame px-4 py-3 shadow-toast"
+          className="toast-in absolute bottom-[max(36px,calc(var(--safe-b)_+_12px))] left-1/2 z-50 flex w-max max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-[14px] bg-frame px-4 py-3 shadow-toast"
         >
           <Icon
             name={toast.tone === "error" ? "circle-exclamation" : "circle-check-fill"}

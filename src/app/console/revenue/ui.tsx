@@ -143,8 +143,11 @@ export function ExportButton({ monthLabel, items }: { monthLabel: string; items:
     const a = document.createElement("a");
     a.href = url;
     a.download = `매출_${monthLabel.replace(/\s/g, "")}.csv`;
+    // iOS Safari: anchor를 DOM에 붙여야 다운로드가 취소되지 않고, revoke는 클릭 후로 미룬다
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   return <GBtn icon="document-text" className="ml-auto !py-[10px]" onClick={exportCsv}>내보내기</GBtn>;
 }

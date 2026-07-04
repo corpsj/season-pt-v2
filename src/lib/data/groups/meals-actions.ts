@@ -46,7 +46,9 @@ export async function logMeal(formData: FormData): Promise<Result> {
   if (file instanceof File && file.size > 0) {
     const v = validateUpload("photo", file.type, file.size);
     if (!v.ok) return { ok: false, error: v.error };
-    const ext = EXT[file.type] ?? "jpg";
+    // 확장자·contentType를 검증된 MIME에서 함께 도출(HEIC 등 이형 저장 방지)
+    const ext = EXT[file.type];
+    if (!ext) return { ok: false, error: "지원하지 않는 사진 형식이에요" };
     photoPath = `${me.memberId}/meal/${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await sb.storage.from(FILES_BUCKET).upload(photoPath, file, { contentType: file.type, upsert: false });
     if (upErr) return { ok: false, error: "사진 업로드에 실패했어요" };

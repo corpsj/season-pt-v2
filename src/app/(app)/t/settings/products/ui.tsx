@@ -268,7 +268,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[88dvh] w-full max-w-[420px] overflow-y-auto rounded-t-[20px] bg-card p-5 sm:rounded-[20px]"
+            className="max-h-[88dvh] w-full max-w-[420px] overflow-y-auto rounded-t-[20px] bg-card p-5 pb-[max(20px,var(--safe-b))] sm:rounded-[20px]"
           >
             <div className="mb-4 text-[16px] font-bold text-ink">
               {editId === "new" ? "상품 추가" : "상품 수정"}

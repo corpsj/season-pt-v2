@@ -61,8 +61,11 @@ export function RevenueClient({ view }: { view: RevenueView }) {
     const a = document.createElement("a");
     a.href = url;
     a.download = file.name;
+    // iOS Safari: anchor를 DOM에 붙여야 다운로드가 취소되지 않고, revoke는 클릭 후로 미룬다
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (

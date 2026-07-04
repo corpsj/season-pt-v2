@@ -68,6 +68,7 @@ export function SetPasswordClient({ needsUsername }: { needsUsername: boolean })
                 placeholder="trainer01"
                 autoCapitalize="none"
                 autoCorrect="off"
+                spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />

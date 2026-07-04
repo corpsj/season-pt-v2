@@ -54,6 +54,10 @@ export function TrainerLoginForm({ showOwnerSignup }: { showOwnerSignup: boolean
           <Field icon="person" label="아이디">
             <TextInput
               placeholder="season.master"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="username"
               value={id}
               onChange={(e) => setId(e.target.value)}
             />
