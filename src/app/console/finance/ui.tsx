@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { useToast } from "@/components/ui/Toast";
 import { Card, PBtn, OBtn, ConsoleModal, won, pill } from "@/components/console/ui";
 import { Money } from "@/components/console/privacy";
@@ -127,7 +128,7 @@ export function ExpenseLedger({ items, staff }: { items: ExpenseItem[]; staff: {
           ) : null}
 
           <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">메모 (선택)</div>
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="예: 6월 임대료" className={FIELD} />
+          <PlainTextInput value={note} onChange={setNote} placeholder="예: 6월 임대료" className={FIELD} />
         </ConsoleModal>
       ) : null}
 

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
-import { Field, TextInput } from "@/components/ui/Field";
+import { Field } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -70,10 +71,10 @@ export function NoticesClient({ notices }: { notices: OwnerNotice[] }) {
               ]}
             />
             <Field icon="megaphone" label="제목">
-              <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 추석 휴관 안내" />
+              <PlainTextInput value={title} onChange={setTitle} placeholder="예: 추석 휴관 안내" className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
             </Field>
             <Field label="내용">
-              <TextInput value={body} onChange={(e) => setBody(e.target.value)} placeholder="자세한 안내 (선택)" />
+              <PlainTextInput value={body} onChange={setBody} placeholder="자세한 안내 (선택)" className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
             </Field>
             <PrimaryButton icon="plus" onClick={add} pending={pending}>
               회원 앱에 게시

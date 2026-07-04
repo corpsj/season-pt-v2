@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
@@ -220,12 +221,12 @@ export function MemberMealsClient({
             {/* capture 미지정 — 카메라 강제 시 이미 찍어둔 음식 사진(갤러리)을 첨부할 수 없다(감사 #27) */}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickPhoto} />
 
-            <textarea
+            <PlainTextInput
+              multiline
               value={memo}
-              onChange={(e) => setMemo(e.target.value)}
+              onChange={setMemo}
               placeholder="무엇을 드셨나요? (예: 닭가슴살 샐러드, 고구마)"
-              rows={2}
-              className="mb-3 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+              className="mb-3 min-h-[44px] w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
             />
 
             <div className="mb-3 flex items-center gap-2">
@@ -291,12 +292,12 @@ export function MemberMealsClient({
                               </button>
                             ))}
                           </div>
-                          <textarea
+                          <PlainTextInput
+                            multiline
                             value={editMemo}
-                            onChange={(e) => setEditMemo(e.target.value)}
+                            onChange={setEditMemo}
                             placeholder="무엇을 드셨나요?"
-                            rows={2}
-                            className="mb-2.5 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+                            className="mb-2.5 min-h-[44px] w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
                           />
                           {m.feedback ? (
                             <div className="mb-2.5 rounded-[11px] bg-[#FBF6EC] px-3 py-2.5 text-[12.5px] leading-relaxed text-[#8A7A55]">

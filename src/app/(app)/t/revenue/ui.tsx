@@ -6,6 +6,7 @@ import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Kicker } from "@/components/ui/Kicker";
 import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -114,7 +115,7 @@ export function RevenueClient({ view }: { view: RevenueView }) {
               />
             </div>
             <Field icon="document-text" label="메모 (선택)">
-              <TextInput placeholder="일일권 · 물품 등" value={note} onChange={(e) => setNote(e.target.value)} />
+              <PlainTextInput placeholder="일일권 · 물품 등" value={note} onChange={setNote} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
             </Field>
             <div className="flex gap-2">
               <button

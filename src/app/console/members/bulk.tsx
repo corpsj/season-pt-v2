@@ -1,6 +1,7 @@
 // client-only(부모 ui.tsx가 "use client" 경계) — 직접 서버 컴포넌트에서 import하지 말 것.
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { OBtn, PBtn, ConsoleModal } from "@/components/console/ui";
 import { bulkAddMembers } from "@/lib/data/groups/carryover-actions";
 import { parseEndDate, type CarrySlot } from "@/lib/import/carryover-parse";
@@ -285,7 +286,7 @@ export function BulkAddModal({
                 const slotsErr = !pairFirst && r.teamKey != null && !empty && r.slots.length === 0;
                 return (
                   <div key={r.key} className={COLS}>
-                    <input value={r.name} onChange={(e) => patch(r.key, { name: e.target.value })} placeholder="이름" className={`${CELL} ${b("name")}`} />
+                    <PlainTextInput value={r.name} onChange={(v) => patch(r.key, { name: v })} placeholder="이름" className={`${CELL} ${b("name")}`} />
                     <input value={formatPhone(r.phone)} onChange={(e) => patch(r.key, { phone: e.target.value.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" inputMode="tel" className={`${CELL} ${b("phone")}`} />
                     <input value={r.birth} onChange={(e) => patch(r.key, { birth: e.target.value.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" inputMode="numeric" className={`${CELL} ${b("birth")}`} />
                     {/* 성별: 클릭마다 여↔남 토글 — 드롭다운보다 빠름 */}

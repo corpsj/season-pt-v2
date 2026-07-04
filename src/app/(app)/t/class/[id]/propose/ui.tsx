@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Kicker } from "@/components/ui/Kicker";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Chip } from "@/components/ui/Chip";
 import { RadioOption } from "@/components/ui/RadioOption";
 import { PrimaryButton } from "@/components/ui/Button";
@@ -109,9 +110,9 @@ export default function ProposeClient({
           ))}
         </div>
         {reason === "직접 입력" ? (
-          <input
+          <PlainTextInput
             value={reasonText}
-            onChange={(e) => setReasonText(e.target.value)}
+            onChange={setReasonText}
             placeholder="사유를 입력해주세요"
             className="mt-2.5 w-full rounded-[12px] border border-ink/[0.08] bg-card px-3.5 py-2.5 text-[13.5px]"
           />

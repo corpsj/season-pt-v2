@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { ConsoleModal } from "@/components/console/ui";
@@ -174,12 +175,13 @@ export function MessagesClient({
               ))}
             </div>
             <div className="flex flex-none items-center gap-2.5 border-t border-[rgba(75,59,46,0.07)] bg-white px-5 py-3.5">
-              <input
+              <PlainTextInput
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                onChange={setDraft}
+                onEnter={send}
                 placeholder="메시지를 입력하세요"
-                className="flex-1 rounded-[13px] bg-[#F4EFE6] px-4 py-3 text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+                wrapperClassName="flex-1"
+                className="rounded-[13px] bg-[#F4EFE6] px-4 py-3 text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
               />
               <button onClick={send} aria-label="전송" className="flex h-[46px] w-[46px] flex-none items-center justify-center rounded-[13px] bg-sage text-white transition hover:brightness-105 active:scale-95"><Icon name="send" size={18} /></button>
             </div>
@@ -194,7 +196,7 @@ export function MessagesClient({
         <ConsoleModal title="새 대화" onClose={() => { setNewOpen(false); setQ(""); }}>
           <div className="mb-2 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] px-3 py-2.5">
             <Icon name="search" size={16} className="text-[#A89F92]" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="회원 이름 검색" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+            <PlainTextInput value={q} onChange={setQ} placeholder="회원 이름 검색" wrapperClassName="w-full" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
             {q ? <button type="button" onClick={() => setQ("")} aria-label="지우기" className="flex-none text-[#C2BAAD]"><Icon name="circle-close" size={16} /></button> : null}
           </div>
           <div className="max-h-[300px] overflow-y-auto rounded-[12px] border border-[rgba(75,59,46,0.08)]">

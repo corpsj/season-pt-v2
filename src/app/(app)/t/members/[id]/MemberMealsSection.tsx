@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { addMealFeedback } from "@/lib/data/groups/meals-actions";
@@ -75,12 +76,12 @@ export function MemberMealsSection({ initial }: { initial: MealLog[] }) {
                 </div>
               ) : openId === m.id ? (
                 <div className="mt-2.5">
-                  <textarea
+                  <PlainTextInput
+                    multiline
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={setDraft}
                     placeholder="식단 피드백을 남겨주세요"
-                    rows={2}
-                    className="w-full resize-none rounded-[11px] border border-ink/[0.12] bg-white px-3 py-2 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+                    className="min-h-[44px] w-full resize-none rounded-[11px] border border-ink/[0.12] bg-white px-3 py-2 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
                   />
                   <div className="mt-1.5 flex gap-1.5">
                     <button onClick={() => setOpenId(null)} disabled={busy} className="flex-1 rounded-[10px] border border-ink/[0.12] bg-white py-2 text-[12.5px] font-semibold text-muted disabled:opacity-50">취소</button>

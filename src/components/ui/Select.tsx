@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./icon";
+import { PlainTextInput } from "./PlainTextInput";
 
 export function Select({
   value,
@@ -69,18 +70,15 @@ export function Combobox({
 
   return (
     <div ref={ref} className="relative">
-      <input
-        type="text"
+      <PlainTextInput
         value={value}
         placeholder={placeholder}
-        onChange={(e) => {
-          onChange(e.target.value);
+        onChange={(v) => {
+          onChange(v);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === "Escape") setOpen(false);
-        }}
+        onEnter={() => setOpen(false)}
         className="w-full rounded-[13px] border border-ink/[0.12] bg-card px-4 py-[13px] text-[14px] font-medium text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-sage/40"
       />
       {open && filtered.length > 0 && (

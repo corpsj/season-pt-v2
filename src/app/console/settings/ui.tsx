@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -404,9 +405,9 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
 
             <div>
               <div className={FLABEL}>상품명 (자동 생성)</div>
-              <input
+              <PlainTextInput
                 value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
+                onChange={(v) => setForm((prev) => ({ ...prev, name: v, nameTouched: true }))}
                 placeholder="대표 1:1 10회권"
                 className={INPUT}
               />
@@ -453,10 +454,10 @@ function MyInfoEditor({ displayName }: { displayName: string }) {
       <div className="mb-4 mt-1 text-[12px] font-medium text-[#9A917F]">회원·강사에게 보이는 표시 이름</div>
       {editing ? (
         <div className="flex items-center gap-2">
-          <input
+          <PlainTextInput
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") { setName(displayName); setEditing(false); } }}
+            onChange={setName}
+            onEnter={save}
             autoFocus
             maxLength={20}
             placeholder="표시 이름"
@@ -556,12 +557,13 @@ function ExercisesEditor({ exercises: init }: { exercises: ExerciseItem[] }) {
 
       {/* 추가 */}
       <div className="mb-5 flex items-center gap-2">
-        <input
+        <PlainTextInput
           value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          onChange={setNewName}
+          onEnter={handleAdd}
           placeholder="새 종목 이름"
-          className={`${INPUT} flex-1`}
+          wrapperClassName="flex-1"
+          className={INPUT}
         />
         <input
           value={newCategory}
@@ -588,12 +590,13 @@ function ExercisesEditor({ exercises: init }: { exercises: ExerciseItem[] }) {
                 <div key={item.id} className="flex items-center gap-3 rounded-[11px] bg-[#FBF9F5] px-3.5 py-2.5">
                   {editingId === item.id ? (
                     <>
-                      <input
+                      <PlainTextInput
                         value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") handleRename(item.id); if (e.key === "Escape") setEditingId(null); }}
+                        onChange={setEditName}
+                        onEnter={() => handleRename(item.id)}
                         autoFocus
-                        className={`${INPUT} flex-1`}
+                        wrapperClassName="flex-1"
+                        className={INPUT}
                       />
                       <input
                         value={editCategory}
@@ -684,11 +687,11 @@ function NoticesEditor({ notices }: { notices: OwnerNotice[] }) {
         <div className="flex flex-col gap-2.5">
           <div>
             <div className={FLABEL}>제목</div>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="예: 추석 휴관 안내" className={INPUT} />
+            <PlainTextInput value={title} onChange={setTitle} placeholder="예: 추석 휴관 안내" className={INPUT} />
           </div>
           <div>
             <div className={FLABEL}>내용</div>
-            <input value={body} onChange={(e) => setBody(e.target.value)} placeholder="자세한 안내 (선택)" className={INPUT} />
+            <PlainTextInput value={body} onChange={setBody} placeholder="자세한 안내 (선택)" className={INPUT} />
           </div>
           <PBtn icon="plus-bold" pending={busy} onClick={add} className="self-start">회원 앱에 게시</PBtn>
         </div>

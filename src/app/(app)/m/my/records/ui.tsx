@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Icon } from "@/components/ui/icon";
 import { Stepper } from "@/components/ui/Stepper";
@@ -133,12 +134,12 @@ export function MemberRecordsClient({
               <Icon name="plus-bold" size={16} />종목 추가
             </button>
 
-            <textarea
+            <PlainTextInput
+              multiline
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={setComment}
               placeholder="메모 (예: 오늘 컨디션·느낌)"
-              rows={2}
-              className="mt-3 w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+              className="mt-3 min-h-[44px] w-full resize-none rounded-[13px] border border-ink/[0.12] bg-[#FBF9F5] px-3.5 py-3 text-[14px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
             />
 
             <div className="mt-3 flex items-center gap-2">

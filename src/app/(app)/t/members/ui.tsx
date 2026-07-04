@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Body } from "@/components/shell/Body";
 import { TabBar } from "@/components/shell/TabBar";
 import { Chip } from "@/components/ui/Chip";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Badge } from "@/components/ui/Badge";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { StatTriple } from "@/components/ui/StatCard";
@@ -57,12 +58,13 @@ export default function MembersClient({
         {/* search bar */}
         <div className="mb-3 flex items-center gap-2.5 rounded-[13px] border border-ink/[0.12] bg-card px-3.5 py-3">
           <Icon name="search" size={18} className="flex-none text-muted4" />
-          <input
-            type="search"
+          <PlainTextInput
+            inputMode="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder="이름 검색"
-            className="flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-placeholder"
+            wrapperClassName="flex-1"
+            className="bg-transparent text-[13px] text-ink outline-none placeholder:text-placeholder"
           />
           {query && (
             <button

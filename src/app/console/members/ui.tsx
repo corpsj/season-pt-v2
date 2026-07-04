@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -340,7 +341,7 @@ export function MembersClient({
       <div className="mb-5 flex items-center gap-3">
         <div className="flex max-w-[380px] flex-1 items-center gap-2.5 rounded-[13px] border border-[rgba(75,59,46,0.1)] bg-white px-[15px] py-[11px]">
           <Icon name="search" size={18} className="text-[#A89F92]" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름 검색" className="w-full bg-transparent text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+          <PlainTextInput value={q} onChange={setQ} placeholder="이름 검색" wrapperClassName="w-full" className="w-full bg-transparent text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
           {q ? <button onClick={() => setQ("")} aria-label="지우기" className="flex-none text-[#C2BAAD]"><Icon name="circle-close" size={17} /></button> : null}
         </div>
         <div className="flex gap-[7px]">

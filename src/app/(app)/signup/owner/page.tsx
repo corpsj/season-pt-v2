@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Field, TextInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -59,10 +60,11 @@ export default function OwnerSignupPage() {
 
         <div className="mt-5 flex flex-col gap-3.5">
           <Field icon="person" label="이름">
-            <TextInput
+            <PlainTextInput
               placeholder="이름"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={setName}
+              className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder"
             />
           </Field>
           <Field icon="person" label="아이디">

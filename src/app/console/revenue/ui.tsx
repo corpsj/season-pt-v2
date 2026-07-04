@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Avatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -219,7 +220,7 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
               <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">회원 선택</div>
               <div className="mb-2 flex items-center gap-2 rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-[#FBF9F5] px-3 py-2.5">
                 <Icon name="search" size={16} className="text-[#A89F92]" />
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름 검색" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+                <PlainTextInput value={q} onChange={setQ} placeholder="이름 검색" wrapperClassName="w-full" className="w-full bg-transparent text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
                 {q ? <button type="button" onClick={() => setQ("")} aria-label="지우기" className="flex-none text-[#C2BAAD]"><Icon name="circle-close" size={16} /></button> : null}
               </div>
               <div className="mb-3.5 max-h-[180px] overflow-y-auto rounded-[12px] border border-[rgba(75,59,46,0.08)]">
@@ -236,7 +237,7 @@ export function PayRecordButton({ members }: { members: { id: string; name: stri
           ) : (
             <>
               <div className="mb-1.5 text-[11.5px] font-semibold text-[#9A917F]">항목 메모</div>
-              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="예: 용품 판매" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
+              <PlainTextInput value={note} onChange={setNote} placeholder="예: 용품 판매" className="mb-3.5 w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]" />
             </>
           )}
 

@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
-import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Banner } from "@/components/ui/Banner";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -44,7 +45,7 @@ export function StaffInviteClient() {
 
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="강사 이름">
-            <TextInput placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} />
+            <PlainTextInput placeholder="이름" value={name} onChange={setName} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
           </Field>
           <Field icon="phone" label="전화번호 (로그인 아이디)">
             <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />

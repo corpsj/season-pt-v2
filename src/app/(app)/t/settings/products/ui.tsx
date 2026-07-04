@@ -5,6 +5,7 @@ import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
 import { Field, MoneyInput, TextInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Switch } from "@/components/ui/Switch";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
@@ -316,10 +317,11 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                 <TextInput inputMode="numeric" placeholder="90" value={form.durationDays} onChange={num("durationDays")} />
               </Field>
               <Field icon="ticket-fill" label="상품명 (자동 생성)">
-                <TextInput
+                <PlainTextInput
                   placeholder="대표 1:1 10회권"
                   value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
+                  onChange={(v) => setForm((prev) => ({ ...prev, name: v, nameTouched: true }))}
+                  className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder"
                 />
               </Field>
 

@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { OutlineButton, PrimaryButton } from "@/components/ui/Button";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Icon } from "@/components/ui/icon";
 import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
@@ -65,7 +66,7 @@ export function EditMemberButton({
             <div className="mb-3.5 text-[16px] font-bold text-ink">회원 정보 수정</div>
             <div className="flex flex-col gap-3">
               <Field icon="person" label="이름">
-                <TextInput value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+                <PlainTextInput value={f.name} onChange={(v) => setF({ ...f, name: v })} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
               </Field>
               <Field icon="phone" label="연락처">
                 <PhoneInput
@@ -96,10 +97,11 @@ export function EditMemberButton({
               </Field>
               <p className="text-[11.5px] text-muted">생년월일을 바꾸면 로그인 비밀번호도 새 생년월일 6자리로 초기화돼요.</p>
               <Field icon="triangle-exclamation" label="부상 메모 (선택)">
-                <TextInput
+                <PlainTextInput
                   value={f.injury}
-                  onChange={(e) => setF({ ...f, injury: e.target.value })}
+                  onChange={(v) => setF({ ...f, injury: v })}
                   placeholder="예: 오른쪽 무릎 주의"
+                  className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder"
                 />
               </Field>
             </div>

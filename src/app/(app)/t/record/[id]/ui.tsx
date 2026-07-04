@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Kicker } from "@/components/ui/Kicker";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Avatar } from "@/components/ui/Avatar";
 import { Icon } from "@/components/ui/icon";
 import { Stepper } from "@/components/ui/Stepper";
@@ -192,12 +193,12 @@ export default function RecordClient({
           <div className="mb-2">
             <Kicker>코멘트</Kicker>
           </div>
-          <textarea
+          <PlainTextInput
+            multiline
             value={comment}
-            onChange={(e) => setComment(e.target.value)}
+            onChange={setComment}
             placeholder="오늘 수업 코멘트를 남겨주세요…"
-            rows={3}
-            className="w-full rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-placeholder focus:ring-2 focus:ring-sage/40 resize-none"
+            className="min-h-[66px] w-full rounded-[14px] border border-ink/[0.08] bg-card px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-placeholder focus:ring-2 focus:ring-sage/40 resize-none"
           />
         </div>
 

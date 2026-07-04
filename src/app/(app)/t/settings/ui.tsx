@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { TextInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Spinner } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { trainerLogout, updateMyName } from "@/lib/auth/trainer-actions";
@@ -77,11 +77,12 @@ export function SettingsClient({ me }: { me: Me }) {
           <Avatar initial={initial} tone="sage" size={48} />
           {nameEditing ? (
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <TextInput
+              <PlainTextInput
                 placeholder="이름"
                 value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
+                onChange={setNameDraft}
                 maxLength={20}
+                className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder"
               />
               <button
                 type="button"

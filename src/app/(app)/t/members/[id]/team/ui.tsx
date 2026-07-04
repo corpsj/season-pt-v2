@@ -7,7 +7,7 @@ import { Kicker } from "@/components/ui/Kicker";
 import { Banner } from "@/components/ui/Banner";
 import { Select } from "@/components/ui/Select";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
-import { TextInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
@@ -134,7 +134,7 @@ export function TeamCreateClient({
           </div>
         ) : candidates.length > 0 ? (
           <div className="mb-4">
-            <TextInput placeholder="회원 이름 검색" value={q} onChange={(e) => setQ(e.target.value)} />
+            <PlainTextInput placeholder="회원 이름 검색" value={q} onChange={setQ} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
             <div className="mt-2 flex max-h-[220px] flex-col overflow-y-auto rounded-[13px] border border-ink/[0.1]">
               {filtered.length > 0 ? (
                 filtered.map((c) => (

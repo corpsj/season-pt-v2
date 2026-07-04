@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Kicker } from "@/components/ui/Kicker";
 import { Switch } from "@/components/ui/Switch";
 import { Icon } from "@/components/ui/icon";
@@ -123,13 +124,13 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
         </div>
         <Card className="mb-5 px-3.5 py-3">
           <div className="flex items-center gap-2">
-            <input
-              type="text"
+            <PlainTextInput
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+              onChange={setNewName}
+              onEnter={handleAdd}
               placeholder="새 종목 이름"
-              className="flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-placeholder"
+              wrapperClassName="flex-1"
+              className="bg-transparent text-[14px] text-ink outline-none placeholder:text-placeholder"
             />
             <button
               type="button"
@@ -180,16 +181,12 @@ export function ExercisesClient({ exercises: init }: { exercises: ExerciseItem[]
                   {editingId === item.id ? (
                     <>
                       <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        <input
-                          type="text"
+                        <PlainTextInput
                           value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleRename(item.id);
-                            if (e.key === "Escape") setEditingId(null);
-                          }}
+                          onChange={setEditName}
+                          onEnter={() => handleRename(item.id)}
                           autoFocus
-                          className="bg-transparent text-[14px] font-medium text-ink outline-none rounded focus:ring-2 focus:ring-sage/40"
+                          className="rounded bg-transparent text-[14px] font-medium text-ink outline-none focus:ring-2 focus:ring-sage/40"
                         />
                         <Combobox
                           value={editCategory}

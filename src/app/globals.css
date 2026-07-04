@@ -122,6 +122,15 @@ img {
   user-select: none;
 }
 
+/* PlainTextInput(iOS 보조 툴바 없는 contenteditable)의 placeholder. value가 비었을 때만
+   data-empty가 붙고, ::before가 editable 내부에 렌더돼 패딩·타이포를 상속하므로 정렬이
+   네이티브 placeholder와 동일하다. :empty 대신 value 기반이라 잔여 <br>에 영향받지 않는다. */
+[data-ph][data-empty]::before {
+  content: attr(data-ph);
+  color: var(--color-placeholder);
+  pointer-events: none;
+}
+
 /* Mobile (the product) is a fixed app shell: lock the document so ONLY the inner
    screen Body scrolls. Without this the whole page — including the bottom tab bar —
    scrolls with the content. Desktop keeps normal scrolling to view the phone frame.

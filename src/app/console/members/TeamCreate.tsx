@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ConsoleModal, OBtn, PBtn } from "@/components/console/ui";
@@ -101,9 +102,9 @@ export function TeamCreateModal({
         </div>
       ) : (
         <>
-          <input
+          <PlainTextInput
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={setQ}
             placeholder="회원 이름 검색"
             className="mb-2 w-full rounded-[11px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-3.5 py-2.5 text-[13.5px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
           />

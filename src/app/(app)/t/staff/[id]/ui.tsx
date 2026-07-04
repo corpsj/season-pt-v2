@@ -8,7 +8,8 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
 import { Kicker } from "@/components/ui/Kicker";
-import { Field, PhoneInput, TextInput } from "@/components/ui/Field";
+import { Field, PhoneInput } from "@/components/ui/Field";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Switch } from "@/components/ui/Switch";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
@@ -174,7 +175,7 @@ export function StaffDetailClient({
             </div>
             <div className="flex flex-col gap-3.5">
               <Field icon="person" label="강사 이름">
-                <TextInput value={name} onChange={(e) => setName(e.target.value)} />
+                <PlainTextInput value={name} onChange={setName} className="w-full bg-transparent text-[15px] text-ink outline-none placeholder:text-placeholder" />
               </Field>
               <Field icon="phone" label="연락처">
                 <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />

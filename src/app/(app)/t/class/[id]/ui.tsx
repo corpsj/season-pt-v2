@@ -6,6 +6,7 @@ import { Body, Footer } from "@/components/shell/Body";
 import { exerciseLine } from "@/lib/data/workout-format";
 import { BackButton } from "@/components/shell/BackButton";
 import { Card } from "@/components/ui/Card";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { Kicker } from "@/components/ui/Kicker";
 import { Badge } from "@/components/ui/Badge";
 import { Banner } from "@/components/ui/Banner";
@@ -311,12 +312,12 @@ function MealCard({ meal }: { meal: SessionMealItem }) {
         </div>
       ) : open ? (
         <div className="mt-2.5">
-          <textarea
+          <PlainTextInput
+            multiline
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={setDraft}
             placeholder="식단 피드백을 남겨주세요"
-            rows={2}
-            className="w-full resize-none rounded-[11px] border border-ink/[0.12] bg-white px-3 py-2 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
+            className="min-h-[44px] w-full resize-none rounded-[11px] border border-ink/[0.12] bg-white px-3 py-2 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"
           />
           <div className="mt-1.5 flex gap-1.5">
             <button

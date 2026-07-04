@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
+import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
@@ -492,9 +493,9 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
                 })}
               </div>
               {reason === "직접 입력" ? (
-                <input
+                <PlainTextInput
                   value={reasonText}
-                  onChange={(e) => setReasonText(e.target.value)}
+                  onChange={setReasonText}
                   placeholder="사유를 입력해주세요"
                   className="mb-4 w-full rounded-[11px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-2.5 text-[13px]"
                 />
@@ -557,12 +558,12 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
           </button>
 
           <MicroLabel className="mb-2 mt-4">코멘트</MicroLabel>
-          <textarea
+          <PlainTextInput
+            multiline
             value={recComment}
-            onChange={(e) => setRecComment(e.target.value)}
+            onChange={setRecComment}
             placeholder="오늘 수업 코멘트를 남겨주세요…"
-            rows={3}
-            className="w-full resize-none rounded-[12px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-[#B3AA9C] focus:ring-2 focus:ring-sage/40"
+            className="min-h-[66px] w-full resize-none rounded-[12px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-[#B3AA9C] focus:ring-2 focus:ring-sage/40"
           />
         </ConsoleModal>
       ) : null}
