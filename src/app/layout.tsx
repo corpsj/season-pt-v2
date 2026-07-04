@@ -59,9 +59,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // 확대(핀치 줌)를 막지 않는다 — 중장년 회원이 작은 글씨를 키울 수 있어야 한다(감사 low, 접근성).
-  maximumScale: 5,
-  userScalable: true,
+  // 확대(핀치/더블탭 줌)를 브라우저·설치앱 모두에서 잠근다(사용자 요청). Android/데스크톱은
+  // 이 선언으로 처리되고, user-scalable을 무시하는 iOS Safari는 NoZoom의 제스처 차단이 담당한다.
+  maximumScale: 1,
+  userScalable: false,
   colorScheme: "light",
   themeColor: "#faf8f4",
   // "cover" → true edge-to-edge so the installed PWA fills the screen like a native

@@ -2,47 +2,26 @@
 import { useEffect } from "react";
 
 /**
- * Disable pinch / double-tap / gesture zoom — but ONLY in the installed
- * (standalone) PWA, i.e. "웹앱으로 켰을 때".
+ * Disable pinch / double-tap / gesture zoom app-wide — browser AND installed PWA
+ * (사용자 요청: 브라우저에서도 확대 안 되게).
  *
- * The BROWSER viewport intentionally keeps zoom ON for accessibility
- * (중장년 회원이 작은 글씨를 확대할 수 있어야 한다 — see the viewport comment in
- * layout.tsx / 감사 low). Locking scale there would regress that decision, so we
- * only clamp scale inside the installed app, where accidental pinch-zoom breaks
- * the native-like feel.
- *
- * Platform coverage (each engine handles zoom differently):
- *  - Android/Chromium: respects `maximum-scale=1, user-scalable=no` once we
- *    harden the viewport <meta> at runtime.
- *  - iOS Safari/WKWebView: IGNORES user-scalable since iOS 10 → we block the
- *    `gesture*` (pinch) events and multi-touch `touchmove`, plus
- *    `touch-action: manipulation` to kill double-tap zoom.
- *  - Desktop standalone: block ctrl/⌘ + wheel and ctrl/⌘ + [+ - = 0].
+ * Android / Chromium / desktop are handled declaratively by the viewport export in
+ * layout.tsx (`maximum-scale=1, user-scalable=no`). This component is the backstop for
+ * engines that IGNORE user-scalable:
+ *  - iOS Safari / WKWebView (since iOS 10): block the `gesture*` (pinch) events and
+ *    multi-touch `touchmove`, plus `touch-action: manipulation` to kill double-tap zoom.
+ *  - Desktop: also block ctrl/⌘ + wheel and ctrl/⌘ + [+ - = 0] as a hardening measure.
  *
  * Single-finger scrolling is untouched (we only preventDefault when >1 touch).
  */
 export function NoZoom() {
   useEffect(() => {
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      // iOS home-screen web apps report standalone here, not via matchMedia.
-      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
-    if (!standalone) return;
-
-    // 1) Harden the viewport meta so Chromium locks the scale.
-    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
-    const prevContent = meta?.getAttribute("content") ?? null;
-    meta?.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover",
-    );
-
-    // 2) Kill double-tap zoom without breaking scroll or taps.
+    // Kill double-tap zoom without breaking scroll or taps.
     const rootEl = document.documentElement;
     const prevTouchAction = rootEl.style.touchAction;
     rootEl.style.touchAction = "manipulation";
 
-    // 3) iOS pinch: block gesture* + 2-finger touchmove. Desktop: ctrl/⌘ zoom.
+    // iOS pinch: block gesture* + 2-finger touchmove. Desktop: ctrl/⌘ zoom.
     const blockGesture = (e: Event) => e.preventDefault();
     const blockPinch = (e: TouchEvent) => {
       if (e.touches.length > 1) e.preventDefault();
@@ -65,7 +44,6 @@ export function NoZoom() {
     document.addEventListener("keydown", blockKeyZoom);
 
     return () => {
-      if (meta && prevContent !== null) meta.setAttribute("content", prevContent);
       rootEl.style.touchAction = prevTouchAction;
       document.removeEventListener("gesturestart", blockGesture);
       document.removeEventListener("gesturechange", blockGesture);
