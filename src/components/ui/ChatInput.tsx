@@ -13,7 +13,8 @@ export function ChatInput({
 }) {
   const ready = value.trim().length > 0;
   return (
-    <div className="flex flex-none items-center gap-2 border-t border-ink/[0.06] px-3 pt-2 pb-[max(12px,var(--safe-b))]">
+    // 하단 패딩: 홈 인디케이터(safe-b) 위에 +12px 띄워 바닥에 붙어 보이지 않게
+    <div className="flex flex-none items-center gap-2 border-t border-ink/[0.06] px-3 pt-2 pb-[max(24px,calc(var(--safe-b)_+_12px))]">
       {/* 첨부(+) 버튼은 기능이 생기면 복원 — 동작 없는 버튼은 신뢰를 깎는다 */}
       <input
         value={value}
