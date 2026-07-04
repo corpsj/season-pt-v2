@@ -5,6 +5,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import { ensureOwner, OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { getTrainerContext } from "@/lib/auth/context";
+import { encryptCredential, decryptCredential } from "@/lib/auth/credential-crypto";
 
 const DOMAIN = process.env.TRAINER_EMAIL_DOMAIN || "trainer.seasonpt.local";
 const toEmail = (u: string) => `${u.trim().toLowerCase()}@${DOMAIN}`;
@@ -44,6 +45,7 @@ export async function ownerSignup(username: string, password: string, name: stri
     display_name: display,
     role: "owner",
     status: "active",
+    credential_enc: encryptCredential(password),
   });
   if (insErr) {
     await admin.auth.admin.deleteUser(created.user.id).catch(() => {}); // 고아 auth 계정 방지
@@ -104,7 +106,10 @@ export async function setTrainerPassword(newPassword: string): Promise<Result> {
   // 초대(invited) 강사의 첫 비번 설정만 active로 전환. 대표가 비활성(inactive)한 강사가
   // 비번 변경으로 스스로 재활성화하는 것은 막는다.
   const { data: tr } = await admin.from("trainers").select("status").eq("auth_user_id", user.id).maybeSingle();
-  const patch: { must_change_password: boolean; status?: string } = { must_change_password: false };
+  const patch: { must_change_password: boolean; status?: string; credential_enc: string } = {
+    must_change_password: false,
+    credential_enc: encryptCredential(newPassword),
+  };
   if (tr?.status === "invited") patch.status = "active";
   await admin.from("trainers").update(patch).eq("auth_user_id", user.id);
   return { ok: true };
@@ -137,6 +142,7 @@ export async function inviteInstructor(
     status: "invited",
     must_change_password: true,
     phone: phone.trim() || null,
+    credential_enc: encryptCredential(tempPassword),
   });
   if (insErr) {
     // 실패했는데 임시비밀번호와 함께 성공 반환되고 고아 auth 계정이 남던 문제(감사 #19).
@@ -209,7 +215,13 @@ export async function issueInstructorLogin(
   if (error || !created.user) return { ok: false, error: "이미 사용 중인 아이디이거나 발급에 실패했어요" };
   const { data: updated, error: upErr } = await admin
     .from("trainers")
-    .update({ auth_user_id: created.user.id, username: uname, must_change_password: true, status: "invited" })
+    .update({
+      auth_user_id: created.user.id,
+      username: uname,
+      must_change_password: true,
+      status: "invited",
+      credential_enc: encryptCredential(tempPassword),
+    })
     .eq("id", id)
     .is("auth_user_id", null) // 원자 클레임: 여전히 계정 없을 때만 — 동시/이중 발급 방지
     .select("id");
@@ -332,7 +344,23 @@ export async function resetInstructorPassword(id: string): Promise<Result & { te
   const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password: tempPassword });
   if (error) return { ok: false, error: "초기화에 실패했어요. 다시 시도해주세요." };
   // 비번은 이미 바뀜 — 변경강제 플래그 실패를 삼키면 첫 로그인 변경강제가 안 걸린다. 재시도는 새 임시비번으로 안전하게 재발급됨.
-  const { error: flagErr } = await admin.from("trainers").update({ must_change_password: true }).eq("id", id);
+  const { error: flagErr } = await admin
+    .from("trainers")
+    .update({ must_change_password: true, credential_enc: encryptCredential(tempPassword) })
+    .eq("id", id);
   if (flagErr) return { ok: false, error: "비밀번호는 바뀌었지만 변경 강제 설정에 실패했어요. 다시 시도해주세요." };
   return { ok: true, tempPassword };
+}
+
+/** 저장된(암호화된) 비밀번호를 대표가 다시 확인. 발급/초기화 화면을 놓쳤을 때 재조회용. 대표 전용. */
+export async function getTrainerCredential(id: string): Promise<Result & { password?: string }> {
+  if (!(await ensureOwner())) return { ok: false, error: OWNER_ONLY_ERROR };
+  const admin = createSupabaseAdmin();
+  const { data } = await admin.from("trainers").select("credential_enc").eq("id", id).maybeSingle();
+  if (!data?.credential_enc) return { ok: false, error: "저장된 비밀번호가 없어요" };
+  try {
+    return { ok: true, password: decryptCredential(data.credential_enc) };
+  } catch {
+    return { ok: false, error: "복호화에 실패했어요" };
+  }
 }
