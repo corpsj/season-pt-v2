@@ -9,7 +9,7 @@ import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
 import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications, createExercise, renameExercise, setExerciseActive, createNotice, deleteNotice } from "@/lib/data/groups/owner-ops-actions";
 import { updateMyName } from "@/lib/auth/trainer-actions";
-import { productTier, productType, composeProductName, isDiscountProduct, matchesPickerFilter, type ProductTier, type PickerFilter } from "@/lib/data/product-class";
+import { productTier, productType, composeProductName, isDiscountProduct, matchesQuad, isUnclassified, QUAD_TABS, type ProductTier, type Quad } from "@/lib/data/product-class";
 import type { MembershipProduct, StudioSettings, ExerciseItem } from "@/lib/types";
 import type { OwnerNotice } from "@/lib/data/groups/owner-ops";
 
@@ -95,17 +95,9 @@ export function SettingsClient({ products, settings, exercises, notices, display
 
 /* ============================================================
    회원권 상품 편집기(콘솔) — 모바일 설정 화면과 동일한 감각.
-   담당(대표/강사/공용) 필터 → 유형(1:1/2:1/기타) 섹션 × 회차 칩 그리드,
+   담당×유형 4탭(대표1:1/강사1:1/대표2:1/강사2:1) × 회차 칩 그리드,
    비활성은 접힌 보관함, 편집은 칩 탭 → 모달(상품명 자동 조합).
    ============================================================ */
-
-const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
-const TIER_HEAD: Record<ProductTier, string> = {
-  owner: "bg-[#F4EEE3] text-[#8A6F3E]",
-  staff: "bg-[#E4EFE3] text-[#5C9166]",
-  common: "bg-[#F0ECE3] text-[#847A66]",
-};
-const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: "기타" };
 
 type FormState = {
   tier: ProductTier;
@@ -120,7 +112,7 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  tier: "common", ptype: "1on1", discount: false, name: "",
+  tier: "owner", ptype: "1on1", discount: false, name: "",
   nameTouched: false, sessions: "", price: "", unitListPrice: "", durationDays: "90",
 };
 
@@ -153,10 +145,30 @@ const INPUT =
   "w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]";
 const FLABEL = "mb-1.5 text-[12px] font-semibold text-[#9A917F]";
 
+function ProductChip({ p, onClick }: { p: MembershipProduct; onClick: () => void }) {
+  const type = productType(p.name);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-[13px] border border-ink/[0.08] bg-[#FBF9F5] px-3.5 py-3 text-left transition hover:bg-[#F7F3EB]"
+    >
+      <div className="flex flex-wrap items-baseline gap-1.5">
+        <span className="min-w-0 truncate text-[15px] font-bold text-ink">{type ? `${p.sessions}회권` : p.name}</span>
+        {isDiscountProduct(p.name) ? (
+          <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">특별할인</span>
+        ) : null}
+      </div>
+      <div className="mt-1 text-[13px] font-semibold text-ink">{won(p.price)}</div>
+      <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">유효 {p.durationDays}일</div>
+    </button>
+  );
+}
+
 function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
+  const [productTab, setProductTab] = useState<Quad>("owner-1on1");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 모달 안 판매 상태 표시용
@@ -166,23 +178,17 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const active = useMemo(() => products.filter((p) => p.active), [products]);
   const archived = useMemo(() => products.filter((p) => !p.active), [products]);
 
-  // 발급 픽커와 동일한 1:1/2:1/특별할인 3분류(matchesPickerFilter 단일 소스) — 담당(대표/강사)은 카드 뱃지로 구분.
+  const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
+  // 발급 픽커와 동일한 담당×유형 4탭. 특별할인 상품은 자기 탭에 배지로 함께 노출.
   const visible = useMemo(
-    () => active.filter((p) => matchesPickerFilter(p.name, typeFilter)),
-    [active, typeFilter],
+    () => active.filter((p) => matchesQuad(p.name, activeTab)).sort(bySessionsAsc),
+    [active, activeTab],
   );
-
-  // 담당 섹션: 대표 → 강사 → 공용, 비어있는 섹션은 생략(유형은 필터+카드 뱃지로 구분).
-  const sections = useMemo(() => {
-    const g: Record<ProductTier, MembershipProduct[]> = { owner: [], staff: [], common: [] };
-    for (const p of visible) g[productTier(p.name)].push(p);
-    return (["owner", "staff", "common"] as ProductTier[])
-      .map((k) => ({ key: k, label: TIER_LABEL[k], items: g[k].sort(bySessionsAsc) }))
-      .filter((s) => s.items.length > 0);
-  }, [visible]);
+  // 4탭 어디에도 안 맞는 무표기(공용/무유형) 상품 — 숨김 방지용 별도 그룹(지금은 0개).
+  const unclassified = useMemo(() => active.filter((p) => isUnclassified(p.name)).sort(bySessionsAsc), [active]);
 
   function openNew() {
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, tier: activeTab.tier, ptype: activeTab.type });
     setEditActive(true);
     setEditId("new");
   }
@@ -265,65 +271,36 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
         <PBtn icon="plus-bold" onClick={openNew}>상품 추가</PBtn>
       </div>
 
-      {/* 분류 필터 — 발급 픽커와 동일한 3칩 */}
+      {/* 담당×유형 4탭 — 발급 픽커와 동일 */}
       <div className="mb-4 flex items-center gap-[6px]">
-        {([
-          { key: "1on1", label: "1:1" },
-          { key: "2on1", label: "2:1" },
-          { key: "discount", label: "특별할인" },
-        ] as { key: PickerFilter; label: string }[]).map((f) => (
-          <button key={f.key} type="button" onClick={() => setTypeFilter(f.key)} className={pillCls(typeFilter === f.key)}>{f.label}</button>
+        {QUAD_TABS.map((t) => (
+          <button key={t.key} type="button" onClick={() => setProductTab(t.key)} className={pillCls(productTab === t.key)}>{t.label}</button>
         ))}
       </div>
 
-      {/* 판매 중 — 유형 섹션 × 회차 칩 그리드 */}
-      {sections.length === 0 ? (
+      {/* 판매 중 — 회차 칩 그리드 */}
+      {visible.length === 0 ? (
         <div className="rounded-[13px] bg-[#FBF7F1] py-8 text-center text-[13px] font-medium text-[#A89F92]">
-          {active.length > 0 ? "이 분류에 상품이 없어요" : "등록된 상품이 없어요 — ‘상품 추가’로 시작하세요"}
+          {active.length > 0 ? "이 분류에 상품이 없어요 — ‘상품 추가’로 만드세요" : "등록된 상품이 없어요 — ‘상품 추가’로 시작하세요"}
         </div>
       ) : (
-        sections.map((sec) => (
-          <div key={sec.key} className="mb-4 last:mb-0">
-            <div className="mb-2 flex items-center gap-2">
-              <span className={`rounded-[6px] px-2 py-0.5 text-[11.5px] font-bold ${TIER_HEAD[sec.key]}`}>{sec.label}</span>
-              <span className="text-[11.5px] font-medium text-[#9A917F]">{sec.items.length}개</span>
-            </div>
-            <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
-              {sec.items.map((p) => {
-                const type = productType(p.name);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => openEdit(p)}
-                    className="rounded-[13px] border border-ink/[0.08] bg-[#FBF9F5] px-3.5 py-3 text-left transition hover:bg-[#F7F3EB]"
-                  >
-                    <div className="flex flex-wrap items-baseline gap-1.5">
-                      <span className="min-w-0 truncate text-[15px] font-bold text-ink">
-                        {type ? `${p.sessions}회` : p.name}
-                      </span>
-                      {type ? (
-                        <span className="flex-none rounded-[6px] bg-[#EFEBE2] px-1.5 py-0.5 text-[10.5px] font-bold text-[#847A66]">
-                          {TYPE_LABEL[type]}
-                        </span>
-                      ) : null}
-                      {isDiscountProduct(p.name) ? (
-                        <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">
-                          특별할인
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 text-[13px] font-semibold text-ink">{won(p.price)}</div>
-                    <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">
-                      {type ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))
+        <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+          {visible.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} />)}
+        </div>
       )}
+
+      {/* 기타(미분류) — 담당/유형 표기 없는 예전 상품, 숨김 방지 */}
+      {unclassified.length > 0 ? (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="rounded-[6px] bg-[#F0ECE3] px-2 py-0.5 text-[11.5px] font-bold text-[#847A66]">기타</span>
+            <span className="text-[11.5px] font-medium text-[#9A917F]">{unclassified.length}개</span>
+          </div>
+          <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
+            {unclassified.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} />)}
+          </div>
+        </div>
+      ) : null}
 
       {/* 보관함(비활성) — 접힘 기본. 은퇴 상품이 작업 목록을 밀어내지 않게. */}
       {archived.length > 0 ? (
@@ -381,16 +358,16 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             <div>
               <div className={FLABEL}>담당</div>
               <div className="flex items-center gap-[6px]">
-                {(["owner", "staff", "common"] as ProductTier[]).map((t) => (
-                  <button key={t} type="button" onClick={() => patchForm({ tier: t })} className={pillCls(form.tier === t)}>{TIER_LABEL[t]}</button>
+                {([["owner", "대표"], ["staff", "강사"]] as [ProductTier, string][]).map(([t, l]) => (
+                  <button key={t} type="button" onClick={() => patchForm({ tier: t })} className={pillCls((form.tier === "common" ? "owner" : form.tier) === t)}>{l}</button>
                 ))}
               </div>
             </div>
             <div>
               <div className={FLABEL}>유형</div>
               <div className="flex items-center gap-[6px]">
-                {(["1on1", "2on1"] as const).map((tp) => (
-                  <button key={tp} type="button" onClick={() => patchForm({ ptype: tp })} className={pillCls(form.ptype === tp)}>{TYPE_LABEL[tp]}</button>
+                {([["1on1", "1:1"], ["2on1", "2:1"]] as const).map(([tp, l]) => (
+                  <button key={tp} type="button" onClick={() => patchForm({ ptype: tp })} className={pillCls(form.ptype === tp)}>{l}</button>
                 ))}
               </div>
             </div>
@@ -398,7 +375,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             <div className="flex items-center justify-between rounded-[13px] bg-[#F4EEE3] px-4 py-3">
               <div className="min-w-0">
                 <div className="text-[13px] font-semibold text-ink">특별할인 상품</div>
-                <div className="mt-px text-[11px] font-medium text-[#9A917F]">발급 화면의 특별할인 탭에 표시돼요</div>
+                <div className="mt-px text-[11px] font-medium text-[#9A917F]">해당 탭에 특별할인 배지로 표시돼요</div>
               </div>
               <Switch on={form.discount} onChange={(v) => patchForm({ discount: v })} label={form.discount ? "특별할인" : "일반"} />
             </div>
@@ -430,7 +407,7 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
               <input
                 value={form.name}
                 onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
-                placeholder="1:1 PT 10회권"
+                placeholder="대표 1:1 10회권"
                 className={INPUT}
               />
             </div>

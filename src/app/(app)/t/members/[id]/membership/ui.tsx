@@ -12,7 +12,7 @@ import { PrimaryButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { issueMembership } from "@/lib/data/groups/owner-ops-actions";
-import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
+import { QUAD_TABS, matchesQuad, isUnclassified, isDiscountProduct, productShortLabel, type Quad } from "@/lib/data/product-class";
 import type { MemberDetailView, MembershipProduct } from "@/lib/types";
 
 // ponytail: date labels computed client-side from durationDays; no timezone edge cases matter here (display only)
@@ -33,12 +33,12 @@ export function MembershipClient({
   const id = member.id;
   const router = useRouter();
   const toast = useToast();
-  // 1:1/2:1/특별할인 3분류 칩 — 담당·자격 기반 자동 필터 없음(대표가 어느 상품이든 발급 가능).
-  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
-  const visible = useMemo(
-    () => products.filter((p) => matchesPickerFilter(p.name, typeFilter)),
-    [products, typeFilter],
-  );
+  // 담당×유형 4탭 — 담당·자격 기반 자동 필터 없음(대표가 어느 탭 상품이든 발급 가능).
+  const [productTab, setProductTab] = useState<Quad>("owner-1on1");
+  const visible = useMemo(() => {
+    const tab = QUAD_TABS.find((t) => t.key === productTab)!;
+    return products.filter((p) => matchesQuad(p.name, tab) || isUnclassified(p.name));
+  }, [products, productTab]);
   const [selected, setSelected] = useState<string>("");
   const [pending, setPending] = useState(false);
 
@@ -80,13 +80,9 @@ export function MembershipClient({
         {products.length > 0 ? (
           <SegmentedToggle
             className="mb-2.5"
-            options={[
-              { value: "1on1", label: "1:1" },
-              { value: "2on1", label: "2:1" },
-              { value: "discount", label: "특별할인" },
-            ]}
-            value={typeFilter}
-            onChange={setTypeFilter}
+            options={QUAD_TABS.map((t) => ({ value: t.key, label: t.label }))}
+            value={productTab}
+            onChange={setProductTab}
           />
         ) : null}
         <div className="mb-6 flex flex-col gap-2.5">
@@ -102,7 +98,10 @@ export function MembershipClient({
               }
             >
               <span className="flex items-center gap-2">
-                <span className="text-[14px] font-bold text-ink">{p.name}</span>
+                <span className="text-[14px] font-bold text-ink">{productShortLabel(p)}</span>
+                {isDiscountProduct(p.name) ? (
+                  <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
+                ) : null}
               </span>
             </RadioOption>
           ))}

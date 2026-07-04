@@ -21,26 +21,20 @@ import {
   productType,
   composeProductName,
   isDiscountProduct,
-  matchesPickerFilter,
+  isUnclassified,
+  matchesQuad,
+  QUAD_TABS,
   type ProductTier,
-  type PickerFilter,
+  type Quad,
 } from "@/lib/data/product-class";
 import type { MembershipProduct } from "@/lib/types";
 
 /*
- * 상품 목록은 담당(대표/강사/공용) × 유형(1:1/2:1) × 회차의 가격표다.
- * 담당은 토글로 반쪽만, 유형은 섹션 헤더로(반복 접두사 흡수), 회차는 정렬된 2열 칩으로.
- * 비활성 상품은 접힌 보관함으로 — 은퇴 상품이 작업 목록을 밀어내지 않는다.
- * 편집은 칩 탭 → 바텀시트(인라인 폼이 목록을 화면 밖으로 밀던 문제 해결).
+ * 상품 목록은 담당(대표/강사) × 유형(1:1/2:1) × 회차의 가격표다.
+ * 담당×유형은 4탭(대표1:1/강사1:1/대표2:1/강사2:1)으로 가르고, 회차는 정렬된 2열 칩으로.
+ * 탭이 담당·유형 맥락을 주니 칩은 "8회권"만 — 반복 접두사를 흡수한다.
+ * 비활성 상품은 접힌 보관함으로, 편집은 칩 탭 → 바텀시트.
  */
-
-const TIER_LABEL: Record<ProductTier, string> = { owner: "대표", staff: "강사", common: "공용" };
-const TIER_HEAD: Record<ProductTier, string> = {
-  owner: "bg-gold-bg text-gold",
-  staff: "bg-green-active-bg text-green-active",
-  common: "bg-chip-soft text-muted2",
-};
-const TYPE_LABEL: Record<string, string> = { "1on1": "1:1", "2on1": "2:1", etc: "기타" };
 
 type FormState = {
   tier: ProductTier;
@@ -55,7 +49,7 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  tier: "common", ptype: "1on1", discount: false, name: "",
+  tier: "owner", ptype: "1on1", discount: false, name: "",
   nameTouched: false, sessions: "", price: "", unitListPrice: "", durationDays: "90",
 };
 
@@ -81,7 +75,7 @@ function bySessionsAsc(a: MembershipProduct, b: MembershipProduct) {
 export function ProductsClient({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
-  const [typeFilter, setTypeFilter] = useState<PickerFilter>("1on1");
+  const [productTab, setProductTab] = useState<Quad>("owner-1on1");
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 시트 안 판매 상태 표시용
@@ -91,23 +85,17 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
   const active = useMemo(() => products.filter((p) => p.active), [products]);
   const archived = useMemo(() => products.filter((p) => !p.active), [products]);
 
-  // 발급 픽커와 동일한 1:1/2:1/특별할인 3분류(matchesPickerFilter 단일 소스) — 담당(대표/강사)은 카드 뱃지로 구분.
+  const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
+  // 발급 픽커와 동일한 담당×유형 4탭. 특별할인 상품은 자기 탭에 배지로 함께 노출.
   const visible = useMemo(
-    () => active.filter((p) => matchesPickerFilter(p.name, typeFilter)),
-    [active, typeFilter],
+    () => active.filter((p) => matchesQuad(p.name, activeTab)).sort(bySessionsAsc),
+    [active, activeTab],
   );
-
-  // 담당 섹션: 대표 → 강사 → 공용, 비어있는 섹션은 생략(유형은 필터+카드 뱃지로 구분).
-  const sections = useMemo(() => {
-    const g: Record<ProductTier, MembershipProduct[]> = { owner: [], staff: [], common: [] };
-    for (const p of visible) g[productTier(p.name)].push(p);
-    return (["owner", "staff", "common"] as ProductTier[])
-      .map((k) => ({ key: k, label: TIER_LABEL[k], items: g[k].sort(bySessionsAsc) }))
-      .filter((s) => s.items.length > 0);
-  }, [visible]);
+  // 4탭 어디에도 안 맞는 무표기(공용/무유형) 상품 — 숨김 방지용 별도 그룹(지금은 0개).
+  const unclassified = useMemo(() => active.filter((p) => isUnclassified(p.name)).sort(bySessionsAsc), [active]);
 
   function openNew() {
-    setForm({ ...EMPTY_FORM, name: "" });
+    setForm({ ...EMPTY_FORM, tier: activeTab.tier, ptype: activeTab.type, name: "" });
     setEditActive(true);
     setEditId("new");
   }
@@ -168,6 +156,28 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
   const num = (field: "sessions" | "price" | "unitListPrice" | "durationDays") =>
     (e: React.ChangeEvent<HTMLInputElement>) => patchForm({ [field]: e.target.value } as Partial<FormState>);
 
+  function chipCard(p: MembershipProduct) {
+    return (
+      <button
+        key={p.id}
+        type="button"
+        onClick={() => openEdit(p)}
+        className="tappable rounded-[13px] border border-ink/[0.1] bg-card px-3.5 py-3 text-left"
+      >
+        <div className="flex flex-wrap items-baseline gap-1.5">
+          <span className="truncate text-[15px] font-bold text-ink">
+            {productType(p.name) ? `${p.sessions}회권` : p.name}
+          </span>
+          {isDiscountProduct(p.name) ? (
+            <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
+          ) : null}
+        </div>
+        <div className="mt-1 text-[13px] font-semibold text-ink">₩{p.price.toLocaleString()}</div>
+        <div className="mt-0.5 text-[11.5px] font-medium text-muted">유효 {p.durationDays}일</div>
+      </button>
+    );
+  }
+
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body>
@@ -180,70 +190,37 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           </PrimaryButton>
         </div>
 
-        {/* 분류 필터 — 발급 픽커와 동일한 3칩 */}
+        {/* 담당×유형 4탭 — 발급 픽커와 동일 */}
         <SegmentedToggle
           className="mb-4"
-          options={[
-            { value: "1on1", label: "1:1" },
-            { value: "2on1", label: "2:1" },
-            { value: "discount", label: "특별할인" },
-          ]}
-          value={typeFilter}
-          onChange={(v) => setTypeFilter(v as PickerFilter)}
+          options={QUAD_TABS.map((t) => ({ value: t.key, label: t.label }))}
+          value={productTab}
+          onChange={setProductTab}
         />
 
-        {/* 판매 중 — 유형 섹션 × 회차 칩 그리드 */}
-        {sections.length === 0 ? (
+        {/* 판매 중 — 회차 칩 그리드 */}
+        {visible.length === 0 ? (
           <Card className="p-6 text-center text-[13.5px] text-muted">
-            {active.length > 0 ? "이 분류에 상품이 없어요." : "등록된 상품이 없어요. ‘추가’로 시작하세요."}
+            {active.length > 0 ? "이 분류에 상품이 없어요. ‘추가’로 만드세요." : "등록된 상품이 없어요. ‘추가’로 시작하세요."}
           </Card>
         ) : (
-          sections.map((sec) => (
-            <div key={sec.key} className="mb-4">
-              <div className="mb-2 flex items-center gap-2">
-                <span className={`rounded-md px-2 py-0.5 text-[11.5px] font-bold ${TIER_HEAD[sec.key]}`}>{sec.label}</span>
-                <span className="text-[11.5px] font-medium text-muted">{sec.items.length}개</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {sec.items.map((p) => {
-                  const type = productType(p.name);
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => openEdit(p)}
-                      className="tappable rounded-[13px] border border-ink/[0.1] bg-card px-3.5 py-3 text-left"
-                    >
-                      <div className="flex flex-wrap items-baseline gap-1.5">
-                        <span className="truncate text-[15px] font-bold text-ink">
-                          {type ? `${p.sessions}회` : p.name}
-                        </span>
-                        {type ? (
-                          <span className="flex-none rounded-md bg-chip-soft px-1.5 py-0.5 text-[10.5px] font-bold text-muted2">
-                            {TYPE_LABEL[type]}
-                          </span>
-                        ) : null}
-                        {isDiscountProduct(p.name) ? (
-                          <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">
-                            특별할인
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 text-[13px] font-semibold text-ink">₩{p.price.toLocaleString()}</div>
-                      <div className="mt-0.5 text-[11.5px] font-medium text-muted">
-                        {type ? `유효 ${p.durationDays}일` : `${p.sessions}회 · ${p.durationDays}일`}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))
+          <div className="grid grid-cols-2 gap-2">{visible.map(chipCard)}</div>
         )}
+
+        {/* 기타(미분류) — 담당/유형 표기 없는 예전 상품, 숨김 방지 */}
+        {unclassified.length > 0 ? (
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="rounded-md bg-chip-soft px-2 py-0.5 text-[11.5px] font-bold text-muted2">기타</span>
+              <span className="text-[11.5px] font-medium text-muted">{unclassified.length}개</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">{unclassified.map(chipCard)}</div>
+          </div>
+        ) : null}
 
         {/* 보관함(비활성) — 접힘 기본, 은퇴 상품이 작업 목록을 밀어내지 않게 */}
         {archived.length > 0 ? (
-          <div className="mt-2">
+          <div className="mt-4">
             <button
               type="button"
               onClick={() => setArchiveOpen((v) => !v)}
@@ -277,7 +254,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
 
         <div className="mt-4">
           <Banner tone="neutral">
-            상품명의 대표/강사·1:1/2:1 표기로 발급 화면이 자동 분류돼요. 보관(비활성) 상품은 발급 화면에 표시되지 않아요.
+            상품명의 대표/강사·1:1/2:1 표기로 발급 화면 탭이 자동 분류돼요. 보관(비활성) 상품은 발급 화면에 표시되지 않아요.
           </Banner>
         </div>
         <div className="h-3.5" />
@@ -303,9 +280,8 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
                   options={[
                     { value: "owner", label: "대표" },
                     { value: "staff", label: "강사" },
-                    { value: "common", label: "공용" },
                   ]}
-                  value={form.tier}
+                  value={form.tier === "common" ? "owner" : form.tier}
                   onChange={(v) => patchForm({ tier: v as ProductTier })}
                 />
               </div>
@@ -323,7 +299,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
               <div className="flex items-center justify-between rounded-[13px] bg-gold-bg px-4 py-3">
                 <div className="min-w-0">
                   <div className="text-[13px] font-semibold text-ink">특별할인 상품</div>
-                  <div className="mt-0.5 text-[11px] text-muted">발급 화면의 특별할인 탭에 표시돼요</div>
+                  <div className="mt-0.5 text-[11px] text-muted">해당 탭에 특별할인 배지로 표시돼요</div>
                 </div>
                 <Switch on={form.discount} onChange={(v) => patchForm({ discount: v })} label={form.discount ? "특별할인" : "일반"} />
               </div>
@@ -341,7 +317,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
               </Field>
               <Field icon="ticket-fill" label="상품명 (자동 생성)">
                 <TextInput
-                  placeholder="1:1 PT 10회권"
+                  placeholder="대표 1:1 10회권"
                   value={form.name}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
                 />
@@ -364,4 +340,3 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     </div>
   );
 }
-

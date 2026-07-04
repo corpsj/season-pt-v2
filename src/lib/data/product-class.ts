@@ -21,19 +21,37 @@ export function isDiscountProduct(name: string): boolean {
   return name.includes("특별할인");
 }
 
-export type PickerFilter = "1on1" | "2on1" | "discount";
+/** 발급·설정 화면의 4분류 탭: 담당(대표/강사) × 유형(1:1/2:1). 특별할인 상품도 자기 tier×type 탭에 배지로 함께 노출. */
+export type Quad = "owner-1on1" | "staff-1on1" | "owner-2on1" | "staff-2on1";
+export const QUAD_TABS: { key: Quad; tier: "owner" | "staff"; type: "1on1" | "2on1"; label: string }[] = [
+  { key: "owner-1on1", tier: "owner", type: "1on1", label: "대표 1:1" },
+  { key: "staff-1on1", tier: "staff", type: "1on1", label: "강사 1:1" },
+  { key: "owner-2on1", tier: "owner", type: "2on1", label: "대표 2:1" },
+  { key: "staff-2on1", tier: "staff", type: "2on1", label: "강사 2:1" },
+];
 
-/** 발급 픽커 3분류 필터: 특별할인 칩은 특별할인 상품만, 1:1/2:1 칩은 일반 상품 중 해당 유형.
- *  유형 표기 없는 상품(기존 커스텀 이름)은 1:1/2:1 어느 칩에서도 노출 — 숨은 상품이 생기지 않게. */
-export function matchesPickerFilter(name: string, filter: PickerFilter): boolean {
-  if (filter === "discount") return isDiscountProduct(name);
-  if (isDiscountProduct(name)) return false;
-  const t = productType(name);
-  return t === null || t === filter;
+/** 상품명의 담당·유형이 탭과 일치하는가. */
+export function matchesQuad(name: string, tab: { tier: "owner" | "staff"; type: "1on1" | "2on1" }): boolean {
+  return productTier(name) === tab.tier && productType(name) === tab.type;
 }
 
-/** 폼 조합용 상품명: "대표 1:1 PT 10회권" (공용은 무접두). 할인이면 "특별할인 "을 최전방에 접두("특별할인 강사 1:1 PT 10회권"). */
+/** 4탭 어디에도 안 맞는 상품(무표기 공용/무유형 — 기존 커스텀 이름). 픽커 하단 "기타"로 노출해 숨김 방지. */
+export function isUnclassified(name: string): boolean {
+  return productTier(name) === "common" || productType(name) === null;
+}
+
+/** 등록이 2명으로 확장되는지: 2:1 상품이면 듀엣. */
+export function isDuetProduct(name: string): boolean {
+  return productType(name) === "2on1";
+}
+
+/** 탭·픽커용 짧은 라벨: 유형 있는 상품은 "16회권"(대표/1:1 맥락은 탭이 제공), 없으면 전체 이름. */
+export function productShortLabel(p: { name: string; sessions: number }): string {
+  return productType(p.name) ? `${p.sessions}회권` : p.name;
+}
+
+/** 폼 조합용 상품명: "대표 1:1 10회권" (공용은 무접두). 할인이면 "특별할인 "을 최전방에 접두("특별할인 강사 1:1 10회권"). */
 export function composeProductName(tier: ProductTier, type: "1on1" | "2on1", sessions: number, discount?: boolean): string {
   const prefix = tier === "owner" ? "대표 " : tier === "staff" ? "강사 " : "";
-  return `${discount ? "특별할인 " : ""}${prefix}${type === "2on1" ? "2:1" : "1:1"} PT ${sessions}회권`;
+  return `${discount ? "특별할인 " : ""}${prefix}${type === "2on1" ? "2:1" : "1:1"} ${sessions}회권`;
 }

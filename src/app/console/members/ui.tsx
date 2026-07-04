@@ -13,7 +13,7 @@ import type { MemberFileView } from "@/lib/data/groups/member-files";
 import type { MealLog } from "@/lib/data/groups/meals";
 import { extendMembership, previewRefund, refundMembership, pauseMembership, resumeMembership, transferMembership } from "@/lib/data/groups/membership-actions";
 import { createMember, createDuetMembers, deleteMember, updateMember, setMemberStatus } from "@/lib/data/groups/owner-ops-actions";
-import { matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
+import { QUAD_TABS, matchesQuad, isUnclassified, isDuetProduct, isDiscountProduct, productShortLabel, type Quad } from "@/lib/data/product-class";
 import { BulkAddModal, type TrainerOpt } from "./bulk";
 import { BodyRecordSection, MealsSection } from "./BodyMeals";
 import { ScheduleEditModal } from "./ScheduleEditor";
@@ -87,8 +87,7 @@ export function MembersClient({
 
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
   const [f, setF] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender, trainerId: ownerId, productId: "", method: "card" as PaymentMethod, amount: "" });
-  // 등록: 수업 형태(듀엣) + 파트너 + 선택적 정기 일정
-  const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
+  // 등록: 수업 형태는 선택한 회원권으로 파생 — 2:1 상품을 고르면 듀엣(파트너 함께 등록).
   const [p2, setP2] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender });
   const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
   const [issueProduct, setIssueProduct] = useState("");
@@ -103,6 +102,8 @@ export function MembersClient({
   const list = items.filter(
     (m) => (filter === "all" || statusById[m.id] === filter) && (query === "" || m.name.includes(query) || m.sub.includes(query)),
   );
+  // 듀엣 여부는 선택한 회원권으로 파생 — 2:1 상품이면 파트너 함께 등록.
+  const is2on1 = isDuetProduct(products.find((p) => p.id === f.productId)?.name ?? "");
 
   async function loadAttachments(id: string) {
     const [fs, ms] = await Promise.all([listMemberFiles(id), listMemberMeals(id)]);
@@ -181,7 +182,6 @@ export function MembersClient({
   }
   function resetAddForm() {
     setF({ name: "", phone: "", birth: "", gender: "female", trainerId: ownerId, productId: "", method: "card", amount: "" });
-    setClassType("1on1");
     setP2({ name: "", phone: "", birth: "", gender: "female" });
     setDayTimes({});
   }
@@ -197,15 +197,10 @@ export function MembersClient({
       return next;
     });
   }
-  /** 수업 형태 변경 — 형태가 바뀌면 안 맞는 선택 상품은 해제(상품 픽커는 key로 재마운트되어 필터도 맞춰짐). */
-  function onAddClassType(v: "1on1" | "2on1") {
-    setClassType(v);
-    setF((prev) => ({ ...prev, productId: "", amount: "" }));
-  }
   async function doAdd() {
     if (busy) return;
     if (!f.name.trim() || !f.phone.trim() || f.birth.replace(/\D/g, "").length !== 6) return toast("이름·연락처·생년월일(6자리)을 입력해주세요", "error");
-    if (classType === "2on1" && (!p2.name.trim() || !p2.phone.trim() || p2.birth.replace(/\D/g, "").length !== 6))
+    if (is2on1 && (!p2.name.trim() || !p2.phone.trim() || p2.birth.replace(/\D/g, "").length !== 6))
       return toast("듀엣 파트너의 이름·연락처·생년월일(6자리)을 입력해주세요", "error");
     if (f.productId) {
       const amt = Number(f.amount);
@@ -217,22 +212,21 @@ export function MembersClient({
     const product = f.productId ? { productId: f.productId } : undefined;
     const payment = f.productId ? { method: f.method, amount: Number(f.amount) } : undefined;
     setBusy(true);
-    const r =
-      classType === "2on1"
-        ? await createDuetMembers({
-            members: [
-              { name: f.name, phone: f.phone, birth: f.birth, gender: f.gender },
-              { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
-            ],
-            trainerId: f.trainerId,
-            slots,
-            product,
-            payment,
-          })
-        : await createMember({ name: f.name, phone: f.phone, birth: f.birth, gender: f.gender, slots, trainerId: f.trainerId, product, payment });
+    const r = is2on1
+      ? await createDuetMembers({
+          members: [
+            { name: f.name, phone: f.phone, birth: f.birth, gender: f.gender },
+            { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
+          ],
+          trainerId: f.trainerId,
+          slots,
+          product,
+          payment,
+        })
+      : await createMember({ name: f.name, phone: f.phone, birth: f.birth, gender: f.gender, slots, trainerId: f.trainerId, product, payment });
     setBusy(false);
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
-    toast(r.warn ?? (classType === "2on1" ? "듀엣 회원 두 명을 등록했어요" : "회원을 등록했어요"));
+    toast(r.warn ?? (is2on1 ? "듀엣 회원 두 명을 등록했어요" : "회원을 등록했어요"));
     setModal(null);
     resetAddForm();
     router.refresh();
@@ -582,19 +576,24 @@ export function MembersClient({
             </select>
           </ModalField>
 
-          {/* 수업 형태 — 2:1(듀엣)은 파트너 정보를 함께 받아 두 명을 동시에 등록 */}
-          <ModalField label="수업 형태">
-            <div className="flex gap-2">
-              {([["1on1", "1:1"], ["2on1", "2:1 (듀엣)"]] as const).map(([v, l]) => (
-                <button key={v} onClick={() => onAddClassType(v)} className={`flex-1 rounded-[12px] py-[11px] text-[13.5px] font-semibold transition ${classType === v ? "bg-sage text-white" : "border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] text-[#766D60]"}`}>{l}</button>
-              ))}
-            </div>
-          </ModalField>
+          {/* 회원권 (선택) — 2:1 상품을 고르면 아래에 듀엣 파트너 입력이 열린다 */}
+          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){is2on1 ? " · 두 회원에게 각각 발급" : ""}</div>
+          <ProductPicker
+            products={products}
+            selected={f.productId}
+            showPrice
+            onPick={(id) => {
+              const newId = f.productId === id ? "" : id;
+              const p = products.find((pp) => pp.id === newId);
+              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
+            }}
+            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
+          />
 
-          {/* 듀엣 파트너 */}
-          {classType === "2on1" ? (
-            <div className="mb-3.5 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
-              <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">듀엣 파트너</div>
+          {/* 듀엣 파트너 — 2:1 회원권 선택 시 파트너를 함께 등록 */}
+          {is2on1 ? (
+            <div className="mb-3.5 mt-3 rounded-[13px] border border-[rgba(138,111,62,0.28)] bg-[#FBF7EF] p-3.5">
+              <div className="mb-2.5 text-[12px] font-bold text-[#7A6338]">듀엣 파트너 · 2:1 회원권</div>
               <ModalField label="이름"><Input value={p2.name} onChange={(v) => setP2({ ...p2, name: v })} placeholder="파트너 이름" /></ModalField>
               <ModalField label="연락처"><Input value={formatPhone(p2.phone)} onChange={(v) => setP2({ ...p2, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
               <div className="grid grid-cols-2 gap-2.5">
@@ -607,12 +606,35 @@ export function MembersClient({
                   </div>
                 </ModalField>
               </div>
-              <div className="text-[11px] font-medium text-[#9A8772]">회원권을 고르면 두 회원에게 각각 발급·결제돼요.</div>
+              <div className="text-[11px] font-medium text-[#9A8772]">두 회원에게 각각 발급·결제돼요.</div>
+            </div>
+          ) : null}
+
+          {/* 결제 (상품 선택 시) */}
+          {f.productId ? (
+            <div className="mt-3">
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "결제 금액 (1인당)" : "결제 금액"}</div>
+              <input
+                value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
+                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
+                inputMode="numeric"
+                placeholder="₩ 금액"
+                className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
+              />
+              {is2on1 && Number(f.amount) > 0 ? (
+                <div className="mb-3.5 mt-2 rounded-[11px] bg-[#EDF4E3] px-3.5 py-2.5 text-[12.5px] font-medium text-[#5B6452]">
+                  2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 → <span className="font-bold">2명 합계 {(Number(f.amount) * 2).toLocaleString("ko-KR")}원</span>
+                </div>
+              ) : (
+                <div className="mb-3.5" />
+              )}
+              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
+              <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
             </div>
           ) : null}
 
           {/* 정기 수업 요일 (선택) — 고르면 매주 자동 생성. 2:1은 팀 일정으로 묶인다. */}
-          <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{classType === "2on1" ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</div>
+          <div className="mb-2 mt-3 text-[11.5px] font-semibold text-[#9A917F]">{is2on1 ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</div>
           <div className="mb-2 flex gap-1.5">
             {DAYS.map((d, i) => {
               const on = dayTimes[i] != null;
@@ -636,42 +658,6 @@ export function MembersClient({
                   </div>
                 </div>
               ))}
-            </div>
-          ) : null}
-
-          <div className="mb-2 mt-1 text-[11.5px] font-semibold text-[#9A917F]">회원권 (선택){classType === "2on1" ? " · 두 회원에게 각각 발급" : ""}</div>
-          <ProductPicker
-            key={classType}
-            initialFilter={classType === "2on1" ? "2on1" : "1on1"}
-            products={products}
-            selected={f.productId}
-            showPrice
-            onPick={(id) => {
-              const newId = f.productId === id ? "" : id;
-              const p = products.find((pp) => pp.id === newId);
-              setF({ ...f, productId: newId, amount: p ? String(p.price) : f.amount });
-            }}
-            onClear={() => setF((prev) => ({ ...prev, productId: "", amount: "" }))}
-          />
-          {f.productId ? (
-            <div className="mt-3">
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">{classType === "2on1" ? "결제 금액 (1인당)" : "결제 금액"}</div>
-              <input
-                value={f.amount ? Number(f.amount).toLocaleString("ko-KR") : ""}
-                onChange={(e) => setF({ ...f, amount: e.target.value.replace(/\D/g, "").slice(0, 12) })}
-                inputMode="numeric"
-                placeholder="₩ 금액"
-                className="w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none placeholder:text-[#B3AA9C]"
-              />
-              {classType === "2on1" && Number(f.amount) > 0 ? (
-                <div className="mb-3.5 mt-2 rounded-[11px] bg-[#EDF4E3] px-3.5 py-2.5 text-[12.5px] font-medium text-[#5B6452]">
-                  2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 → <span className="font-bold">2명 합계 {(Number(f.amount) * 2).toLocaleString("ko-KR")}원</span>
-                </div>
-              ) : (
-                <div className="mb-3.5" />
-              )}
-              <div className="mb-2 text-[11.5px] font-semibold text-[#9A917F]">결제 수단</div>
-              <MethodPicker value={f.method} onChange={(m) => setF({ ...f, method: m })} />
             </div>
           ) : null}
         </ConsoleModal>
@@ -870,29 +856,26 @@ function MethodPicker({ value, onChange }: { value: PaymentMethod; onChange: (m:
     </div>
   );
 }
-const PRODUCT_FILTERS: { key: PickerFilter; label: string }[] = [
-  { key: "1on1", label: "1:1" },
-  { key: "2on1", label: "2:1" },
-  { key: "discount", label: "특별할인" },
-];
-function ProductPicker({ products, selected, onPick, onClear, showPrice, initialFilter }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; onClear: () => void; showPrice?: boolean; initialFilter?: PickerFilter }) {
-  const [filter, setFilter] = useState<PickerFilter>(initialFilter ?? "1on1");
-  const shown = products.filter((p) => matchesPickerFilter(p.name, filter));
-  // 칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 숨은 상품이 조용히 발급되는 것 방지.
-  function pickFilter(next: PickerFilter) {
-    setFilter(next);
+function ProductPicker({ products, selected, onPick, onClear, showPrice }: { products: MembershipProduct[]; selected: string; onPick: (id: string) => void; onClear: () => void; showPrice?: boolean }) {
+  const [tab, setTab] = useState<Quad>("owner-1on1");
+  const activeTab = QUAD_TABS.find((t) => t.key === tab)!;
+  const shown = products.filter((p) => matchesQuad(p.name, activeTab) || isUnclassified(p.name));
+  // 탭 변경으로 선택 상품이 숨겨지면 선택 해제 — 숨은 상품이 조용히 발급되는 것 방지.
+  function pickTab(next: Quad) {
+    setTab(next);
     const cur = products.find((p) => p.id === selected);
-    if (cur && !matchesPickerFilter(cur.name, next)) onClear();
+    const t = QUAD_TABS.find((q) => q.key === next)!;
+    if (cur && !matchesQuad(cur.name, t) && !isUnclassified(cur.name)) onClear();
   }
   return (
     <div>
       {products.length > 0 ? (
         <div className="mb-2.5 flex items-center gap-[6px]">
-          {PRODUCT_FILTERS.map((f) => {
-            const on = filter === f.key;
+          {QUAD_TABS.map((t) => {
+            const on = tab === t.key;
             return (
-              <button key={f.key} type="button" onClick={() => pickFilter(f.key)} className={`rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}>
-                {f.label}
+              <button key={t.key} type="button" onClick={() => pickTab(t.key)} className={`rounded-[9px] px-3 py-[6px] text-[12px] font-semibold transition ${on ? "bg-sage text-white" : "bg-[#F4F0E8] text-[#766D60] hover:bg-[#ECE6DA]"}`}>
+                {t.label}
               </button>
             );
           })}
@@ -903,18 +886,23 @@ function ProductPicker({ products, selected, onPick, onClear, showPrice, initial
           const on = selected === p.id;
           return (
             <button key={p.id} onClick={() => onPick(p.id)} className={`rounded-[13px] border px-4 py-3 text-left transition ${on ? "border-sage bg-[#EDF4E3]" : "border-[rgba(75,59,46,0.12)] bg-white hover:bg-[#FBF9F5]"}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[14px] font-bold text-ink">{p.name}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[14px] font-bold text-ink">{productShortLabel(p)}</span>
+                    {isDiscountProduct(p.name) ? (
+                      <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">특별할인</span>
+                    ) : null}
+                  </div>
                   <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · 유효 {p.durationDays}일</div>
                 </div>
-                {showPrice ? <span className="text-[15px] font-bold text-ink">{won(p.price)}</span> : null}
+                {showPrice ? <span className="flex-none text-[15px] font-bold text-ink">{won(p.price)}</span> : null}
               </div>
             </button>
           );
         })}
         {products.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">등록된 상품이 없어요</div> : null}
-        {products.length > 0 && shown.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">해당하는 상품이 없어요</div> : null}
+        {products.length > 0 && shown.length === 0 ? <div className="text-[12.5px] font-medium text-[#A89F92]">이 분류에 상품이 없어요</div> : null}
       </div>
     </div>
   );

@@ -13,7 +13,15 @@ import { Card } from "@/components/ui/Card";
 import { PrimaryButton } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { createMember, createDuetMembers } from "@/lib/data/groups/owner-ops-actions";
-import { productType, matchesPickerFilter, type PickerFilter } from "@/lib/data/product-class";
+import {
+  QUAD_TABS,
+  matchesQuad,
+  isUnclassified,
+  isDuetProduct,
+  isDiscountProduct,
+  productShortLabel,
+  type Quad,
+} from "@/lib/data/product-class";
 import type { Gender, PaymentMethod, MembershipProduct } from "@/lib/types";
 
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -46,31 +54,41 @@ export function MemberRegisterClient({
   const [phone, setPhone] = useState("");
   const [birth, setBirth] = useState("");
   const [gender, setGender] = useState<Gender>("female");
-  // 듀엣(2:1) 파트너 — 신규 회원 2명 동시 등록
+  // 듀엣(2:1) 파트너 — 2:1 회원권을 고르면 신규 회원 2명 동시 등록
   const [p2, setP2] = useState({ name: "", phone: "", birth: "", gender: "female" as Gender });
   // 정기 일정은 선택 사항 — 요일을 고르지 않으면 일정 없이 등록된다.
   const [dayTimes, setDayTimes] = useState<Record<number, { hour: number; minute: number }>>({});
   const [trainerId, setTrainerId] = useState(ownerId);
-  const [classType, setClassType] = useState<"1on1" | "2on1">("1on1");
+  const [productTab, setProductTab] = useState<Quad>("owner-1on1");
   const [selectedProduct, setSelectedProduct] = useState<string | "later">("later");
-  const [productFilter, setProductFilter] = useState<PickerFilter>("1on1");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("card");
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(todayStr());
   const [pending, setPending] = useState(false);
 
+  const selectedProductData = products.find((p) => p.id === selectedProduct);
+  // 수업 형태는 더 이상 별도 토글이 아니다 — 선택한 회원권이 2:1이면 듀엣(2명 동시 등록).
+  // "나중에 발급"(상품 미선택)은 항상 1명 등록, 팀은 이후 회원 상세 [2:1 팀으로 묶기]에서 묶는다.
+  const is2on1 = selectedProductData ? isDuetProduct(selectedProductData.name) : false;
+
+  const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
+  const visibleProducts = products.filter((p) => matchesQuad(p.name, activeTab) || isUnclassified(p.name));
+
   // 결제 금액은 상품 가격 그대로(할인은 특별할인 상품이 담당 — 금액 차감 없음).
   function onProductChange(id: string | "later") {
     setSelectedProduct(id);
-    if (id !== "later") {
-      const p = products.find((p) => p.id === id);
-      if (p) {
-        setPayAmount(String(p.price));
-        // 상품명으로 수업 형태 자동 동기화 — "나중에 발급"은 토글로 직접 지정.
-        const pt = productType(p.name);
-        if (pt) setClassType(pt);
-      }
-    } else {
+    const p = id !== "later" ? products.find((pp) => pp.id === id) : undefined;
+    setPayAmount(p ? String(p.price) : "");
+  }
+
+  /** 탭 변경 — 선택 상품이 새 탭에 안 보이면 선택 해제(조용히 엉뚱한 상품이 발급되는 것 방지). */
+  function onTabChange(next: Quad) {
+    setProductTab(next);
+    if (selectedProduct === "later") return;
+    const p = products.find((pp) => pp.id === selectedProduct);
+    const tab = QUAD_TABS.find((t) => t.key === next)!;
+    if (p && !matchesQuad(p.name, tab) && !isUnclassified(p.name)) {
+      setSelectedProduct("later");
       setPayAmount("");
     }
   }
@@ -137,30 +155,6 @@ export function MemberRegisterClient({
 
   const staffOptions = trainers.map((s) => ({ value: s.id, label: s.name }));
 
-  const selectedProductData = products.find((p) => p.id === selectedProduct);
-  // 2:1이면 정기 슬롯 입력을 숨긴다 — 팀 시간은 등록 후 회원 상세 [2:1 팀으로 묶기]에서 정한다.
-  // 여기서 슬롯을 받으면 잘못된 1:1 스케줄이 생성된다. 상품명 추론이 아니라 명시 토글이 기준
-  // ("나중에 발급"으로 등록하는 2:1 회원의 함정 방지, 감사 후속).
-  const is2on1 = classType === "2on1";
-
-  /** 상품 필터 변경. 1:1/2:1은 등록 형태(듀엣)와 직결 — 함께 전환해 파트너 입력이 열리게 한다(특별할인은 형태 무관).
-   *  칩 변경으로 선택 상품이 숨겨지면 선택 해제 — 조용히 엉뚱한 상품이 발급되는 것 방지. */
-  function onFilterChange(next: PickerFilter) {
-    setProductFilter(next);
-    if (next === "1on1" || next === "2on1") setClassType(next);
-    if (selectedProduct === "later") return;
-    const p = products.find((pp) => pp.id === selectedProduct);
-    if (p && !matchesPickerFilter(p.name, next)) {
-      setSelectedProduct("later");
-      setPayAmount("");
-    }
-  }
-
-  /** 수업 형태 토글. 상품 필터도 맞춰(듀엣이면 2:1 상품이 보이게) 안 맞는 선택 상품은 해제한다. */
-  function onClassTypeChange(next: "1on1" | "2on1") {
-    onFilterChange(next);
-  }
-
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body>
@@ -207,28 +201,59 @@ export function MemberRegisterClient({
               onChange={setTrainerId}
             />
           </div>
-
-          {/* 수업 형태 — 2:1(듀엣)은 파트너 정보를 함께 받아 두 명을 동시에 등록한다 */}
-          <div>
-            <div className="mb-2 text-[12.5px] font-semibold text-muted5">수업 형태</div>
-            <SegmentedToggle
-              options={[
-                { value: "1on1", label: "1:1" },
-                { value: "2on1", label: "2:1 (듀엣)" },
-              ]}
-              value={classType}
-              onChange={onClassTypeChange}
-            />
-          </div>
         </div>
 
-        {/* 듀엣 파트너 — 신규 회원 2명 동시 등록 */}
+        {/* 회원권 상품 — 담당×유형 4탭. 2:1 상품을 고르면 듀엣(파트너 입력)이 열린다. */}
+        <div className="mb-2.5 mt-6">
+          <Kicker>회원권 상품</Kicker>
+        </div>
+        {products.length > 0 ? (
+          <div className="mb-2.5">
+            <SegmentedToggle
+              options={QUAD_TABS.map((t) => ({ value: t.key, label: t.label }))}
+              value={productTab}
+              onChange={onTabChange}
+            />
+          </div>
+        ) : null}
+        <div className="mb-4 flex flex-col gap-2.5">
+          {visibleProducts.map((p) => (
+            <RadioOption
+              key={p.id}
+              selected={selectedProduct === p.id}
+              onClick={() => onProductChange(p.id)}
+              right={
+                <span className="flex-none text-[14px] font-bold text-ink">
+                  ₩{p.price.toLocaleString()}
+                </span>
+              }
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-[14px] font-bold text-ink">{productShortLabel(p)}</span>
+                {isDiscountProduct(p.name) ? (
+                  <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
+                ) : null}
+              </span>
+            </RadioOption>
+          ))}
+          <RadioOption
+            selected={selectedProduct === "later"}
+            onClick={() => onProductChange("later")}
+          >
+            <span className="text-[14px] font-semibold text-muted">나중에 발급</span>
+          </RadioOption>
+        </div>
+
+        {/* 듀엣 파트너 — 2:1 회원권 선택 시 신규 회원 2명 동시 등록 */}
         {is2on1 ? (
           <>
-            <div className="mb-2.5 mt-6">
+            <div className="mb-2 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
+              2:1 회원권이에요 · 함께 들을 파트너 회원을 등록하면 두 명이 동시에 만들어져요.
+            </div>
+            <div className="mb-2.5">
               <Kicker>듀엣 파트너</Kicker>
             </div>
-            <Card className="flex flex-col gap-3.5 p-4">
+            <Card className="mb-4 flex flex-col gap-3.5 p-4">
               <Field icon="person" label="이름">
                 <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
               </Field>
@@ -258,7 +283,46 @@ export function MemberRegisterClient({
           </>
         ) : null}
 
-        <div className="mb-2.5 mt-6">
+        {/* 결제 정보 (상품 선택 시) */}
+        {selectedProduct !== "later" && selectedProductData && (
+          <Card className="mb-4 flex flex-col gap-3 p-4">
+            <div>
+              <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
+              <SegmentedToggle
+                options={[
+                  { value: "cash", label: "현금" },
+                  { value: "card", label: "카드" },
+                  { value: "account", label: "계좌" },
+                ]}
+                value={payMethod}
+                onChange={setPayMethod}
+              />
+            </div>
+            <Field icon="coins" label={is2on1 ? "금액 (1인당)" : "금액"} hint="원">
+              <MoneyInput
+                placeholder={selectedProductData.price.toLocaleString("ko-KR")}
+                value={payAmount}
+                onValueChange={setPayAmount}
+              />
+            </Field>
+            {is2on1 && Number(payAmount.replace(/[^\d]/g, "")) > 0 ? (
+              <div className="-mt-1 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
+                2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 →{" "}
+                <span className="font-bold">2명 합계 {(Number(payAmount.replace(/[^\d]/g, "")) * 2).toLocaleString("ko-KR")}원</span>
+              </div>
+            ) : null}
+            <Field icon="calendar" label="결제일">
+              <TextInput
+                type="date"
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+              />
+            </Field>
+          </Card>
+        )}
+
+        {/* 정기 수업 요일 (선택) */}
+        <div className="mb-2.5 mt-2">
           <Kicker>{is2on1 ? "팀 정기 수업 요일 (선택)" : "정기 수업 요일 (선택)"}</Kicker>
         </div>
         <div className="mb-3 flex gap-1.5">
@@ -324,89 +388,6 @@ export function MemberRegisterClient({
             ? "선택한 요일·시간에 두 회원의 팀 수업이 매주 자동 생성돼요. 일정은 나중에 정해도 돼요."
             : "선택한 요일·시간에 매주 수업이 자동 생성돼요. 일정은 나중에 정해도 돼요."}
         </Banner>
-
-        {/* 회원권 상품 선택 — 1:1/2:1/특별할인 3분류 칩 */}
-        <div className="mb-2.5 mt-6">
-          <Kicker>회원권 상품</Kicker>
-        </div>
-        {is2on1 ? (
-          <div className="mb-2.5 text-[12px] font-medium text-muted">선택한 회원권은 두 회원에게 각각 발급·결제 기록돼요.</div>
-        ) : null}
-        {products.length > 0 ? (
-          <div className="mb-2.5">
-            <SegmentedToggle
-              options={[
-                { value: "1on1", label: "1:1" },
-                { value: "2on1", label: "2:1" },
-                { value: "discount", label: "특별할인" },
-              ]}
-              value={productFilter}
-              onChange={onFilterChange}
-            />
-          </div>
-        ) : null}
-        <div className="mb-4 flex flex-col gap-2.5">
-          {products
-            .filter((p) => matchesPickerFilter(p.name, productFilter))
-            .map((p) => (
-            <RadioOption
-              key={p.id}
-              selected={selectedProduct === p.id}
-              onClick={() => onProductChange(p.id)}
-              right={
-                <span className="flex-none text-[14px] font-bold text-ink">
-                  ₩{p.price.toLocaleString()}
-                </span>
-              }
-            >
-              <span className="text-[14px] font-bold text-ink">{p.name}</span>
-            </RadioOption>
-          ))}
-          <RadioOption
-            selected={selectedProduct === "later"}
-            onClick={() => onProductChange("later")}
-          >
-            <span className="text-[14px] font-semibold text-muted">나중에 발급</span>
-          </RadioOption>
-        </div>
-
-        {/* 결제 정보 (상품 선택 시) */}
-        {selectedProduct !== "later" && selectedProductData && (
-          <Card className="mb-4 flex flex-col gap-3 p-4">
-            <div>
-              <div className="mb-2 text-[12.5px] font-semibold text-muted5">결제수단</div>
-              <SegmentedToggle
-                options={[
-                  { value: "cash", label: "현금" },
-                  { value: "card", label: "카드" },
-                  { value: "account", label: "계좌" },
-                ]}
-                value={payMethod}
-                onChange={setPayMethod}
-              />
-            </div>
-            <Field icon="coins" label={is2on1 ? "금액 (1인당)" : "금액"} hint="원">
-              <MoneyInput
-                placeholder={selectedProductData.price.toLocaleString("ko-KR")}
-                value={payAmount}
-                onValueChange={setPayAmount}
-              />
-            </Field>
-            {is2on1 && Number(payAmount.replace(/[^\d]/g, "")) > 0 ? (
-              <div className="-mt-1 rounded-[11px] bg-sage-banner2 px-3.5 py-2.5 text-[12.5px] font-medium text-sage-deep">
-                2:1은 1인당 금액이에요 · 두 회원에게 각각 발급 →{" "}
-                <span className="font-bold">2명 합계 {(Number(payAmount.replace(/[^\d]/g, "")) * 2).toLocaleString("ko-KR")}원</span>
-              </div>
-            ) : null}
-            <Field icon="calendar" label="결제일">
-              <TextInput
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-              />
-            </Field>
-          </Card>
-        )}
 
         <div className="h-3.5" />
       </Body>
