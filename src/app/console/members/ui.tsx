@@ -588,7 +588,7 @@ export function MembersClient({
           <ModalField label="이름"><Input value={f.name} onChange={(v) => setF({ ...f, name: v })} placeholder="회원 이름" /></ModalField>
           <ModalField label="연락처"><Input value={formatPhone(f.phone)} onChange={(v) => setF({ ...f, phone: v.replace(/\D/g, "").slice(0, 11) })} placeholder="010-0000-0000" /></ModalField>
           <div className="grid grid-cols-2 gap-2.5">
-            <ModalField label="생년월일 (6자리)"><Input value={f.birth} onChange={(v) => setF({ ...f, birth: v })} placeholder="YYMMDD" /></ModalField>
+            <ModalField label="생년월일 (6자리)"><Input value={f.birth} onChange={(v) => setF({ ...f, birth: v.replace(/\D/g, "").slice(0, 6) })} placeholder="YYMMDD" /></ModalField>
             <ModalField label="성별">
               <div className="flex gap-2">
                 {([["female", "여성"], ["male", "남성"]] as const).map(([g, l]) => (
