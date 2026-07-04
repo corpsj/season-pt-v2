@@ -25,8 +25,8 @@ export function isDiscountProduct(name: string): boolean {
 export type Quad = "owner-1on1" | "staff-1on1" | "owner-2on1" | "staff-2on1";
 export const QUAD_TABS: { key: Quad; tier: "owner" | "staff"; type: "1on1" | "2on1"; label: string }[] = [
   { key: "owner-1on1", tier: "owner", type: "1on1", label: "대표 1:1" },
-  { key: "staff-1on1", tier: "staff", type: "1on1", label: "강사 1:1" },
   { key: "owner-2on1", tier: "owner", type: "2on1", label: "대표 2:1" },
+  { key: "staff-1on1", tier: "staff", type: "1on1", label: "강사 1:1" },
   { key: "staff-2on1", tier: "staff", type: "2on1", label: "강사 2:1" },
 ];
 
