@@ -206,8 +206,31 @@ export function StaffDetailClient({
               </>
             ) : null}
 
-            {/* login account: issue for placeholder, reset for existing */}
-            {member.hasLogin ? (
+            {/* login account: issue for placeholder, reset for existing. issued(방금 발급한 자격증명)는
+                member.hasLogin이 refresh로 true로 바뀐 뒤에도 최우선으로 계속 보여야 한다(안 그러면
+                발급 직후 router.refresh()가 화면을 "비밀번호 초기화" 상태로 바꿔버려 임시비번이 사라짐). */}
+            {issued ? (
+              <>
+                <div className="mb-2.5 mt-7">
+                  <Kicker>로그인 계정 발급</Kicker>
+                </div>
+                <Card className="overflow-hidden">
+                  <div className="flex items-center gap-2.5 px-4 py-[14px]">
+                    <Icon name="person" size={18} className="flex-none text-sage" />
+                    <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
+                    <span className="text-[14px] font-bold text-ink">{issued.username}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
+                    <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
+                    <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
+                    <span className="select-all text-[14px] font-bold text-ink">{issued.tempPassword}</span>
+                  </div>
+                  <div className="border-t border-ink/[0.07] px-4 py-3 text-[12px] font-medium leading-[1.5] text-muted">
+                    지금 강사에게 전달하세요. 첫 로그인 시 비밀번호 변경이 강제돼요.
+                  </div>
+                </Card>
+              </>
+            ) : member.hasLogin ? (
               <>
                 <div className="mb-2.5 mt-7">
                   <Kicker>비밀번호</Kicker>
@@ -229,40 +252,20 @@ export function StaffDetailClient({
                 <div className="mb-2.5 mt-7">
                   <Kicker>로그인 계정 발급</Kicker>
                 </div>
-                {issued ? (
-                  <Card className="overflow-hidden">
-                    <div className="flex items-center gap-2.5 px-4 py-[14px]">
-                      <Icon name="person" size={18} className="flex-none text-sage" />
-                      <span className="flex-1 text-[12.5px] font-semibold text-muted5">아이디</span>
-                      <span className="text-[14px] font-bold text-ink">{issued.username}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 border-t border-ink/[0.07] px-4 py-[14px]">
-                      <Icon name="lock-fill" size={18} className="flex-none text-terracotta" />
-                      <span className="flex-1 text-[12.5px] font-semibold text-muted5">임시 비밀번호</span>
-                      <span className="select-all text-[14px] font-bold text-ink">{issued.tempPassword}</span>
-                    </div>
-                    <div className="border-t border-ink/[0.07] px-4 py-3 text-[12px] font-medium leading-[1.5] text-muted">
-                      지금 강사에게 전달하세요. 첫 로그인 시 비밀번호 변경이 강제돼요.
-                    </div>
-                  </Card>
-                ) : (
-                  <>
-                    <Field icon="person-fill" label="아이디 (로그인 ID)" hint="영문·숫자">
-                      <TextInput
-                        placeholder="instructor01"
-                        autoCapitalize="none"
-                        autoCorrect="off"
-                        value={issueUsername}
-                        onChange={(e) => setIssueUsername(e.target.value)}
-                      />
-                    </Field>
-                    <div className="mt-3.5">
-                      <PrimaryButton icon="lock-fill" onClick={onIssueLogin} disabled={busy || !issueUsername.trim()}>
-                        로그인 계정 발급
-                      </PrimaryButton>
-                    </div>
-                  </>
-                )}
+                <Field icon="person-fill" label="아이디 (로그인 ID)" hint="영문·숫자">
+                  <TextInput
+                    placeholder="instructor01"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    value={issueUsername}
+                    onChange={(e) => setIssueUsername(e.target.value)}
+                  />
+                </Field>
+                <div className="mt-3.5">
+                  <PrimaryButton icon="lock-fill" onClick={onIssueLogin} disabled={busy || !issueUsername.trim()}>
+                    로그인 계정 발급
+                  </PrimaryButton>
+                </div>
               </>
             )}
 

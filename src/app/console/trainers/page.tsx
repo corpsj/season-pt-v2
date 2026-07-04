@@ -96,48 +96,46 @@ export default async function ConsoleTrainersPage({
                 </div>
 
                 {pending ? (
-                  <div className="flex items-center gap-3.5 rounded-[15px] border border-[rgba(198,115,82,0.2)] bg-[#FBF3E9] px-5 py-[18px]">
+                  <div className="mb-[18px] flex items-center gap-3.5 rounded-[15px] border border-[rgba(198,115,82,0.2)] bg-[#FBF3E9] px-5 py-[18px]">
                     <div className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-[12px] bg-white"><Icon name="lock-fill" size={20} className="text-terracotta" /></div>
                     <div className="flex-1">
                       <div className="text-[13.5px] font-semibold text-[#5B4B38]">초대 대기 · 첫 로그인 전</div>
-                      <div className="mt-0.5 text-[12px] font-medium text-[#9A8772]">강사가 <b className="text-[#5B4B38]">@{detail.username}</b> 로 첫 로그인하면 담당 배정·실적이 표시돼요.</div>
+                      <div className="mt-0.5 text-[12px] font-medium text-[#9A8772]">강사가 <b className="text-[#5B4B38]">@{detail.username}</b> 로 첫 로그인하면 활성 강사로 전환돼요. 담당 배정·정보 수정은 지금도 할 수 있어요.</div>
                     </div>
                   </div>
+                ) : null}
+
+                <div className="mb-[18px] grid grid-cols-3 gap-2.5">
+                  <StatBox label="담당 회원" value={detail.memberCount} unit="명" />
+                  <StatBox label="이번 주 수업" value={extra?.weekSessions ?? 0} unit="회" />
+                  <StatBox label="이번 달 수업" value={extra?.monthSessions ?? 0} unit="회" />
+                </div>
+
+                <div className="mb-2.5 flex items-center justify-between">
+                  <MicroLabel>담당 회원 {detail.memberCount}명</MicroLabel>
+                </div>
+                {extra && extra.members.length > 0 ? (
+                  <div className="mb-[18px] flex flex-col gap-2">
+                    {extra.members.map((m) => (
+                      <Link key={m.id} href={`/console/members?sel=${m.id}`} className="flex items-center gap-[11px] rounded-[12px] bg-[#FBF7F1] px-3.5 py-[11px] transition hover:brightness-[0.985]">
+                        <Avatar initial={m.initial} tone={m.avatarTone} size={36} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13.5px] font-semibold text-ink">{m.name}</div>
+                          <div className="text-[11px] font-medium text-[#9A917F]">{m.product} · 잔여 {m.remaining}회</div>
+                        </div>
+                        <DPill dDay={m.dDay} />
+                      </Link>
+                    ))}
+                  </div>
                 ) : (
-                  <>
-                    <div className="mb-[18px] grid grid-cols-3 gap-2.5">
-                      <StatBox label="담당 회원" value={detail.memberCount} unit="명" />
-                      <StatBox label="이번 주 수업" value={extra?.weekSessions ?? 0} unit="회" />
-                      <StatBox label="이번 달 수업" value={extra?.monthSessions ?? 0} unit="회" />
-                    </div>
-
-                    <div className="mb-2.5 flex items-center justify-between">
-                      <MicroLabel>담당 회원 {detail.memberCount}명</MicroLabel>
-                    </div>
-                    {extra && extra.members.length > 0 ? (
-                      <div className="mb-[18px] flex flex-col gap-2">
-                        {extra.members.map((m) => (
-                          <Link key={m.id} href={`/console/members?sel=${m.id}`} className="flex items-center gap-[11px] rounded-[12px] bg-[#FBF7F1] px-3.5 py-[11px] transition hover:brightness-[0.985]">
-                            <Avatar initial={m.initial} tone={m.avatarTone} size={36} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[13.5px] font-semibold text-ink">{m.name}</div>
-                              <div className="text-[11px] font-medium text-[#9A917F]">{m.product} · 잔여 {m.remaining}회</div>
-                            </div>
-                            <DPill dDay={m.dDay} />
-                          </Link>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="mb-[18px] px-0.5 text-[12px] font-medium text-[#B3AA9C]">담당 회원이 없어요</div>
-                    )}
-
-                    {!detail.isOwner ? <TrainerRates id={detail.id} rate1on1={detail.rate1on1} rate2on1={detail.rate2on1} /> : null}
-
-                    <div className="mt-[18px]">
-                      <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} reassignTargets={reassignTargets} />
-                    </div>
-                  </>
+                  <div className="mb-[18px] px-0.5 text-[12px] font-medium text-[#B3AA9C]">담당 회원이 없어요</div>
                 )}
+
+                {!detail.isOwner ? <TrainerRates id={detail.id} rate1on1={detail.rate1on1} rate2on1={detail.rate2on1} /> : null}
+
+                <div className="mt-[18px]">
+                  <TrainerActions id={detail.id} name={detail.name} phone={detail.phone} active={detail.status === "active"} isOwner={detail.isOwner} isMe={detail.isMe} memberCount={detail.memberCount} hasLogin={detail.hasLogin} reassignTargets={reassignTargets} />
+                </div>
               </>
             ) : (
               <div className="py-16 text-center text-[14px] font-medium text-[#A89F92]">강사를 선택하세요</div>
