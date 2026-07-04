@@ -55,7 +55,7 @@ export default function OwnerSignupPage() {
         <div className="mt-5 flex flex-col gap-3.5">
           <Field icon="person" label="이름">
             <TextInput
-              placeholder="홍길동"
+              placeholder="이름"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />

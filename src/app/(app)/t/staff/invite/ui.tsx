@@ -44,7 +44,7 @@ export function StaffInviteClient() {
 
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="강사 이름">
-            <TextInput placeholder="정하늘" value={name} onChange={(e) => setName(e.target.value)} />
+            <TextInput placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field icon="phone" label="전화번호 (로그인 아이디)">
             <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />

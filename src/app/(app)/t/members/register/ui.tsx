@@ -231,7 +231,7 @@ export function MemberRegisterClient({
         {is2on1 ? <div className="mb-2.5 text-[13px] font-bold text-gold">회원 1</div> : null}
         <div className="flex flex-col gap-3.5">
           <Field icon="person" label="이름">
-            <TextInput placeholder="윤서아" value={name} onChange={(e) => setName(e.target.value)} />
+            <TextInput placeholder="이름" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field icon="phone" label="연락처 (아이디)">
             <PhoneInput placeholder="010-0000-0000" value={phone} onValueChange={setPhone} />
@@ -263,7 +263,7 @@ export function MemberRegisterClient({
             <div className="mb-2.5 mt-5 text-[13px] font-bold text-gold">회원 2 · 듀엣 파트너</div>
             <Card className="flex flex-col gap-3.5 p-4">
               <Field icon="person" label="이름">
-                <TextInput placeholder="이은비" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
+                <TextInput placeholder="이름" value={p2.name} onChange={(e) => setP2({ ...p2, name: e.target.value })} />
               </Field>
               <Field icon="phone" label="연락처 (아이디)">
                 <PhoneInput placeholder="010-0000-0000" value={p2.phone} onValueChange={(d) => setP2({ ...p2, phone: d })} />
