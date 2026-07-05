@@ -74,8 +74,8 @@ export function ChatRoomClient({ room, dayKeys }: { room: ChatRoomView; dayKeys:
     setDeleting(true);
     const res = await deleteChatThread(room.threadId);
     if (res.ok) {
-      router.push("/t/chat");
-      router.refresh();
+      // replace: 삭제된 방을 히스토리에서 빼서 뒤로가기로 다시 들어가 오류나는 걸 막는다.
+      router.replace("/t/chat");
     } else {
       setDeleting(false);
       showToast(res.error ?? "삭제에 실패했어요.", "error");
