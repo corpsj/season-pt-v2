@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { Body } from "@/components/shell/Body";
 import { TabBar } from "@/components/shell/TabBar";
-import { Icon } from "@/components/ui/icon";
 import {
   getChatThreads,
   getChatUnread,
@@ -22,26 +20,8 @@ export default async function TrainerChatListPage() {
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">
       <Body>
-        {/* header */}
-        <div className="mb-3.5 flex items-center justify-between">
-          <span className="text-[21px] font-bold text-ink">채팅</span>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-sage-banner2 px-3 py-1.5 text-[12px] font-semibold text-[#5b6452]">
-              <Icon name="persons" size={15} className="text-sage-deep" />
-              {me.isOwner ? "전체 회원" : "담당회원"} {totalMembers}
-            </span>
-            <Link
-              href="/t/chat/new"
-              aria-label="새 메시지"
-              className="tappable -mr-1 flex h-9 w-9 items-center justify-center rounded-full text-sage-deep transition-colors active:scale-90 active:bg-sage-banner2"
-            >
-              <Icon name="write" size={21} />
-            </Link>
-          </div>
-        </div>
-
-        {/* thread list (live) */}
-        <ChatListClient initial={threads} />
+        {/* header + thread list (live) */}
+        <ChatListClient initial={threads} isOwner={me.isOwner} totalMembers={totalMembers} />
         <div className="h-3.5" />
       </Body>
 
