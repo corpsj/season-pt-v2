@@ -1,13 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Body } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
 import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { ChatBubble } from "@/components/ui/ChatBubble";
 import { ChatInput } from "@/components/ui/ChatInput";
+import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
-import { sendChat, pollTrainerMessages } from "@/lib/data/groups/chat-actions";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
+import { sendChat, pollTrainerMessages, deleteChatThread } from "@/lib/data/groups/chat-actions";
 import { mergeMessages, latestCursor, TEMP_PREFIX } from "@/lib/chat/merge";
 import { dayChipLabel, kstDayKey, type ChatDayKeys } from "@/lib/chat/day-labels";
 import { usePolling } from "@/lib/hooks/usePolling";
@@ -15,8 +18,11 @@ import type { ChatMessageView, ChatRoomView } from "@/lib/types";
 
 export function ChatRoomClient({ room, dayKeys }: { room: ChatRoomView; dayKeys: ChatDayKeys }) {
   const showToast = useToast();
+  const confirm = useConfirm();
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessageView[]>(room.messages);
   const [draft, setDraft] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const cursorRef = useRef<string | null>(
     latestCursor(room.messages, room.cursor ?? null)
   );
@@ -53,6 +59,28 @@ export function ChatRoomClient({ room, dayKeys }: { room: ChatRoomView; dayKeys:
       return merged;
     });
   }, 3000);
+
+  async function onDeleteThread() {
+    if (deleting) return;
+    if (
+      !(await confirm({
+        title: "이 대화를 삭제할까요?",
+        description: "메시지가 모두 사라지고 되돌릴 수 없어요.",
+        confirmLabel: "삭제",
+        tone: "warn",
+      }))
+    )
+      return;
+    setDeleting(true);
+    const res = await deleteChatThread(room.threadId);
+    if (res.ok) {
+      router.push("/t/chat");
+      router.refresh();
+    } else {
+      setDeleting(false);
+      showToast(res.error ?? "삭제에 실패했어요.", "error");
+    }
+  }
 
   async function send() {
     const text = draft.trim();
@@ -96,6 +124,15 @@ export function ChatRoomClient({ room, dayKeys }: { room: ChatRoomView; dayKeys:
           </div>
           <div className="truncate text-[11.5px] font-medium text-muted">{room.sub}</div>
         </div>
+        <button
+          type="button"
+          onClick={onDeleteThread}
+          disabled={deleting}
+          aria-label="대화 삭제"
+          className="tappable flex h-9 w-9 flex-none items-center justify-center rounded-full text-muted transition-colors active:scale-90 active:bg-warm-banner active:text-terracotta disabled:opacity-60"
+        >
+          <Icon name="circle-close" size={20} />
+        </button>
       </div>
 
       {/* messages */}

@@ -61,6 +61,26 @@ export async function sendChat(
   };
 }
 
+/** Delete a chat thread (participants/messages cascade). Owner may delete any thread; other trainers only their own. */
+export async function deleteChatThread(
+  threadId: string
+): Promise<{ ok: boolean; error?: string }> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요." };
+
+  let q = sb.from("chat_threads").select("id").eq("id", threadId);
+  if (t.role !== "owner") q = q.eq("trainer_id", t.id);
+  const { data: thread } = await q.maybeSingle();
+  if (!thread) return { ok: false, error: "대화를 찾을 수 없어요." };
+
+  const { error } = await sb.from("chat_threads").delete().eq("id", threadId);
+  if (error) return { ok: false, error: "삭제에 실패했어요." };
+
+  revalidatePath("/t/chat");
+  revalidatePath(`/t/chat/${threadId}`);
+  return { ok: true };
+}
+
 /** Mark a thread's incoming messages as read by the trainer. */
 export async function markThreadRead(
   threadId: string
