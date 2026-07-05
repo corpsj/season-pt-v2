@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
@@ -54,7 +55,9 @@ export function InstallPrompt() {
     if (!isIOS && !isAndroid) return; // mobile only
     const isInApp = IN_APP_RE.test(ua);
 
-    setPlat(isInApp ? "inapp" : isIOS ? "ios" : "android");
+    const platFrame = requestAnimationFrame(() => {
+      setPlat(isInApp ? "inapp" : isIOS ? "ios" : "android");
+    });
 
     const onBIP = (e: Event) => {
       e.preventDefault();
@@ -69,6 +72,7 @@ export function InstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBIP);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      cancelAnimationFrame(platFrame);
       window.removeEventListener("beforeinstallprompt", onBIP);
       window.removeEventListener("appinstalled", onInstalled);
     };
@@ -133,9 +137,11 @@ export function InstallPrompt() {
       aria-label="앱 설치"
     >
       <div className="flex flex-1 flex-col items-center justify-center break-keep px-7 text-center">
-        <img
+        <Image
           src="/brand/icon-512.png"
           alt=""
+          width={88}
+          height={88}
           className="h-[88px] w-[88px] rounded-[22px] border border-ink/[0.06] shadow-[0_8px_28px_rgba(38,35,30,0.16)]"
         />
         <h1 className="mt-5 text-[21px] font-bold text-ink">계절 PT &amp; 필라테스</h1>

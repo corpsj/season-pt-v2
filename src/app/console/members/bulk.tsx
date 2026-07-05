@@ -103,8 +103,10 @@ export function BulkAddModal({
       const saved = JSON.parse(raw) as Draft[];
       if (Array.isArray(saved) && saved.some((r) => !isEmpty(r))) {
         keySeq = Math.max(0, ...saved.map((r) => r.key)) + 1; // 이후 새 행 key 충돌 방지
-        setRows(saved);
-        setRestored(true);
+        queueMicrotask(() => {
+          setRows(saved);
+          setRestored(true);
+        });
       }
     } catch { /* 손상된 초안은 무시 */ }
   }, []);

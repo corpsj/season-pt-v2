@@ -29,16 +29,23 @@ export function SearchBox() {
   const boxRef = useRef<HTMLDivElement>(null);
   const reqId = useRef(0);
 
+  function updateQuery(value: string) {
+    setQ(value);
+    setOpen(true);
+    reqId.current += 1;
+    if (value.trim().length < 2) {
+      setHits([]);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+  }
+
   // 디바운스 + stale 응답 폐기(reqId).
   useEffect(() => {
     const term = q.trim();
-    if (term.length < 2) {
-      setHits([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    const id = ++reqId.current;
+    if (term.length < 2) return;
+    const id = reqId.current;
     const timer = setTimeout(async () => {
       try {
         const res = await searchAll(term);
@@ -98,10 +105,7 @@ export function SearchBox() {
         <Icon name="search" size={15} className="flex-none text-[#A89F92]" />
         <input
           value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOpen(true);
-          }}
+          onChange={(e) => updateQuery(e.target.value)}
           onFocus={() => setOpen(true)}
           onKeyDown={onKey}
           placeholder="회원·강사·요청·메시지 검색"
@@ -115,8 +119,7 @@ export function SearchBox() {
             type="button"
             aria-label="검색어 지우기"
             onClick={() => {
-              setQ("");
-              setHits([]);
+              updateQuery("");
             }}
             className="flex-none text-[#B3AA9C] transition hover:text-[#847A66]"
           >

@@ -13,7 +13,10 @@ export function usePolling(
   enabled = true
 ): void {
   const fnRef = useRef(fn);
-  fnRef.current = fn;
+
+  useEffect(() => {
+    fnRef.current = fn;
+  }, [fn]);
 
   useEffect(() => {
     if (!enabled) return;

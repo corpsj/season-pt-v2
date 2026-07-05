@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Season PT v2
 
-## Getting Started
+Korean PT/Pilates studio operations app for owners, trainers, and members. The mobile app supports daily class management, member records, chat, meal/workout/body tracking, schedule-change requests, and membership operations. The desktop console supports owner-level calendar, member, revenue, request, and operations views.
 
-First, run the development server:
+## Main Surfaces
+
+- `/t`: trainer mobile app. Calendar, class detail, member detail, records, chat, settlement/performance, retention.
+- `/m`: member mobile app. Schedule, requests, records, meals, body composition, chat.
+- `/console`: owner desktop console. Studio overview, calendar, members, requests, revenue, finance, retention.
+
+## Stack
+
+- Next.js 16 App Router, React 19, TypeScript strict
+- Tailwind CSS v4 with project design tokens in `src/app/globals.css`
+- Supabase Auth and Database
+- Custom signed member session cookie for member login
+- Bun for local commands and tests
+
+## Required Environment
+
+Create `.env.local` with:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+MEMBER_SESSION_SECRET=
+CREDENTIAL_ENC_KEY=
+TRAINER_EMAIL_DOMAIN=trainer.seasonpt.local
+CRON_SECRET=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`MEMBER_SESSION_SECRET` is required in production. `SUPABASE_SERVICE_ROLE_KEY` is server-only and must never be exposed to client components.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Local Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+bun install
+bun run dev
+```
 
-## Learn More
+Open `http://localhost:3000`.
 
-To learn more about Next.js, take a look at the following resources:
+## Validation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+bunx tsc --noEmit
+bun run lint
+bun test
+bun run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+For rendered UI changes, also validate with a browser screenshot or equivalent visual check. Project instructions require reading `AGENTS.md` and the local Next.js docs in `node_modules/next/dist/docs/` before changing Next.js behavior.
 
-## Deploy on Vercel
+## Key Directories
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app`: App Router pages, layouts, server actions, and API routes.
+- `src/components`: shared shell, trainer tabs, console chrome, and reusable UI primitives.
+- `src/lib/auth`: custom member sessions and credential encryption helpers.
+- `src/lib/data`: Supabase clients, date utilities, domain queries, and mutations.
+- `docs`: product/design specs and usability implementation plans.

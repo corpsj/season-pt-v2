@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    ".claude/**",
+    ".superpowers/**",
+    ".vercel/**",
     // Design handoff reference material + one-off generators (not app code).
     "docs/**",
     "scripts/**",

@@ -1,4 +1,5 @@
 import { getMemberChatRoom } from "@/lib/data/groups/member";
+import { currentKstDayKeys } from "@/lib/chat/day-labels";
 import { MemberChatClient } from "./ui";
 
 export default async function MemberChatPage(props: {
@@ -16,6 +17,7 @@ export default async function MemberChatPage(props: {
       cursor={room.cursor}
       truncated={room.truncated}
       initialDraft={draft ?? ""}
+      dayKeys={currentKstDayKeys()}
     />
   );
 }

@@ -9,20 +9,9 @@ import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
 import { sendMemberChat, pollMemberMessages } from "@/lib/data/groups/member-actions";
 import { mergeMessages, latestCursor, TEMP_PREFIX } from "@/lib/chat/merge";
+import { dayChipLabel, kstDayKey, type ChatDayKeys } from "@/lib/chat/day-labels";
 import { usePolling } from "@/lib/hooks/usePolling";
 import type { ChatMessageView } from "@/lib/types";
-
-/** KST calendar day (YYYY-MM-DD) for a message; optimistic (no ts) folds into today. */
-function kstDayKey(iso: string | undefined, todayKey: string): string {
-  if (!iso) return todayKey;
-  return new Date(new Date(iso).getTime() + 9 * 3600000).toISOString().slice(0, 10);
-}
-function dayChipLabel(key: string, todayKey: string, yesterdayKey: string): string {
-  if (key === todayKey) return "오늘";
-  if (key === yesterdayKey) return "어제";
-  const [, mo, d] = key.split("-");
-  return `${Number(mo)}월 ${Number(d)}일`;
-}
 
 export function MemberChatClient({
   trainerName,
@@ -32,6 +21,7 @@ export function MemberChatClient({
   cursor: initialCursor,
   truncated,
   initialDraft,
+  dayKeys,
 }: {
   trainerName: string;
   initial: string;
@@ -41,6 +31,7 @@ export function MemberChatClient({
   cursor: string | null;
   truncated?: boolean;
   initialDraft?: string;
+  dayKeys: ChatDayKeys;
 }) {
   const showToast = useToast();
   const [messages, setMessages] = useState<ChatMessageView[]>(initialMessages);
@@ -129,18 +120,16 @@ export function MemberChatClient({
           </div>
         ) : null}
         {(() => {
-          const todayKey = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
-          const yesterdayKey = new Date(Date.now() - 86400000 + 9 * 3600000).toISOString().slice(0, 10);
           let prevKey = "";
           const rows: React.ReactNode[] = [];
           for (const m of messages) {
-            const key = kstDayKey(m.createdAt, todayKey);
+            const key = kstDayKey(m.createdAt, dayKeys.todayKey);
             if (key !== prevKey) {
               prevKey = key;
               rows.push(
                 <div key={`day-${key}`} className="mb-1 flex justify-center">
                   <span className="rounded-full bg-chip-soft px-2.5 py-1 text-[11px] font-medium text-muted">
-                    {dayChipLabel(key, todayKey, yesterdayKey)}
+                    {dayChipLabel(key, dayKeys)}
                   </span>
                 </div>
               );

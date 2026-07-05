@@ -3,8 +3,10 @@ import {
   sb,
   getTrainerContext,
   kstDateISO,
+  kstWeekday,
   hmLabel,
   clockHM,
+  weekdayKo,
   todayISO,
   dayDiff,
   monthBoundsKst,
@@ -403,12 +405,34 @@ function scheduleLabel(weekdays: number[], hour: number): string {
   return `매주 ${days} ${period} ${h12}시`;
 }
 
+function shortSlotLabel(iso: string): string {
+  const d = kstDateISO(iso);
+  return `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))} ${weekdayKo(kstWeekday(iso))} · ${clockHM(iso)}`;
+}
+
+function signedFixed(n: number): string {
+  const rounded = Math.round(n * 10) / 10;
+  return `${rounded > 0 ? "+" : ""}${rounded.toFixed(1)}`;
+}
+
 function badgeForMember(dDay: number | null): BadgeView {
   if (dDay !== null && isExpiringWindow(dDay)) {
     const variant: BadgeView["variant"] = dDay <= 5 ? "expiringNear" : "expiringSoon";
     return { text: `D-${dDay}`, variant };
   }
   return { text: "활성", variant: "active" };
+}
+
+async function canReadMember(me: Me, memberId: string): Promise<boolean> {
+  if (me.isOwner) return true;
+  if (!me.trainerId) return false;
+  const { data } = await sb
+    .from("member_trainers")
+    .select("member_id")
+    .eq("member_id", memberId)
+    .eq("trainer_id", me.trainerId)
+    .maybeSingle();
+  return !!data;
 }
 
 export async function getMembers(filter: MemberFilter = "all"): Promise<MembersView> {
@@ -625,16 +649,7 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
   const today = todayISO();
 
   // 강사는 담당 회원만 상세 열람(대표는 전체) — 임의 id로 타 강사 회원 PII를 열람하는 IDOR 차단(감사 #13).
-  let allowed = me.isOwner;
-  if (!allowed && trainerId) {
-    const { data: link } = await sb
-      .from("member_trainers")
-      .select("member_id")
-      .eq("member_id", id)
-      .eq("trainer_id", trainerId)
-      .maybeSingle();
-    allowed = !!link;
-  }
+  const allowed = await canReadMember(me, id);
   if (!allowed) {
     // 빈 껍데기 반환 — 회원권·인바디·일정 서브쿼리까지 전부 차단.
     return {
@@ -744,6 +759,176 @@ export async function getMemberDetail(id: string): Promise<MemberDetailView> {
     membershipPaused,
     memberStatus: m.status,
     events,
+  };
+}
+
+export type MemberCoachBriefPriority = {
+  kind: "request" | "meal" | "membership" | "injury" | "body" | "workout" | "schedule";
+  label: string;
+  tone: "warn" | "positive" | "neutral";
+};
+
+export interface MemberCoachBrief {
+  nextClass: { label: string; href: string } | null;
+  pendingRequests: number;
+  mealFeedbackCount: number;
+  latestMealLabel: string | null;
+  latestWorkoutLabel: string | null;
+  bodyTrend: { label: string; sub: string; tone: "positive" | "neutral" } | null;
+  priorities: MemberCoachBriefPriority[];
+}
+
+const EMPTY_COACH_BRIEF: MemberCoachBrief = {
+  nextClass: null,
+  pendingRequests: 0,
+  mealFeedbackCount: 0,
+  latestMealLabel: null,
+  latestWorkoutLabel: null,
+  bodyTrend: null,
+  priorities: [],
+};
+
+/**
+ * 회원 상세 상단 코칭 브리프. 기존 수업·요청·식단·운동·체성분 데이터를 묶어
+ * 다음 상담 전에 먼저 볼 일을 읽기 전용으로 요약한다. 대표는 전체, 강사는 담당 회원만.
+ */
+export async function getMemberCoachBrief(memberId: string): Promise<MemberCoachBrief> {
+  const me = await getMe();
+  if (!(await canReadMember(me, memberId))) return EMPTY_COACH_BRIEF;
+
+  const trainerId = me.trainerId ?? "";
+  const nowISO = new Date().toISOString();
+  const today = todayISO();
+
+  let nextSessionQ = sb
+    .from("sessions")
+    .select("id, scheduled_at, session_members!inner(member_id)")
+    .eq("session_members.member_id", memberId)
+    .eq("status", "scheduled")
+    .gte("scheduled_at", nowISO)
+    .order("scheduled_at", { ascending: true })
+    .limit(1);
+  if (!me.isOwner) nextSessionQ = nextSessionQ.eq("trainer_id", trainerId);
+
+  let memberSessionsQ = sb
+    .from("session_members")
+    .select("session_id, sessions!inner(trainer_id)")
+    .eq("member_id", memberId);
+  if (!me.isOwner) memberSessionsQ = memberSessionsQ.eq("sessions.trainer_id", trainerId);
+
+  const [memberRes, membershipRes, nextRes, sessionRes, mealRes, workoutRes, bodyRes] = await Promise.all([
+    sb.from("members").select("injury_note").eq("id", memberId).maybeSingle(),
+    sb
+      .from("memberships")
+      .select("remaining_sessions, total_sessions, end_date, status")
+      .eq("member_id", memberId)
+      .in("status", ["active", "paused"])
+      .order("end_date", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    nextSessionQ,
+    memberSessionsQ,
+    sb
+      .from("meal_logs")
+      .select("meal_type, memo, feedback, eaten_at")
+      .eq("member_id", memberId)
+      .order("eaten_at", { ascending: false })
+      .limit(7),
+    sb
+      .from("workout_records")
+      .select("created_at, exercises, comment")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sb
+      .from("body_compositions")
+      .select("weight, skeletal_muscle, body_fat, measured_at")
+      .eq("member_id", memberId)
+      .order("measured_at", { ascending: false })
+      .limit(2),
+  ]);
+
+  const next = (nextRes.data ?? [])[0] as { id: string; scheduled_at: string } | undefined;
+  const sessionIds = (sessionRes.data ?? []).map((r) => (r as { session_id: string }).session_id);
+  let pendingRequests = 0;
+  if (sessionIds.length) {
+    const { count } = await sb
+      .from("schedule_change_requests")
+      .select("id", { count: "exact", head: true })
+      .in("session_id", sessionIds)
+      .eq("status", "pending");
+    pendingRequests = count ?? 0;
+  }
+
+  const mealRows = (mealRes.data ?? []) as { meal_type: string | null; memo: string | null; feedback: string | null; eaten_at: string }[];
+  const latestMeal = mealRows[0];
+  const mealFeedbackCount = mealRows.filter((m) => !m.feedback).length;
+
+  const workout = workoutRes.data as { created_at: string; exercises: unknown; comment: string | null } | null;
+  const exerciseCount = Array.isArray(workout?.exercises) ? workout.exercises.length : 0;
+
+  const bodies = (bodyRes.data ?? []) as {
+    weight: number | null;
+    skeletal_muscle: number | null;
+    body_fat: number | null;
+    measured_at: string;
+  }[];
+  const latestBody = bodies[0];
+  const prevBody = bodies[1];
+  const bodyTrend =
+    latestBody && prevBody
+      ? (() => {
+          const parts = [
+            latestBody.weight != null && prevBody.weight != null ? `체중 ${signedFixed(Number(latestBody.weight) - Number(prevBody.weight))}kg` : null,
+            latestBody.skeletal_muscle != null && prevBody.skeletal_muscle != null ? `골격근 ${signedFixed(Number(latestBody.skeletal_muscle) - Number(prevBody.skeletal_muscle))}kg` : null,
+            latestBody.body_fat != null && prevBody.body_fat != null ? `체지방 ${signedFixed(Number(latestBody.body_fat) - Number(prevBody.body_fat))}%` : null,
+          ].filter(Boolean);
+          if (!parts.length) return null;
+          const muscleDelta =
+            latestBody.skeletal_muscle != null && prevBody.skeletal_muscle != null
+              ? Number(latestBody.skeletal_muscle) - Number(prevBody.skeletal_muscle)
+              : 0;
+          const fatDelta =
+            latestBody.body_fat != null && prevBody.body_fat != null
+              ? Number(latestBody.body_fat) - Number(prevBody.body_fat)
+              : 0;
+          const tone: "positive" | "neutral" = muscleDelta > 0 || fatDelta < 0 ? "positive" : "neutral";
+          return {
+            label: parts.join(" · "),
+            sub: `${kstDateISO(prevBody.measured_at)} → ${kstDateISO(latestBody.measured_at)}`,
+            tone,
+          };
+        })()
+      : null;
+
+  const membership = membershipRes.data as { remaining_sessions: number; total_sessions: number; end_date: string; status: string } | null;
+  const priorities: MemberCoachBriefPriority[] = [];
+  if (pendingRequests > 0) priorities.push({ kind: "request", label: `일정 요청 ${pendingRequests}건 확인`, tone: "warn" });
+  if (membership?.status === "paused") priorities.push({ kind: "membership", label: "회원권 일시정지 중", tone: "neutral" });
+  else if (membership) {
+    const dDay = dayDiff(today, membership.end_date);
+    if (membership.remaining_sessions <= 3) priorities.push({ kind: "membership", label: `잔여 ${membership.remaining_sessions}회 · 재등록 상담`, tone: "warn" });
+    else if (dDay >= 0 && dDay <= 14) priorities.push({ kind: "membership", label: `D-${dDay} 만료 임박`, tone: "warn" });
+  }
+  if (mealFeedbackCount > 0) priorities.push({ kind: "meal", label: `식단 피드백 ${mealFeedbackCount}건`, tone: "warn" });
+  if (memberRes.data?.injury_note) priorities.push({ kind: "injury", label: "부상 메모 확인", tone: "warn" });
+  if (bodyTrend) priorities.push({ kind: "body", label: bodyTrend.tone === "positive" ? "체성분 변화 좋음" : "체성분 변화 확인", tone: bodyTrend.tone });
+  if (!next) priorities.push({ kind: "schedule", label: "예정된 수업 없음", tone: "neutral" });
+  if (!workout) priorities.push({ kind: "workout", label: "최근 운동 기록 없음", tone: "neutral" });
+
+  return {
+    nextClass: next ? { label: shortSlotLabel(next.scheduled_at), href: `/t/class/${next.id}` } : null,
+    pendingRequests,
+    mealFeedbackCount,
+    latestMealLabel: latestMeal
+      ? `${shortSlotLabel(latestMeal.eaten_at)} · ${latestMeal.meal_type ?? "식단"}${latestMeal.memo ? " 메모" : ""}`
+      : null,
+    latestWorkoutLabel: workout
+      ? `${shortSlotLabel(workout.created_at)} · ${exerciseCount > 0 ? `${exerciseCount}개 종목` : "운동 기록"}${workout.comment ? " · 코멘트" : ""}`
+      : null,
+    bodyTrend,
+    priorities,
   };
 }
 

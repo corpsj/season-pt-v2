@@ -8,8 +8,8 @@ import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { Stat } from "@/components/ui/StatCard";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { PrimaryButton, MiniButton } from "@/components/ui/Button";
-import { Icon } from "@/components/ui/icon";
-import { getMemberDetail, getMemberRecordHref, getMe } from "@/lib/data/groups/trainer-home";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { getMemberCoachBrief, getMemberDetail, getMemberRecordHref, getMe, type MemberCoachBrief } from "@/lib/data/groups/trainer-home";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
 import { getBodyHistory } from "@/lib/data/groups/body";
 import { getMemberMeals } from "@/lib/data/groups/meals";
@@ -24,10 +24,27 @@ import { MemberStatusControl } from "./MemberStatusControl";
 import { DeleteMemberButton } from "./DeleteMemberButton";
 
 const EV_LABEL: Record<string, string> = { extend: "연장", refund: "환불", transfer: "양도", issue: "발급", pause: "일시정지", resume: "재개" };
+type BriefKind = MemberCoachBrief["priorities"][number]["kind"];
+
+const BRIEF_ICON: Record<BriefKind, IconName> = {
+  request: "refresh",
+  meal: "fire",
+  membership: "ticket",
+  injury: "triangle-exclamation",
+  body: "chart",
+  workout: "document-text",
+  schedule: "calendar",
+};
+
+const BRIEF_TONE_CLASS: Record<MemberCoachBrief["priorities"][number]["tone"], string> = {
+  warn: "border-terracotta/20 bg-warm-banner text-terracotta-deep",
+  positive: "border-sage-line/35 bg-sage-banner2 text-sage-deep",
+  neutral: "border-ink/[0.06] bg-sage-banner text-muted5",
+};
 
 export default async function MemberDetailPage(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const [m, recordHref, me, photos, inbodies, mealsPage, bodyHistory] = await Promise.all([
+  const [m, recordHref, me, photos, inbodies, mealsPage, bodyHistory, brief] = await Promise.all([
     getMemberDetail(id),
     getMemberRecordHref(id),
     getMe(),
@@ -35,6 +52,7 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
     getMemberFiles(id, "inbody"),
     getMemberMeals(id),
     getBodyHistory(id, 5),
+    getMemberCoachBrief(id),
   ]);
   const meals = mealsPage.meals;
 
@@ -88,6 +106,8 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             2:1 팀 수업이에요. 두 회원의 잔여 횟수가 함께 차감돼요.
           </Banner>
         ) : null}
+
+        <CoachBriefCard brief={brief} />
 
         {/* membership card */}
         <Card className="mb-3.5 bg-sage px-5 py-[18px] text-surface">
@@ -221,6 +241,92 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
           </PrimaryButton>
         </div>
       </Footer>
+    </div>
+  );
+}
+
+function CoachBriefCard({ brief }: { brief: MemberCoachBrief }) {
+  const priorities = brief.priorities.slice(0, 4);
+
+  return (
+    <Card className="mb-3.5 flex-none overflow-hidden px-4 py-[14px]">
+      <div className="mb-3 flex items-center gap-2.5">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-sage-banner2 text-sage-deep">
+          <Icon name="sparkle-fill" size={16} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13.5px] font-bold text-ink">코칭 브리프</div>
+          <div className="truncate text-[11.5px] font-medium text-muted">다음 상담 전 먼저 볼 항목</div>
+        </div>
+        {brief.nextClass ? (
+          <Link
+            href={brief.nextClass.href}
+            className="tappable inline-flex max-w-[142px] flex-none items-center gap-1 rounded-[10px] bg-sage px-2.5 py-1.5 text-[11.5px] font-bold text-surface"
+          >
+            <span className="truncate">{brief.nextClass.label}</span>
+            <Icon name="chevron-right" size={12} className="flex-none" />
+          </Link>
+        ) : (
+          <span className="inline-flex flex-none items-center rounded-[10px] bg-chip-soft px-2.5 py-1.5 text-[11.5px] font-bold text-muted5">
+            수업 없음
+          </span>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {priorities.length > 0 ? (
+          priorities.map((p) => (
+            <div key={`${p.kind}-${p.label}`} className={`flex items-center gap-2 rounded-[12px] border px-3 py-2 ${BRIEF_TONE_CLASS[p.tone]}`}>
+              <Icon name={BRIEF_ICON[p.kind]} size={15} className="flex-none" />
+              <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold">{p.label}</span>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-[12px] border border-sage-line/30 bg-sage-banner2 px-3 py-2 text-[12.5px] font-bold text-sage-deep">
+            우선 확인할 항목이 없어요
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <BriefMetric icon="fire" label="최근 식단" value={brief.latestMealLabel ?? "기록 없음"} />
+        <BriefMetric icon="document-text" label="최근 운동" value={brief.latestWorkoutLabel ?? "기록 없음"} />
+        <BriefMetric
+          icon="chart"
+          label="체성분 변화"
+          value={brief.bodyTrend?.label ?? "비교 기록 부족"}
+          sub={brief.bodyTrend?.sub}
+          positive={brief.bodyTrend?.tone === "positive"}
+          className="col-span-2"
+        />
+      </div>
+    </Card>
+  );
+}
+
+function BriefMetric({
+  icon,
+  label,
+  value,
+  sub,
+  positive,
+  className = "",
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  sub?: string;
+  positive?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 rounded-[12px] border border-ink/[0.06] bg-surface px-3 py-2.5 ${className}`}>
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-bold text-muted">
+        <Icon name={icon} size={12} className={positive ? "text-sage-deep" : "text-muted"} />
+        <span>{label}</span>
+      </div>
+      <div className="break-keep text-[12.5px] font-bold leading-[1.35] text-ink">{value}</div>
+      {sub ? <div className="mt-0.5 break-keep text-[10.5px] font-medium leading-[1.35] text-muted">{sub}</div> : null}
     </div>
   );
 }
