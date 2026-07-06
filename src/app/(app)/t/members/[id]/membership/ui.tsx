@@ -102,6 +102,9 @@ export function MembershipClient({
                 {isDiscountProduct(p.name) ? (
                   <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
                 ) : null}
+                {!p.active ? (
+                  <span className="flex-none rounded-md bg-chip-soft px-1.5 py-0.5 text-[10.5px] font-bold text-muted2">단종 · 연장전용</span>
+                ) : null}
               </span>
             </RadioOption>
           ))}
@@ -114,7 +117,12 @@ export function MembershipClient({
           <Card className="flex items-center gap-2.5 px-[15px] py-[14px]">
             <Icon name="calendar" size={18} className="flex-none text-sage" />
             <span className="text-[13px] font-medium text-muted2">
-              시작 {dateLabel()} · ~{dateLabel(selectedProductData.durationDays)} · 잔여 {selectedProductData.sessions}회 자동 생성
+              {member.activeMembershipId ? (
+                // 연장: 기존 잔여·유효기간에 누적된다.
+                <>기존 잔여 {member.remaining}회 +{selectedProductData.sessions}회 = {member.remaining + selectedProductData.sessions}회 · 유효기간 +{selectedProductData.durationDays}일</>
+              ) : (
+                <>시작 {dateLabel()} · ~{dateLabel(selectedProductData.durationDays)} · 잔여 {selectedProductData.sessions}회 자동 생성</>
+              )}
             </span>
           </Card>
         )}
@@ -123,7 +131,7 @@ export function MembershipClient({
 
       <Footer>
         <PrimaryButton icon="ticket-fill" onClick={onIssue} pending={pending}>
-          발급하고 결제 기록
+          {member.activeMembershipId ? "연장하고 결제 기록" : "발급하고 결제 기록"}
         </PrimaryButton>
       </Footer>
     </div>

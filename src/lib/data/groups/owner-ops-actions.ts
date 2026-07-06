@@ -6,6 +6,7 @@ import { OWNER_ONLY_ERROR } from "@/lib/auth/guard";
 import { deactivateSoloSchedules, buildTeamSchedule } from "@/lib/data/groups/session-mutations";
 import { generateUpcomingSessions } from "@/lib/data/groups/maintenance";
 import { normalizeTeamSlots } from "@/lib/data/team-slots";
+import { computeRenewal } from "@/lib/data/renewal";
 import { FILES_BUCKET } from "@/lib/data/groups/member-files";
 import type { Gender, PaymentMethod } from "@/lib/types";
 
@@ -217,6 +218,50 @@ export async function issueMembership(
     .eq("id", productId)
     .maybeSingle();
   if (!prod) return { ok: false, error: "상품을 찾을 수 없어요" };
+
+  // 재구매/연장: 이미 활성(또는 일시정지) 회원권이 있으면 새 행을 만들지 않고 기존 회원권에
+  // 회차·유효기간·가격을 누적한다(이 앱은 회원당 활성 회원권 1개를 전제). 신규 회원은 활성 회원권이
+  // 없으므로 자연히 아래 신규 발급 경로를 탄다.
+  // ponytail: 단일 회원권 모델 — 별도 회원권을 동시에 두는 케이스는 미지원(있다면 최근 것 하나만 연장).
+  const { data: existing } = await sb
+    .from("memberships")
+    .select("id, remaining_sessions, total_sessions, end_date, price, status")
+    .eq("member_id", memberId)
+    .in("status", ["active", "paused"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    // 더블클릭/재시도 멱등: 직전 20초 내 동일 회차 재구매 이벤트가 있으면 이중 누적 없이 그대로 반환.
+    const dupSince = new Date(Date.now() - 20000).toISOString();
+    const { data: recentEv } = await sb
+      .from("membership_events")
+      .select("id").eq("membership_id", existing.id).eq("type", "extend")
+      .gte("created_at", dupSince).like("note", `재구매 +${prod.sessions}회%`)
+      .limit(1).maybeSingle();
+    if (recentEv) return { ok: true, membershipId: existing.id };
+
+    const next = computeRenewal(existing, prod, todayISO());
+    const { error: upErr } = await sb
+      .from("memberships")
+      .update({
+        remaining_sessions: next.remaining_sessions,
+        total_sessions: next.total_sessions,
+        end_date: next.end_date,
+        price: next.price,
+        product: next.product,
+      })
+      .eq("id", existing.id);
+    if (upErr) return { ok: false, error: "회원권 연장에 실패했어요. 다시 시도해주세요." };
+    await sb.from("membership_events").insert({
+      membership_id: existing.id, type: "extend", amount: prod.sessions,
+      note: `재구매 +${prod.sessions}회 · 유효기간 +${prod.duration_days}일`, created_by: t.id,
+    });
+    revalidatePath(`/t/members/${memberId}`);
+    revalidatePath("/t");
+    revalidatePath("/t/members");
+    return { ok: true, membershipId: existing.id };
+  }
 
   const start = todayISO();
   const end = new Date(new Date(start + "T00:00:00Z").getTime() + prod.duration_days * 86400000)

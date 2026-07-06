@@ -150,7 +150,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     setBusy(false);
     if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     setEditActive(!editActive);
-    toast(!editActive ? "판매를 재개했어요" : "보관함으로 옮겼어요");
+    toast(!editActive ? "판매를 재개했어요" : "단종 처리했어요");
     router.refresh();
   }
 
@@ -228,7 +228,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
               className="tappable flex w-full items-center gap-2 rounded-[13px] bg-sage-banner px-4 py-3"
             >
               <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={15} className="flex-none text-muted3" />
-              <span className="text-[13px] font-semibold text-muted2">보관된 상품 {archived.length}개</span>
+              <span className="text-[13px] font-semibold text-muted2">단종된 상품 {archived.length}개</span>
             </button>
             {archiveOpen ? (
               <Card className="mt-2 overflow-hidden">
@@ -255,7 +255,7 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
 
         <div className="mt-4">
           <Banner tone="neutral">
-            상품명의 대표/강사·1:1/2:1 표기로 발급 화면 탭이 자동 분류돼요. 보관(비활성) 상품은 발급 화면에 표시되지 않아요.
+            상품명의 대표/강사·1:1/2:1 표기로 발급 화면 탭이 자동 분류돼요. 단종한 상품은 신규 회원 발급 화면엔 안 보이지만, 이미 그 상품을 쓰던 회원은 연장할 수 있어요.
           </Banner>
         </div>
         <div className="h-3.5" />
@@ -327,8 +327,8 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
 
               {editId !== "new" ? (
                 <div className="flex items-center justify-between rounded-[13px] bg-sage-banner px-4 py-3">
-                  <span className="text-[13px] font-semibold text-muted2">판매 중 (끄면 보관함으로)</span>
-                  <Switch on={editActive} onChange={onToggleActive} label={editActive ? "판매" : "보관"} />
+                  <span className="text-[13px] font-semibold text-muted2">판매 중 (끄면 단종 — 기존 회원만 연장)</span>
+                  <Switch on={editActive} onChange={onToggleActive} label={editActive ? "판매" : "단종"} />
                 </div>
               ) : null}
             </div>

@@ -290,6 +290,34 @@ export async function getMembershipProducts(): Promise<MembershipProduct[]> {
   }));
 }
 
+/** 이 회원이 보유(연장 가능)한 단종 상품 — 신규 픽커엔 없지만, 이미 그 상품을 쓰던 회원은 연장할 수 있게.
+ *  환불 회원권은 제외(만료/소진은 포함 — 지난 상품으로 재구매 가능). */
+export async function getMemberRenewableProducts(memberId: string): Promise<MembershipProduct[]> {
+  const { data: held } = await sb
+    .from("memberships")
+    .select("product_id")
+    .eq("member_id", memberId)
+    .neq("status", "refunded");
+  const ids = [...new Set((held ?? []).map((r) => r.product_id).filter(Boolean))] as string[];
+  if (ids.length === 0) return [];
+  const { data } = await sb
+    .from("membership_products")
+    .select("id, name, sessions, price, unit_list_price, duration_days, active, sort_order")
+    .in("id", ids)
+    .eq("active", false)
+    .order("sort_order", { ascending: true });
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    sessions: r.sessions,
+    price: r.price,
+    unitListPrice: r.unit_list_price ?? 0,
+    durationDays: r.duration_days,
+    active: r.active,
+    sortOrder: r.sort_order,
+  }));
+}
+
 /** All products including inactive. */
 export async function getAllProducts(): Promise<MembershipProduct[]> {
   const { data } = await sb
