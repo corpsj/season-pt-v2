@@ -380,8 +380,8 @@ export function MembersClient({
                   {m.isTeam && m.team ? <TeamAvatar team={m.team} size={40} /> : <Avatar initial={m.initial} tone={m.avatarTone} size={40} />}
                   <div className="min-w-0 flex-1 overflow-hidden">
                     <div className="truncate text-[14px] font-semibold text-ink">{m.name}</div>
-                    <div className="truncate text-[11.5px] font-medium text-[#9A917F]">{m.sub}</div>
                   </div>
+                  <span className="w-[150px] truncate text-[11.5px] font-medium text-[#9A917F]">{m.sub}</span>
                   <span className="w-[60px] text-right"><BadgePill badge={m.badge} /></span>
                 </button>
               );
