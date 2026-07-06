@@ -305,8 +305,8 @@ function RateField({ label, value, onChange }: { label: string; value: string; o
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-[#9A917F]">₩</span>
         <input
           inputMode="numeric"
-          maxLength={8}
-          value={value}
+          maxLength={10}
+          value={value ? Number(value).toLocaleString("ko-KR") : ""}
           onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, "").slice(0, 8))}
           placeholder="0"
           className="w-full rounded-[11px] border border-[rgba(75,59,46,0.14)] bg-white py-[10px] pl-7 pr-3 text-[14px] font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]"

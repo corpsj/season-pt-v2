@@ -109,15 +109,23 @@ type FormState = {
   sessions: string;
   price: string;
   unitListPrice: string;
+  unitTouched: boolean; // 사용자가 정상가를 직접 입력하면 자동 계산 중단
   durationDays: string;
 };
 
 const EMPTY_FORM: FormState = {
   tier: "owner", ptype: "1on1", discount: false, name: "",
-  nameTouched: false, sessions: "", price: "", unitListPrice: "", durationDays: "90",
+  nameTouched: false, sessions: "", price: "", unitListPrice: "", unitTouched: false, durationDays: "90",
 };
 
 const digits = (s: string) => s.replace(/[^\d]/g, "");
+
+/** 판매가 ÷ 회차 (자동 정상가). */
+function autoUnit(sessions: string, price: string): string {
+  const s = Number(sessions);
+  const pr = Number(digits(price));
+  return s > 0 && pr > 0 ? String(Math.round(pr / s)) : "";
+}
 
 function productToForm(p: MembershipProduct): FormState {
   const tier = productTier(p.name);
@@ -125,11 +133,15 @@ function productToForm(p: MembershipProduct): FormState {
   const discount = isDiscountProduct(p.name);
   // 이름이 규칙 조합과 정확히 일치하면 자동 동기화 유지, 커스텀 이름이면 보존.
   const nameTouched = p.name !== composeProductName(tier, ptype, p.sessions, discount);
+  // 저장된 정상가가 자동값(판매가÷회차)과 다르면 '직접 입력'으로 보고 보존, 같으면 자동 유지.
+  const auto = p.sessions > 0 ? Math.round(p.price / p.sessions) : 0;
+  const unitTouched = !!p.unitListPrice && p.unitListPrice !== auto;
   return {
     tier, ptype, discount, name: p.name, nameTouched,
     sessions: String(p.sessions),
     price: String(p.price),
     unitListPrice: p.unitListPrice ? String(p.unitListPrice) : "",
+    unitTouched,
     durationDays: String(p.durationDays),
   };
 }
@@ -214,6 +226,8 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
         const n = Number(next.sessions);
         next.name = n > 0 ? composeProductName(next.tier, next.ptype, n, next.discount) : next.name;
       }
+      // 정상가를 직접 만지기 전까지는 판매가·회차에서 실시간 계산해 채운다.
+      if (!next.unitTouched) next.unitListPrice = autoUnit(next.sessions, next.price);
       return next;
     });
   }
@@ -398,13 +412,19 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
 
             <div>
               <div className={FLABEL}>가격 (원)</div>
-              <input value={form.price} onChange={setNum("price")} inputMode="numeric" placeholder="750000" className={INPUT} />
+              <input value={form.price ? Number(form.price).toLocaleString("ko-KR") : ""} onChange={setNum("price")} inputMode="numeric" placeholder="750,000" className={INPUT} />
               {fUnit > 0 ? <div className="mt-1 pl-1 text-[11px] font-semibold text-sage-deep">회당 {won(fUnit)}</div> : null}
             </div>
 
             <div>
-              <div className={FLABEL}>1회 정상가 (환불 기준, 원)</div>
-              <input value={form.unitListPrice} onChange={setNum("unitListPrice")} inputMode="numeric" placeholder="자동 (판매가 ÷ 회차)" className={INPUT} />
+              <div className={FLABEL}>1회 정상가 (환불 기준, 원){form.unitTouched ? "" : " · 자동"}</div>
+              <input
+                value={form.unitListPrice ? Number(form.unitListPrice).toLocaleString("ko-KR") : ""}
+                onChange={(e) => patchForm({ unitListPrice: digits(e.target.value), unitTouched: true })}
+                inputMode="numeric"
+                placeholder="자동 (판매가 ÷ 회차)"
+                className={INPUT}
+              />
             </div>
 
             <div>
