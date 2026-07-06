@@ -382,7 +382,7 @@ export function MembersClient({
                     <div className="truncate text-[14px] font-semibold text-ink">{m.name}</div>
                     <div className="truncate text-[11.5px] font-medium text-[#9A917F]">{m.sub}</div>
                   </div>
-                  <span className="w-[60px] text-right"><DPill dDay={dDayFromBadge(m)} /></span>
+                  <span className="w-[60px] text-right"><BadgePill badge={m.badge} /></span>
                 </button>
               );
             })}
@@ -853,11 +853,11 @@ export function MembersClient({
 }
 
 /* ----- small shared pieces ----- */
-function dDayFromBadge(m: MemberListItem): number | null {
-  // list badge text is "D-N" or "활성"; convert for the trailing pill
-  const t = m.badge.text;
-  if (t.startsWith("D-")) return Number(t.slice(2));
-  return 9999; // not expiring → renders a calm sage pill via DPill (>14)
+function BadgePill({ badge }: { badge: MemberListItem["badge"] }) {
+  if (badge.variant === "expiringNear" || badge.variant === "expiringSoon") {
+    return <span style={pill("#B5612F", "#FBF3E9")}>{badge.text}</span>;
+  }
+  return <span style={pill("#5B6452", "#EDF4E3")}>{badge.text}</span>;
 }
 
 /** 등록 모달의 번호 섹션 헤더 — ①회원권 ②회원 정보 ③담당·결제 ④정기 요일. 첫 섹션 외에는 구분선 포함. */
