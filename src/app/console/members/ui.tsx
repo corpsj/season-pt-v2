@@ -7,7 +7,7 @@ import { Avatar, TeamAvatar } from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, PBtn, OBtn, DPill, ConsoleModal, MicroLabel, won, pill } from "@/components/console/ui";
-import { loadMemberDetail, consoleIssueMembership } from "@/lib/data/groups/console-actions";
+import { loadMemberDetail, consoleIssueMembership, loadMemberRenewableProducts } from "@/lib/data/groups/console-actions";
 import { listMemberFiles } from "@/lib/data/groups/member-files-actions";
 import { listMemberMeals } from "@/lib/data/groups/meals-actions";
 import type { MemberFileView } from "@/lib/data/groups/member-files";
@@ -96,6 +96,7 @@ export function MembersClient({
   const [issueProduct, setIssueProduct] = useState("");
   const [issueMethod, setIssueMethod] = useState<PaymentMethod>("card");
   const [issueAmt, setIssueAmt] = useState("");
+  const [issueRenewable, setIssueRenewable] = useState<MembershipProduct[]>([]); // 선택 회원의 단종 상품(연장 전용)
   const [refund, setRefund] = useState<{ refund: number; used: number; noBaseline: boolean } | null>(null);
   const [refundMethod, setRefundMethod] = useState<PaymentMethod>("card");
   const [refundAmt, setRefundAmt] = useState("");
@@ -168,7 +169,10 @@ export function MembersClient({
     setIssueProduct("");
     setIssueAmt("");
     setIssueMethod("card");
+    setIssueRenewable([]);
     setModal("issue");
+    // 이 회원이 쓰던 단종 상품을 픽커에 합쳐 연장할 수 있게(신규 등록 폼엔 안 합쳐 단종 숨김 유지).
+    if (selectedId) loadMemberRenewableProducts(selectedId).then(setIssueRenewable).catch(() => {});
   }
   async function doIssue() {
     if (!selectedId || !issueProduct) return;
@@ -733,11 +737,11 @@ export function MembersClient({
           <MemberStripe d={d} />
           <div className="mb-2.5 text-[11.5px] font-semibold text-[#9A917F]">회원권 상품</div>
           <ProductPicker
-            products={products}
+            products={[...products, ...issueRenewable]}
             selected={issueProduct}
             onPick={(id) => {
               setIssueProduct(id);
-              const p = products.find((pp) => pp.id === id);
+              const p = [...products, ...issueRenewable].find((pp) => pp.id === id);
               if (p) setIssueAmt(String(p.price));
             }}
             onClear={() => { setIssueProduct(""); setIssueAmt(""); }}
@@ -927,6 +931,9 @@ function ProductPicker({ products, selected, onPick, onClear, showPrice }: { pro
                     <span className="text-[14px] font-bold text-ink">{productShortLabel(p)}</span>
                     {isDiscountProduct(p.name) ? (
                       <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">특별할인</span>
+                    ) : null}
+                    {!p.active ? (
+                      <span className="flex-none rounded-[6px] bg-[#EFEBE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A8172]">단종 · 연장전용</span>
                     ) : null}
                   </div>
                   <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · 유효 {p.durationDays}일</div>

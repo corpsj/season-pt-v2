@@ -203,11 +203,15 @@ export async function updateMember(
   return { ok: true };
 }
 
-/** 회원권 발급: membership_products에서 상품 조회, memberships insert. */
+/** 재구매 롤백용 스냅샷 — 연장(in-place) 직전 회원권 값. 결제와 묶는 호출자가 결제 실패 시 복원. */
+type RenewalPrev = { remaining_sessions: number; total_sessions: number; end_date: string; price: number | null; product: string | null };
+
+/** 회원권 발급: membership_products에서 상품 조회, memberships insert.
+ *  이미 활성/일시정지 회원권이 있으면 새 행 대신 그 회원권을 연장(누적)하고 renewed+prev를 반환. */
 export async function issueMembership(
   memberId: string,
   productId: string,
-): Promise<Result & { membershipId?: string }> {
+): Promise<Result & { membershipId?: string; renewed?: boolean; prev?: RenewalPrev }> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "로그인이 필요해요" };
   if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
@@ -225,7 +229,7 @@ export async function issueMembership(
   // ponytail: 단일 회원권 모델 — 별도 회원권을 동시에 두는 케이스는 미지원(있다면 최근 것 하나만 연장).
   const { data: existing } = await sb
     .from("memberships")
-    .select("id, remaining_sessions, total_sessions, end_date, price, status")
+    .select("id, remaining_sessions, total_sessions, end_date, price, product, status")
     .eq("member_id", memberId)
     .in("status", ["active", "paused"])
     .order("created_at", { ascending: false })
@@ -260,7 +264,14 @@ export async function issueMembership(
     revalidatePath(`/t/members/${memberId}`);
     revalidatePath("/t");
     revalidatePath("/t/members");
-    return { ok: true, membershipId: existing.id };
+    // renewed + prev: 결제와 묶어 처리하는 호출자(콘솔)가 결제 실패 시 연장분만 정확히 되돌릴 수 있게.
+    return {
+      ok: true, membershipId: existing.id, renewed: true,
+      prev: {
+        remaining_sessions: existing.remaining_sessions, total_sessions: existing.total_sessions,
+        end_date: existing.end_date, price: existing.price, product: existing.product,
+      },
+    };
   }
 
   const start = todayISO();
@@ -676,6 +687,21 @@ export async function setProductActive(id: string, active: boolean): Promise<Res
   const { error } = await sb.from("membership_products").update({ active }).eq("id", id);
   if (error) return { ok: false, error: "상태 변경에 실패했어요" };
   revalidatePath("/t/settings/products");
+  revalidatePath("/console/settings");
+  return { ok: true };
+}
+
+/** 상품 삭제: 발급 이력이 없는 상품만(FK·매출 이력 보존). 이미 발급됐으면 단종(비활성)으로 안내. */
+export async function deleteProduct(id: string): Promise<Result> {
+  const t = await getTrainerContext();
+  if (!t) return { ok: false, error: "로그인이 필요해요" };
+  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  const { data: used } = await sb.from("memberships").select("id").eq("product_id", id).limit(1).maybeSingle();
+  if (used) return { ok: false, error: "이미 발급된 상품은 삭제할 수 없어요. 단종으로 숨겨주세요." };
+  const { error } = await sb.from("membership_products").delete().eq("id", id);
+  if (error) return { ok: false, error: "삭제에 실패했어요" };
+  revalidatePath("/t/settings/products");
+  revalidatePath("/console/settings");
   return { ok: true };
 }
 

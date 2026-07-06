@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, PBtn, OBtn, ConsoleModal, won } from "@/components/console/ui";
 import { PrivacyToggle } from "@/components/console/privacy";
-import { createProduct, updateProduct, setProductActive, updatePolicy, updateNotifications, createExercise, renameExercise, setExerciseActive, createNotice, deleteNotice } from "@/lib/data/groups/owner-ops-actions";
+import { createProduct, updateProduct, setProductActive, deleteProduct, updatePolicy, updateNotifications, createExercise, renameExercise, setExerciseActive, createNotice, deleteNotice } from "@/lib/data/groups/owner-ops-actions";
 import { updateMyName } from "@/lib/auth/trainer-actions";
 import { productTier, productType, composeProductName, isDiscountProduct, matchesQuad, isUnclassified, QUAD_TABS, type ProductTier, type Quad } from "@/lib/data/product-class";
 import type { MembershipProduct, StudioSettings, ExerciseItem } from "@/lib/types";
@@ -146,47 +146,50 @@ const INPUT =
   "w-full rounded-[12px] border border-[rgba(75,59,46,0.14)] bg-[#FBF9F5] px-[15px] py-[12px] text-[14px] font-medium text-ink outline-none transition focus-visible:ring-2 focus-visible:ring-sage/40 placeholder:text-[#B3AA9C]";
 const FLABEL = "mb-1.5 text-[12px] font-semibold text-[#9A917F]";
 
-function ProductChip({ p, onClick }: { p: MembershipProduct; onClick: () => void }) {
+function ProductChip({ p, onClick, onToggle, busy }: { p: MembershipProduct; onClick: () => void; onToggle: () => void; busy: boolean }) {
   const type = productType(p.name);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-[13px] border border-ink/[0.08] bg-[#FBF9F5] px-3.5 py-3 text-left transition hover:bg-[#F7F3EB]"
-    >
-      <div className="flex flex-wrap items-baseline gap-1.5">
-        <span className="min-w-0 truncate text-[15px] font-bold text-ink">{type ? `${p.sessions}회권` : p.name}</span>
-        {isDiscountProduct(p.name) ? (
-          <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">특별할인</span>
-        ) : null}
+    <div className={`rounded-[13px] border bg-[#FBF9F5] px-3.5 py-3 ${p.active ? "border-ink/[0.08]" : "border-ink/[0.06]"}`}>
+      <button type="button" onClick={onClick} className="block w-full text-left transition hover:opacity-80">
+        <div className={`flex flex-wrap items-baseline gap-1.5 ${p.active ? "" : "opacity-60"}`}>
+          <span className="min-w-0 truncate text-[15px] font-bold text-ink">{type ? `${p.sessions}회권` : p.name}</span>
+          {isDiscountProduct(p.name) ? (
+            <span className="flex-none rounded-[6px] bg-[#F4EEE3] px-1.5 py-0.5 text-[10.5px] font-bold text-[#8A6F3E]">특별할인</span>
+          ) : null}
+        </div>
+        <div className={`mt-1 text-[13px] font-semibold text-ink ${p.active ? "" : "opacity-60"}`}>{won(p.price)}</div>
+        <div className={`mt-0.5 text-[11.5px] font-medium text-[#9A917F] ${p.active ? "" : "opacity-60"}`}>유효 {p.durationDays}일</div>
+      </button>
+      <div className="mt-2.5 flex items-center justify-between border-t border-ink/[0.06] pt-2.5">
+        <span className={`text-[11.5px] font-bold ${p.active ? "text-sage" : "text-[#A89F92]"}`}>{p.active ? "판매 중" : "단종"}</span>
+        <Switch on={p.active} onChange={onToggle} disabled={busy} label={p.active ? "판매 중" : "단종"} />
       </div>
-      <div className="mt-1 text-[13px] font-semibold text-ink">{won(p.price)}</div>
-      <div className="mt-0.5 text-[11.5px] font-medium text-[#9A917F]">유효 {p.durationDays}일</div>
-    </button>
+    </div>
   );
 }
 
 function ProductsEditor({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [productTab, setProductTab] = useState<Quad>("owner-1on1");
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 모달 안 판매 상태 표시용
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
 
-  const active = useMemo(() => products.filter((p) => p.active), [products]);
-  const archived = useMemo(() => products.filter((p) => !p.active), [products]);
+  // 판매중 먼저, 단종은 뒤로 — 단종 상품도 탭 안에 함께 보여 토글로 바로 켜고 끌 수 있게.
+  const activeFirst = (a: MembershipProduct, b: MembershipProduct) =>
+    Number(b.active) - Number(a.active) || bySessionsAsc(a, b);
 
   const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
   // 발급 픽커와 동일한 담당×유형 4탭. 특별할인 상품은 자기 탭에 배지로 함께 노출.
   const visible = useMemo(
-    () => active.filter((p) => matchesQuad(p.name, activeTab)).sort(bySessionsAsc),
-    [active, activeTab],
+    () => products.filter((p) => matchesQuad(p.name, activeTab)).sort(activeFirst),
+    [products, activeTab],
   );
   // 4탭 어디에도 안 맞는 무표기(공용/무유형) 상품 — 숨김 방지용 별도 그룹(지금은 0개).
-  const unclassified = useMemo(() => active.filter((p) => isUnclassified(p.name)).sort(bySessionsAsc), [active]);
+  const unclassified = useMemo(() => products.filter((p) => isUnclassified(p.name)).sort(activeFirst), [products]);
 
   function openNew() {
     setForm({ ...EMPTY_FORM, tier: activeTab.tier, ptype: activeTab.type });
@@ -249,7 +252,36 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
     setBusy(false);
     if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
     setEditActive(!editActive);
-    toast(!editActive ? "판매를 재개했어요" : "보관함으로 옮겼어요");
+    toast(!editActive ? "판매를 재개했어요" : "단종 처리했어요");
+    router.refresh();
+  }
+
+  /** 카드에서 바로 판매/단종 전환 — 모달을 열지 않고 토글. */
+  async function toggleActive(p: MembershipProduct) {
+    if (busy) return;
+    setBusy(true);
+    const res = await setProductActive(p.id, !p.active);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
+    toast(p.active ? "단종 처리했어요" : "판매를 재개했어요");
+    router.refresh();
+  }
+
+  async function onDelete() {
+    if (!editId || editId === "new" || busy) return;
+    const ok = await confirm({
+      title: "상품을 삭제할까요?",
+      description: "발급 이력이 없는 상품만 삭제돼요. 되돌릴 수 없어요.",
+      confirmLabel: "삭제",
+      tone: "warn",
+    });
+    if (!ok) return;
+    setBusy(true);
+    const res = await deleteProduct(editId);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "삭제에 실패했어요", "error");
+    toast("상품을 삭제했어요");
+    closeForm();
     router.refresh();
   }
 
@@ -279,14 +311,14 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
         ))}
       </div>
 
-      {/* 판매 중 — 회차 칩 그리드 */}
+      {/* 회차 칩 그리드 — 판매중 먼저, 단종은 뒤에 함께(토글로 바로 전환) */}
       {visible.length === 0 ? (
         <div className="rounded-[13px] bg-[#FBF7F1] py-8 text-center text-[13px] font-medium text-[#A89F92]">
-          {active.length > 0 ? "이 분류에 상품이 없어요 — ‘상품 추가’로 만드세요" : "등록된 상품이 없어요 — ‘상품 추가’로 시작하세요"}
+          {products.length > 0 ? "이 분류에 상품이 없어요 — ‘상품 추가’로 만드세요" : "등록된 상품이 없어요 — ‘상품 추가’로 시작하세요"}
         </div>
       ) : (
         <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
-          {visible.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} />)}
+          {visible.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} onToggle={() => toggleActive(p)} busy={busy} />)}
         </div>
       )}
 
@@ -298,42 +330,14 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             <span className="text-[11.5px] font-medium text-[#9A917F]">{unclassified.length}개</span>
           </div>
           <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(160px,1fr))]">
-            {unclassified.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} />)}
+            {unclassified.map((p) => <ProductChip key={p.id} p={p} onClick={() => openEdit(p)} onToggle={() => toggleActive(p)} busy={busy} />)}
           </div>
         </div>
       ) : null}
 
-      {/* 보관함(비활성) — 접힘 기본. 은퇴 상품이 작업 목록을 밀어내지 않게. */}
-      {archived.length > 0 ? (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => setArchiveOpen((v) => !v)}
-            className="flex w-full items-center gap-1.5 rounded-[10px] bg-[#F8F4EC] px-3 py-2.5 text-left transition hover:bg-[#F4EFE6]"
-          >
-            <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={13} className="flex-none text-[#A89F92]" />
-            <span className="text-[12px] font-semibold text-[#766D60]">보관된 상품 {archived.length}개 · 발급 화면에 표시되지 않아요</span>
-          </button>
-          {archiveOpen ? (
-            <div className="mt-2 flex flex-col gap-1.5">
-              {[...archived].sort(bySessionsAsc).map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => openEdit(p)}
-                  className="flex items-center gap-3 rounded-[11px] px-3 py-2.5 text-left opacity-60 transition hover:bg-[#F7F3EB] hover:opacity-100"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-bold text-ink">{p.name}</div>
-                    <div className="mt-0.5 text-[11px] font-medium text-[#9A917F]">{p.sessions}회 · {won(p.price)} · {p.durationDays}일</div>
-                  </div>
-                  <Icon name="pencil" size={14} className="flex-none text-[#A89F92]" />
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="mt-3 text-[11.5px] font-medium leading-relaxed text-[#9A917F]">
+        각 카드의 토글로 판매/단종을 바로 전환해요. 단종하면 신규 회원 발급 화면엔 안 보이지만, 이미 그 상품을 쓰던 회원은 연장할 수 있어요.
+      </div>
 
       {/* 추가/수정 모달 — 담당·유형·회차로 상품명 자동 조합(직접 수정 가능) */}
       {editId ? (
@@ -414,10 +418,20 @@ function ProductsEditor({ products }: { products: MembershipProduct[] }) {
             </div>
 
             {editId !== "new" ? (
-              <div className="flex items-center justify-between rounded-[13px] bg-[#FBF7F1] px-4 py-3">
-                <span className="text-[13px] font-semibold text-[#766D60]">판매 중 (끄면 보관함으로)</span>
-                <Switch on={editActive} onChange={onToggleActive} disabled={busy} label={editActive ? "판매" : "보관"} />
-              </div>
+              <>
+                <div className="flex items-center justify-between rounded-[13px] bg-[#FBF7F1] px-4 py-3">
+                  <span className="text-[13px] font-semibold text-[#766D60]">판매 중 (끄면 단종 — 기존 회원만 연장)</span>
+                  <Switch on={editActive} onChange={onToggleActive} disabled={busy} label={editActive ? "판매" : "단종"} />
+                </div>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={busy}
+                  className="self-start text-[12.5px] font-semibold text-terracotta-deep transition hover:opacity-80 disabled:opacity-50"
+                >
+                  상품 삭제
+                </button>
+              </>
             ) : null}
           </div>
         </ConsoleModal>

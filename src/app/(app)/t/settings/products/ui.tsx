@@ -10,12 +10,13 @@ import { Switch } from "@/components/ui/Switch";
 import { SegmentedToggle } from "@/components/ui/SegmentedToggle";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Banner } from "@/components/ui/Banner";
-import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import {
   createProduct,
   updateProduct,
   setProductActive,
+  deleteProduct,
 } from "@/lib/data/groups/owner-ops-actions";
 import {
   productTier,
@@ -76,24 +77,25 @@ function bySessionsAsc(a: MembershipProduct, b: MembershipProduct) {
 export function ProductsClient({ products }: { products: MembershipProduct[] }) {
   const router = useRouter();
   const toast = useToast();
+  const confirm = useConfirm();
   const [productTab, setProductTab] = useState<Quad>("owner-1on1");
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
   const [editActive, setEditActive] = useState(true); // 시트 안 판매 상태 표시용
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
 
-  const active = useMemo(() => products.filter((p) => p.active), [products]);
-  const archived = useMemo(() => products.filter((p) => !p.active), [products]);
+  // 판매중 먼저, 단종은 뒤로 — 단종 상품도 탭 안에 함께 보여 토글로 바로 켜고 끌 수 있게.
+  const activeFirst = (a: MembershipProduct, b: MembershipProduct) =>
+    Number(b.active) - Number(a.active) || bySessionsAsc(a, b);
 
   const activeTab = QUAD_TABS.find((t) => t.key === productTab)!;
   // 발급 픽커와 동일한 담당×유형 4탭. 특별할인 상품은 자기 탭에 배지로 함께 노출.
   const visible = useMemo(
-    () => active.filter((p) => matchesQuad(p.name, activeTab)).sort(bySessionsAsc),
-    [active, activeTab],
+    () => products.filter((p) => matchesQuad(p.name, activeTab)).sort(activeFirst),
+    [products, activeTab],
   );
   // 4탭 어디에도 안 맞는 무표기(공용/무유형) 상품 — 숨김 방지용 별도 그룹(지금은 0개).
-  const unclassified = useMemo(() => active.filter((p) => isUnclassified(p.name)).sort(bySessionsAsc), [active]);
+  const unclassified = useMemo(() => products.filter((p) => isUnclassified(p.name)).sort(activeFirst), [products]);
 
   function openNew() {
     setForm({ ...EMPTY_FORM, tier: activeTab.tier, ptype: activeTab.type, name: "" });
@@ -154,28 +156,64 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
     router.refresh();
   }
 
+  /** 카드에서 바로 판매/단종 전환 — 시트를 열지 않고 토글. */
+  async function toggleActive(p: MembershipProduct) {
+    if (busy) return;
+    setBusy(true);
+    const res = await setProductActive(p.id, !p.active);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "상태 변경에 실패했어요", "error");
+    toast(p.active ? "단종 처리했어요" : "판매를 재개했어요");
+    router.refresh();
+  }
+
+  async function onDelete() {
+    if (!editId || editId === "new" || busy) return;
+    const ok = await confirm({
+      title: "상품을 삭제할까요?",
+      description: "발급 이력이 없는 상품만 삭제돼요. 되돌릴 수 없어요.",
+      confirmLabel: "삭제",
+      tone: "warn",
+    });
+    if (!ok) return;
+    setBusy(true);
+    const res = await deleteProduct(editId);
+    setBusy(false);
+    if (!res.ok) return toast(res.error ?? "삭제에 실패했어요", "error");
+    toast("상품을 삭제했어요");
+    closeForm();
+    router.refresh();
+  }
+
   const num = (field: "sessions" | "price" | "unitListPrice" | "durationDays") =>
     (e: React.ChangeEvent<HTMLInputElement>) => patchForm({ [field]: e.target.value } as Partial<FormState>);
 
   function chipCard(p: MembershipProduct) {
     return (
-      <button
+      <div
         key={p.id}
-        type="button"
-        onClick={() => openEdit(p)}
-        className="tappable rounded-[13px] border border-ink/[0.1] bg-card px-3.5 py-3 text-left"
+        className={`rounded-[13px] border bg-card px-3.5 py-3 ${p.active ? "border-ink/[0.1]" : "border-ink/[0.08]"}`}
       >
-        <div className="flex flex-wrap items-baseline gap-1.5">
-          <span className="truncate text-[15px] font-bold text-ink">
-            {productType(p.name) ? `${p.sessions}회권` : p.name}
+        <button type="button" onClick={() => openEdit(p)} className="tappable block w-full text-left">
+          <div className={`flex flex-wrap items-baseline gap-1.5 ${p.active ? "" : "opacity-60"}`}>
+            <span className="truncate text-[15px] font-bold text-ink">
+              {productType(p.name) ? `${p.sessions}회권` : p.name}
+            </span>
+            {isDiscountProduct(p.name) ? (
+              <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
+            ) : null}
+          </div>
+          <div className={`mt-1 text-[13px] font-semibold text-ink ${p.active ? "" : "opacity-60"}`}>₩{p.price.toLocaleString()}</div>
+          <div className={`mt-0.5 text-[11.5px] font-medium text-muted ${p.active ? "" : "opacity-60"}`}>유효 {p.durationDays}일</div>
+        </button>
+        {/* 카드에서 바로 판매/단종 토글 */}
+        <div className="mt-2.5 flex items-center justify-between border-t border-ink/[0.06] pt-2.5">
+          <span className={`text-[11.5px] font-bold ${p.active ? "text-sage" : "text-muted3"}`}>
+            {p.active ? "판매 중" : "단종"}
           </span>
-          {isDiscountProduct(p.name) ? (
-            <span className="flex-none rounded-md bg-gold-bg px-1.5 py-0.5 text-[10.5px] font-bold text-gold">특별할인</span>
-          ) : null}
+          <Switch on={p.active} onChange={() => toggleActive(p)} disabled={busy} label={p.active ? "판매 중" : "단종"} />
         </div>
-        <div className="mt-1 text-[13px] font-semibold text-ink">₩{p.price.toLocaleString()}</div>
-        <div className="mt-0.5 text-[11.5px] font-medium text-muted">유효 {p.durationDays}일</div>
-      </button>
+      </div>
     );
   }
 
@@ -199,10 +237,10 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           onChange={setProductTab}
         />
 
-        {/* 판매 중 — 회차 칩 그리드 */}
+        {/* 회차 칩 그리드 — 판매중 먼저, 단종은 뒤에 함께(토글로 바로 전환) */}
         {visible.length === 0 ? (
           <Card className="p-6 text-center text-[13.5px] text-muted">
-            {active.length > 0 ? "이 분류에 상품이 없어요. ‘추가’로 만드세요." : "등록된 상품이 없어요. ‘추가’로 시작하세요."}
+            {products.length > 0 ? "이 분류에 상품이 없어요. ‘추가’로 만드세요." : "등록된 상품이 없어요. ‘추가’로 시작하세요."}
           </Card>
         ) : (
           <div className="grid grid-cols-2 gap-2">{visible.map(chipCard)}</div>
@@ -219,43 +257,9 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
           </div>
         ) : null}
 
-        {/* 보관함(비활성) — 접힘 기본, 은퇴 상품이 작업 목록을 밀어내지 않게 */}
-        {archived.length > 0 ? (
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setArchiveOpen((v) => !v)}
-              className="tappable flex w-full items-center gap-2 rounded-[13px] bg-sage-banner px-4 py-3"
-            >
-              <Icon name={archiveOpen ? "chevron-down" : "chevron-right"} size={15} className="flex-none text-muted3" />
-              <span className="text-[13px] font-semibold text-muted2">단종된 상품 {archived.length}개</span>
-            </button>
-            {archiveOpen ? (
-              <Card className="mt-2 overflow-hidden">
-                {archived.map((p, i) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => openEdit(p)}
-                    className={`tappable flex w-full items-center gap-3 px-4 py-3 text-left opacity-60 ${i > 0 ? "border-t border-ink/[0.07]" : ""}`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13.5px] font-bold text-ink">{p.name}</div>
-                      <div className="mt-0.5 text-[11.5px] text-muted">
-                        {p.sessions}회 · ₩{p.price.toLocaleString()} · {p.durationDays}일
-                      </div>
-                    </div>
-                    <Icon name="pencil" size={15} className="flex-none text-muted" />
-                  </button>
-                ))}
-              </Card>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className="mt-4">
           <Banner tone="neutral">
-            상품명의 대표/강사·1:1/2:1 표기로 발급 화면 탭이 자동 분류돼요. 단종한 상품은 신규 회원 발급 화면엔 안 보이지만, 이미 그 상품을 쓰던 회원은 연장할 수 있어요.
+            각 카드의 토글로 <b>판매/단종</b>을 바로 전환해요. 단종하면 신규 회원 발급 화면엔 안 보이지만, 이미 그 상품을 쓰던 회원은 연장할 수 있어요.
           </Banner>
         </div>
         <div className="h-3.5" />
@@ -326,10 +330,20 @@ export function ProductsClient({ products }: { products: MembershipProduct[] }) 
               </Field>
 
               {editId !== "new" ? (
-                <div className="flex items-center justify-between rounded-[13px] bg-sage-banner px-4 py-3">
-                  <span className="text-[13px] font-semibold text-muted2">판매 중 (끄면 단종 — 기존 회원만 연장)</span>
-                  <Switch on={editActive} onChange={onToggleActive} label={editActive ? "판매" : "단종"} />
-                </div>
+                <>
+                  <div className="flex items-center justify-between rounded-[13px] bg-sage-banner px-4 py-3">
+                    <span className="text-[13px] font-semibold text-muted2">판매 중 (끄면 단종 — 기존 회원만 연장)</span>
+                    <Switch on={editActive} onChange={onToggleActive} label={editActive ? "판매" : "단종"} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={busy}
+                    className="tappable self-start text-[12.5px] font-semibold text-terracotta-deep disabled:opacity-50"
+                  >
+                    상품 삭제
+                  </button>
+                </>
               ) : null}
             </div>
             <div className="mt-4 flex gap-2.5">

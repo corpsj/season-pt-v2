@@ -7,8 +7,8 @@ import { getStudioCalendarWeek, type StudioCalendarWeek } from "@/lib/data/group
 import { getMemberDetail } from "@/lib/data/groups/trainer-home";
 import { getChatRoom } from "@/lib/data/groups/chat";
 import { issueMembership, recordPayment } from "@/lib/data/groups/owner-ops-actions";
-import { getMemberSchedule, getTeamCandidates, type MemberScheduleView } from "@/lib/data/groups/owner-ops";
-import type { ChatRoomView, MemberDetailView, PaymentMethod } from "@/lib/types";
+import { getMemberSchedule, getTeamCandidates, getMemberRenewableProducts, type MemberScheduleView } from "@/lib/data/groups/owner-ops";
+import type { ChatRoomView, MemberDetailView, MembershipProduct, PaymentMethod } from "@/lib/types";
 
 /** Mark one of the owner's in-app notifications read (topbar bell). */
 export async function markConsoleNotifRead(id: string): Promise<{ ok: boolean }> {
@@ -24,6 +24,12 @@ export async function loadMemberDetail(id: string): Promise<MemberDetailView | n
   return getMemberDetail(id);
 }
 
+/** 이 회원이 쓰던 단종 상품(연장 전용) — 발급 모달이 열릴 때 픽커에 합쳐 보여준다. */
+export async function loadMemberRenewableProducts(memberId: string): Promise<MembershipProduct[]> {
+  if (!(await ensureOwner())) return [];
+  return getMemberRenewableProducts(memberId);
+}
+
 /** Issue a membership then record its first payment in one step (console 발급 modal). */
 export async function consoleIssueMembership(
   memberId: string,
@@ -35,9 +41,25 @@ export async function consoleIssueMembership(
   if (!issued.ok || !issued.membershipId) return { ok: false, error: issued.error ?? "발급에 실패했어요" };
   const paid = await recordPayment({ membershipId: issued.membershipId, method, amount });
   if (!paid.ok) {
-    // 보상: 결제 없는 회원권이 남으면 재시도 시 중복 발급된다(감사 #18) — 방금 발급분을 회수.
-    await sb.from("membership_events").delete().eq("membership_id", issued.membershipId);
-    await sb.from("memberships").delete().eq("id", issued.membershipId);
+    if (issued.renewed && issued.prev) {
+      // 연장(재구매)이었으면 기존 회원권을 삭제하면 안 된다(치명적 데이터 손실) — 연장분만 원복.
+      await sb.from("memberships").update({
+        remaining_sessions: issued.prev.remaining_sessions,
+        total_sessions: issued.prev.total_sessions,
+        end_date: issued.prev.end_date,
+        price: issued.prev.price,
+        product: issued.prev.product,
+      }).eq("id", issued.membershipId);
+      // 방금 남긴 재구매 연장 이벤트만 제거(다른 이력 보존).
+      const { data: ev } = await sb.from("membership_events").select("id")
+        .eq("membership_id", issued.membershipId).eq("type", "extend").like("note", "재구매 %")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (ev) await sb.from("membership_events").delete().eq("id", ev.id);
+    } else {
+      // 신규 발급이면: 결제 없는 회원권이 남으면 재시도 시 중복 발급된다(감사 #18) — 방금 발급분을 회수.
+      await sb.from("membership_events").delete().eq("membership_id", issued.membershipId);
+      await sb.from("memberships").delete().eq("id", issued.membershipId);
+    }
     return { ok: false, error: paid.error ?? "결제 기록에 실패했어요. 처음부터 다시 시도해주세요." };
   }
   return { ok: true };
