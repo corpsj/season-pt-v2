@@ -53,6 +53,7 @@ export function MembersClient({
   items,
   statusById,
   products,
+  allProducts,
   trainers,
   ownerId,
   initialId,
@@ -63,6 +64,7 @@ export function MembersClient({
   items: MemberListItem[];
   statusById: Record<string, Status>;
   products: MembershipProduct[];
+  allProducts: MembershipProduct[]; // 판매중 + 단종 — 한꺼번에 입력(기존 회원 승계)에서만 사용
   trainers: TrainerOpt[];
   ownerId: string;
   initialId: string | null;
@@ -694,7 +696,7 @@ export function MembersClient({
 
       {modal === "bulk" ? (
         <BulkAddModal
-          products={products}
+          products={allProducts}
           trainers={trainers}
           onClose={() => setModal(null)}
           onDone={() => router.refresh()}

@@ -253,6 +253,7 @@ export function BulkAddModal({
             <Icon name="circle-info" size={16} className="mt-px flex-none text-[#A89F92]" />
             <span className="text-[12px] font-medium leading-relaxed text-[#766D60]">
               상품을 고르면 <b className="font-semibold text-[#5B5345]">등록일 + 상품 유효기간</b>으로 만료일이 자동 계산돼요.
+              <b className="font-semibold text-[#5B5345]"> 단종된 회원권</b>도 여기선 고를 수 있어요(기존 회원 승계용) — 이후 그 회원권으로 연장도 돼요.
               잔여횟수는 기존 회원 이관 시 남은 횟수로 고쳐주세요. 결제는 기록되지 않아 매출에 잡히지 않아요 — 신규 결제는 등록 후 결제 화면에서 기록해주세요.
               <b className="font-semibold text-[#5B5345]"> 2:1 팀</b>은 두 회원을 위·아래 행에 입력한 뒤 행 왼쪽의 <b className="font-semibold text-[#5B5345]">[2:1]</b> 버튼을 누르세요 — 팀 일정·담당은 위 행 기준이에요.
             </span>
@@ -310,7 +311,16 @@ export function BulkAddModal({
                       className={`${CELL} ${OK_B} cursor-pointer appearance-none`}
                     >
                       <option value="">상품 없음</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {products.some((p) => p.active) ? (
+                        <optgroup label="판매 중">
+                          {products.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </optgroup>
+                      ) : null}
+                      {products.some((p) => !p.active) ? (
+                        <optgroup label="단종 (기존 회원 승계용)">
+                          {products.filter((p) => !p.active).map((p) => <option key={p.id} value={p.id}>{p.name} · 단종</option>)}
+                        </optgroup>
+                      ) : null}
                     </select>
                     <input value={r.remaining} onChange={(e) => patch(r.key, { remaining: e.target.value.replace(/\D/g, "") })} disabled={!r.productId} inputMode="numeric" placeholder={prod ? String(prod.sessions) : "—"} className={`${CELL} text-center ${b("remaining")}`} />
                     <div>

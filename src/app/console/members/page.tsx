@@ -1,6 +1,6 @@
 import { Topbar } from "@/components/console/Topbar";
 import { getMembersAll, getMemberDetail } from "@/lib/data/groups/trainer-home";
-import { getMembershipProducts, getAssignableTrainers } from "@/lib/data/groups/owner-ops";
+import { getMembershipProducts, getAllProducts, getAssignableTrainers } from "@/lib/data/groups/owner-ops";
 import { getTrainerContext } from "@/lib/data/db";
 import { getMemberFiles } from "@/lib/data/groups/member-files";
 import { getMemberMeals } from "@/lib/data/groups/meals";
@@ -12,9 +12,10 @@ export default async function ConsoleMembersPage({
   searchParams: Promise<{ sel?: string }>;
 }) {
   const sp = await searchParams;
-  const [{ view, statusById }, products, trainers, t] = await Promise.all([
+  const [{ view, statusById }, products, allProducts, trainers, t] = await Promise.all([
     getMembersAll(),
     getMembershipProducts(),
+    getAllProducts(), // 한꺼번에 입력(기존 회원 승계)에서 단종 상품까지 선택 가능하게
     getAssignableTrainers(),
     getTrainerContext(), // 레이아웃이 대표를 보장 — 등록 모달 담당 강사 기본값용
   ]);
@@ -32,6 +33,7 @@ export default async function ConsoleMembersPage({
           items={view.items}
           statusById={statusById}
           products={products}
+          allProducts={allProducts}
           trainers={trainers}
           ownerId={t?.id ?? ""}
           initialId={initialId}
