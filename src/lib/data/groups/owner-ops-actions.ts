@@ -80,7 +80,8 @@ export async function createMember(input: {
     .select("id")
     .single();
   if (memErr || !member) {
-    return { ok: false, error: "이미 등록된 연락처이거나 등록에 실패했어요" };
+    if (memErr?.code === "23505") return { ok: false, error: "이미 등록된 연락처예요" };
+    return { ok: false, error: memErr ? `등록 실패(${memErr.code ?? "?"}: ${memErr.message})` : "등록에 실패했어요" };
   }
 
   // 담당 강사 연결 실패는 치명적(회원이 어느 강사에게도 안 보임) — 방금 만든 회원을 지우고 실패 처리(감사 #20).
@@ -89,7 +90,7 @@ export async function createMember(input: {
     .insert({ member_id: member.id, trainer_id: assignedTrainerId });
   if (linkErr) {
     await sb.from("members").delete().eq("id", member.id);
-    return { ok: false, error: "담당 강사 연결에 실패했어요. 다시 시도해주세요." };
+    return { ok: false, error: `담당 강사 연결 실패(${linkErr.code ?? "?"}: ${linkErr.message}). 다시 시도해주세요.` };
   }
 
   // 선택 요일마다 정기 수업 스케줄 + 참여 회원 연결. 실패는 경고로 노출(감사 #20: 조용히 삼키지 않는다).
@@ -127,6 +128,7 @@ export async function createMember(input: {
 
   revalidatePath("/t");
   revalidatePath("/t/members");
+  revalidatePath("/console/members"); // 콘솔에서 등록해도 목록 갱신되게(일괄 등록과 정합)
   return { ok: true, memberId: member.id, warn };
 }
 

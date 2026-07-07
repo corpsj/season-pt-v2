@@ -131,7 +131,13 @@ export async function bulkAddMembers(
       .select("id")
       .single();
     if (memErr || !member) {
-      failed.push({ name, error: "이미 등록된 연락처이거나 등록 실패" });
+      // 실제 원인을 삼키지 않고 노출 — 중복 연락처(23505)면 안내, 그 외 DB 오류는 코드·메시지를 그대로.
+      const reason = memErr?.code === "23505"
+        ? "이미 등록된 연락처"
+        : memErr
+          ? `등록 실패(${memErr.code ?? "?"}: ${memErr.message})`
+          : "등록 실패";
+      failed.push({ name, error: reason });
       continue;
     }
 
@@ -139,7 +145,7 @@ export async function bulkAddMembers(
     const { error: linkErr } = await sb.from("member_trainers").insert({ member_id: member.id, trainer_id: trainerId });
     if (linkErr) {
       await sb.from("members").delete().eq("id", member.id);
-      failed.push({ name, error: "담당 강사 연결 실패 — 다시 시도해주세요" });
+      failed.push({ name, error: `담당 강사 연결 실패(${linkErr.code ?? "?"}: ${linkErr.message}) — 다시 시도해주세요` });
       continue;
     }
 
