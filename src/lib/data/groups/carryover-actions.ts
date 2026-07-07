@@ -32,9 +32,16 @@ export type BulkMemberInput = {
 export async function bulkAddMembers(
   rows: BulkMemberInput[],
 ): Promise<Result & { created: number; failed: { name: string; error: string }[] }> {
-  const t = await getTrainerContext();
-  if (!t) return { ok: false, error: "로그인이 필요해요", created: 0, failed: [] };
-  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR, created: 0, failed: [] };
+  // 인증 확인이 throw하면 클라 await가 터져 버튼이 '등록 중…'에서 멈추고 '완료'가 안 뜬다 —
+  // throw를 삼켜 화면에 원인을 노출(진단). 세션 만료/쿠키 파싱 오류 등이 여기로 잡힌다.
+  let t: Awaited<ReturnType<typeof getTrainerContext>>;
+  try {
+    t = await getTrainerContext();
+  } catch (e) {
+    return { ok: false, error: `인증 확인 오류: ${e instanceof Error ? e.message : String(e)}`, created: 0, failed: [] };
+  }
+  if (!t) return { ok: false, error: "로그인이 필요해요(세션이 만료됐을 수 있어요 — 새로고침 후 다시 로그인)", created: 0, failed: [] };
+  if (t.role !== "owner") return { ok: false, error: `${OWNER_ONLY_ERROR} (현재 권한: ${t.role})`, created: 0, failed: [] };
   if (rows.length === 0) return { ok: false, error: "등록할 회원이 없어요", created: 0, failed: [] };
 
   // 상품·강사 사전 로드(id → 매핑). 드롭다운 입력이지만 서버에서 재검증(위조/stale 방지).

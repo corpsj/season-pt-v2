@@ -34,9 +34,14 @@ export async function createMember(input: {
   product?: { productId: string };
   payment?: { method: PaymentMethod; amount?: number; paidAt?: string };
 }): Promise<Result & { memberId?: string; warn?: string }> {
-  const t = await getTrainerContext();
-  if (!t) return { ok: false, error: "로그인이 필요해요" };
-  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  let t: Awaited<ReturnType<typeof getTrainerContext>>;
+  try {
+    t = await getTrainerContext();
+  } catch (e) {
+    return { ok: false, error: `인증 확인 오류: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  if (!t) return { ok: false, error: "로그인이 필요해요(세션이 만료됐을 수 있어요 — 새로고침 후 다시 로그인)" };
+  if (t.role !== "owner") return { ok: false, error: `${OWNER_ONLY_ERROR} (현재 권한: ${t.role})` };
 
   const name = input.name.trim();
   const phone = normPhone(input.phone);
@@ -177,9 +182,14 @@ export async function updateMember(
   id: string,
   input: { name: string; phone: string; gender: Gender; injuryNote?: string; birth?: string },
 ): Promise<Result> {
-  const t = await getTrainerContext();
-  if (!t) return { ok: false, error: "로그인이 필요해요" };
-  if (t.role !== "owner") return { ok: false, error: OWNER_ONLY_ERROR };
+  let t: Awaited<ReturnType<typeof getTrainerContext>>;
+  try {
+    t = await getTrainerContext();
+  } catch (e) {
+    return { ok: false, error: `인증 확인 오류: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  if (!t) return { ok: false, error: "로그인이 필요해요(세션이 만료됐을 수 있어요 — 새로고침 후 다시 로그인)" };
+  if (t.role !== "owner") return { ok: false, error: `${OWNER_ONLY_ERROR} (현재 권한: ${t.role})` };
 
   const name = input.name.trim();
   const phone = normPhone(input.phone);
