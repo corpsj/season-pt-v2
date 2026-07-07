@@ -230,19 +230,26 @@ export function MembersClient({
     // 입력값은 합계(2:1이면 두 회원 합). 회원당 결제 1건이라 듀엣은 절반씩 나눠 기록한다.
     const payment = f.productId ? { method: f.method, amount: is2on1 ? Math.round(Number(f.amount) / 2) : Number(f.amount), paidAt: payDate || undefined } : undefined;
     setBusy(true);
-    const r = is2on1
-      ? await createDuetMembers({
-          members: [
-            { name: f.name, phone: f.phone, birth: f.birth, gender: f.gender },
-            { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
-          ],
-          trainerId: f.trainerId,
-          slots,
-          product,
-          payment,
-        })
-      : await createMember({ name: f.name, phone: f.phone, birth: f.birth, gender: f.gender, slots, trainerId: f.trainerId, product, payment });
-    setBusy(false);
+    let r: Awaited<ReturnType<typeof createMember>>;
+    try {
+      r = is2on1
+        ? await createDuetMembers({
+            members: [
+              { name: f.name, phone: f.phone, birth: f.birth, gender: f.gender },
+              { name: p2.name, phone: p2.phone, birth: p2.birth, gender: p2.gender },
+            ],
+            trainerId: f.trainerId,
+            slots,
+            product,
+            payment,
+          })
+        : await createMember({ name: f.name, phone: f.phone, birth: f.birth, gender: f.gender, slots, trainerId: f.trainerId, product, payment });
+    } catch (e) {
+      // 액션이 throw하면 여기서 잡아 버튼 멈춤 방지 + 원인 노출.
+      return toast(`등록 중 오류가 발생했어요: ${e instanceof Error ? e.message : String(e)}`, "error");
+    } finally {
+      setBusy(false);
+    }
     if (!r.ok) return toast(r.error ?? "등록에 실패했어요", "error");
     toast(r.warn ?? (is2on1 ? "듀엣 회원 두 명을 등록했어요" : "회원을 등록했어요"));
     setModal(null);

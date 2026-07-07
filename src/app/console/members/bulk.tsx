@@ -169,30 +169,36 @@ export function BulkAddModal({
     if (busy || validCount === 0 || errCount > 0) return;
     setBusy(true);
     setErr(null);
-    const res = await bulkAddMembers(
-      filled.map((r) => {
-        // 팀 쌍의 둘째 행: 일정·담당은 첫 행 기준(개인 1:1 스케줄이 따로 생기지 않게 slots는 비운다).
-        const p = pairPartner(r);
-        const isSecond = !!p && rows.findIndex((o) => o.key === p.key) < rows.findIndex((o) => o.key === r.key);
-        return {
-          name: r.name, phone: r.phone, birth: r.birth.replace(/\D/g, ""), gender: r.gender,
-          productId: r.productId || null,
-          remaining: r.productId ? Number(r.remaining) : null,
-          startDate: r.productId ? r.startDate : null,
-          slots: isSecond ? [] : r.slots,
-          trainerId: (isSecond ? p!.trainerId : r.trainerId) || null,
-          teamKey: r.teamKey,
-        };
-      }),
-    );
-    setBusy(false);
-    if (!res.ok && res.created === 0 && res.failed.length === 0) {
-      setErr(res.error ?? "등록에 실패했어요");
-      return;
+    try {
+      const res = await bulkAddMembers(
+        filled.map((r) => {
+          // 팀 쌍의 둘째 행: 일정·담당은 첫 행 기준(개인 1:1 스케줄이 따로 생기지 않게 slots는 비운다).
+          const p = pairPartner(r);
+          const isSecond = !!p && rows.findIndex((o) => o.key === p.key) < rows.findIndex((o) => o.key === r.key);
+          return {
+            name: r.name, phone: r.phone, birth: r.birth.replace(/\D/g, ""), gender: r.gender,
+            productId: r.productId || null,
+            remaining: r.productId ? Number(r.remaining) : null,
+            startDate: r.productId ? r.startDate : null,
+            slots: isSecond ? [] : r.slots,
+            trainerId: (isSecond ? p!.trainerId : r.trainerId) || null,
+            teamKey: r.teamKey,
+          };
+        }),
+      );
+      if (!res.ok && res.created === 0 && res.failed.length === 0) {
+        setErr(res.error ?? "등록에 실패했어요");
+        return;
+      }
+      setResult({ created: res.created, failed: res.failed });
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* noop */ } // 등록 성공 → 초안 소멸
+      onDone();
+    } catch (e) {
+      // 서버 액션이 throw하면(reject) 여기로 — 없으면 버튼이 '등록 중…'에 영구히 갇힌다(실제 증상).
+      setErr(`등록 중 오류가 발생했어요: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false); // 성공·실패·throw 어느 경우든 반드시 해제
     }
-    setResult({ created: res.created, failed: res.failed });
-    try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* noop */ } // 등록 성공 → 초안 소멸
-    onDone();
   }
 
   return (
