@@ -8,6 +8,11 @@ set -a; . ./.env.deploy.local; . ./.env.local; set +a
 REPO="${REPO:-season-pt-v2}"
 PROJECT="${PROJECT:-season-pt-v2}"
 
+if [ -z "${CRON_SECRET:-}" ]; then
+  echo "CRON_SECRET is required; refusing to deploy a disabled maintenance endpoint." >&2
+  exit 1
+fi
+
 # 1) GitHub repo 생성 + push (gh 인증 필요)
 if ! git remote get-url origin >/dev/null 2>&1; then
   gh repo create "$REPO" --private --source=. --remote=origin --push
@@ -22,7 +27,10 @@ vercel link --yes --project "$PROJECT" --token "$VERCEL_TOKEN" ${VERCEL_SCOPE:+-
 setenv() {
   local name="$1" val="$2"
   [ -z "$val" ] && return 0
-  printf '%s' "$val" | vercel env add "$name" production --force --token "$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"} >/dev/null 2>&1 || true
+  if ! printf '%s' "$val" | vercel env add "$name" production --force --token "$VERCEL_TOKEN" ${VERCEL_SCOPE:+--scope "$VERCEL_SCOPE"} >/dev/null; then
+    echo "ERROR: failed to configure Vercel production env: $name" >&2
+    exit 1
+  fi
 }
 setenv NEXT_PUBLIC_SUPABASE_URL "$NEXT_PUBLIC_SUPABASE_URL"
 setenv NEXT_PUBLIC_SUPABASE_ANON_KEY "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
@@ -30,5 +38,5 @@ setenv SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
 setenv MEMBER_SESSION_SECRET "$MEMBER_SESSION_SECRET"
 setenv CREDENTIAL_ENC_KEY "$CREDENTIAL_ENC_KEY"
 setenv TRAINER_EMAIL_DOMAIN "$TRAINER_EMAIL_DOMAIN"
-setenv CRON_SECRET "${CRON_SECRET:-}"
+setenv CRON_SECRET "$CRON_SECRET"
 echo "setup complete — now: bash scripts/deploy-prod.sh"

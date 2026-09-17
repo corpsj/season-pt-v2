@@ -113,7 +113,14 @@ export function MemberMyClient({ view, chatUnread, notifUnread }: { view: Member
                 {m.expired ? "만료" : m.paused ? "일시정지" : `D-${m.dDay}`}
               </span>
             </div>
-            <ProgressBar pct={m.barPct} track="bg-[#efebe2]" fill="bg-sage" className="mb-[9px]" />
+            <ProgressBar
+              pct={m.barPct}
+              track="bg-[#efebe2]"
+              fill="bg-sage"
+              className="mb-[9px]"
+              label="잔여 회원권 비율"
+              valueText={`${m.total}회 중 ${m.remaining}회 남음`}
+            />
             <div className="text-[12.5px] font-medium text-muted">유효기간 {m.endLabel} 까지</div>
           </Card>
         ) : (

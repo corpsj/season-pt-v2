@@ -17,7 +17,7 @@ type BaseProps = {
 
 export function Spinner({ size }: { size: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="animate-spin motion-reduce:animate-none" aria-hidden>
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" opacity="0.25" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
@@ -57,7 +57,7 @@ const PRIMARY =
 const OUTLINE =
   "tappable flex h-[52px] w-full items-center justify-center gap-[7px] rounded-[15px] border-[1.5px] border-sage-deep/45 bg-transparent text-[16px] font-semibold text-sage-deep hover:bg-sage/[0.07]";
 const MINI =
-  "tappable flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-sage-deep/35 bg-transparent text-[12.5px] font-semibold text-sage-deep hover:bg-sage/[0.07]";
+  "tappable relative flex h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-sage-deep/35 bg-transparent text-[12.5px] font-semibold text-sage-deep after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-[''] hover:bg-sage/[0.07]";
 
 export function PrimaryButton(props: BaseProps) {
   return <Base {...props} base={PRIMARY} />;

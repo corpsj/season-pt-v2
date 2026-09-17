@@ -22,7 +22,12 @@ export function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={cn("tappable rounded-[20px] px-[13px] py-[7px] text-[12px] leading-none", style, className)}
+      aria-pressed={selected == null ? undefined : selected}
+      className={cn(
+        "tappable inline-flex min-h-11 items-center rounded-[20px] px-[13px] py-[7px] text-[12px] leading-none",
+        style,
+        className
+      )}
     >
       {children}
     </button>

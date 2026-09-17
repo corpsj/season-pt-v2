@@ -20,7 +20,7 @@ export interface TrainerContext {
  * Wrapped in React `cache()` so the auth.getUser() network call + trainers query
  * run AT MOST ONCE per request, even though it's called from many data helpers.
  */
-export const getTrainerContext = cache(async (): Promise<TrainerContext | null> => {
+export const getTrainerSetupContext = cache(async (): Promise<TrainerContext | null> => {
   const sb = await createSupabaseServer();
   const {
     data: { user },
@@ -44,10 +44,37 @@ export const getTrainerContext = cache(async (): Promise<TrainerContext | null> 
   };
 });
 
-/** Resolve the logged-in member from the signed cookie (server only, request-cached). */
+/**
+ * Operational trainer context. A phone-only first login creates a short-lived
+ * authenticated setup session, but that session must not authorize attendance,
+ * scheduling, finance, chat, or other Server Actions before credentials are set.
+ */
+export const getTrainerContext = cache(async (): Promise<TrainerContext | null> => {
+  const trainer = await getTrainerSetupContext();
+  return trainer?.mustChangePassword ? null : trainer;
+});
+
+/**
+ * Resolve the logged-in member from the signed cookie (server only, request-cached).
+ * A valid signature is not enough: deleted/inactive members must lose access immediately,
+ * rather than keeping a renewable 30-day cookie until it expires.
+ */
 export const getMemberContext = cache(async (): Promise<MemberSession | null> => {
   const c = await cookies();
-  return verifySession(c.get(MEMBER_COOKIE)?.value);
+  const session = await verifySession(c.get(MEMBER_COOKIE)?.value);
+  if (!session) return null;
+
+  const admin = createSupabaseAdmin();
+  const { data: member, error } = await admin
+    .from("members")
+    .select("id, name, status")
+    .eq("id", session.memberId)
+    .maybeSingle();
+  // Auth checks fail closed on database errors, missing rows, and 탈퇴(inactive).
+  if (error || !member || member.status === "inactive") return null;
+
+  // Keep display data current even when the signed cookie predates a name correction.
+  return { ...session, name: member.name };
 });
 
 /**

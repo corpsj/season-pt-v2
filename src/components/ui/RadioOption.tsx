@@ -21,6 +21,7 @@ export function RadioOption({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={Boolean(selected)}
       className={cn(
         "tappable flex w-full items-center gap-3 rounded-[14px] px-4 py-3.5 text-left",
         selected ? "border-[1.5px] border-sage bg-sage-banner2" : "border border-ink/[0.08] bg-card",

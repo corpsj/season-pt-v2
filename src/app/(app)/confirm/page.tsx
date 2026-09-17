@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { Card } from "@/components/ui/Card";
 import { Banner } from "@/components/ui/Banner";
@@ -6,12 +7,13 @@ import { Icon } from "@/components/ui/icon";
 import { getConfirm } from "@/lib/data/groups/scheduling";
 
 export default async function ConfirmPage(props: {
-  searchParams: Promise<{ to?: string }>;
+  searchParams: Promise<{ to?: string; request?: string }>;
 }) {
-  const { to: toParam } = await props.searchParams;
+  const { to: toParam, request } = await props.searchParams;
   // 오픈 리다이렉트 방지: 내부 절대경로("/…")만 허용. "//evil.com"·"https://…"은 거부하고 기본값으로.
   const to = toParam && toParam.startsWith("/") && !toParam.startsWith("//") ? toParam : "/t";
-  const view = await getConfirm();
+  const view = request ? await getConfirm(request) : null;
+  if (!view) notFound();
 
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">

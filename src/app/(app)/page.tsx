@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { PrimaryButton, OutlineButton } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icon";
-import { getTrainerContext, getMemberContext } from "@/lib/data/db";
+import { getMemberContext } from "@/lib/data/db";
+import { getTrainerSetupContext } from "@/lib/auth/context";
 
 /**
  * Real desktop BROWSER only — routes PC visitors to the owner console. Excludes mobile
@@ -25,7 +26,8 @@ export default async function StartPage() {
   if (isDesktopBrowser(ua)) redirect("/console");
 
   // Stay logged in: a returning user with a live session skips the chooser.
-  if (await getTrainerContext()) redirect("/t");
+  const trainer = await getTrainerSetupContext();
+  if (trainer) redirect(trainer.mustChangePassword ? "/set-password" : "/t");
   if (await getMemberContext()) redirect("/m");
   return (
     <div className="scr flex min-h-0 flex-1 flex-col">

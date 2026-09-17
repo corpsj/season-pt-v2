@@ -2,6 +2,7 @@ import "server-only";
 import {
   sb,
   getTrainerContext,
+  getMemberContext,
   kstDateISO,
   clockHM,
   weekdayKo,
@@ -212,6 +213,7 @@ export async function getClassDetail(sessionId: string): Promise<ClassDetailView
     status: session?.status ?? "scheduled",
     dateISO: dISO,
     isFuture: session ? new Date(session.scheduled_at).getTime() > Date.now() : false,
+    isFutureDay: dISO > todayISO(),
     members: members.map((m) => {
       const c = content.get(m.id);
       return {
@@ -463,41 +465,48 @@ export async function getInbox(): Promise<TrainerInboxView> {
 
 /* --------------------------------------------------------------- confirm */
 
-export async function getConfirm(): Promise<ConfirmView> {
-  // Static success view — the most recently accepted change for this trainer, if any.
-  const t = await getTrainerContext();
-  if (t) {
-    const { data: sessRows } = await sb
-      .from("sessions")
-      .select("id, scheduled_at")
-      .eq("trainer_id", t.id);
-    const sessions = sessRows ?? [];
-    const sessionIds = sessions.map((s) => s.id as string);
-    if (sessionIds.length) {
-      const { data: reqRows } = await sb
-        .from("schedule_change_requests")
-        .select("session_id, original_at, proposed_slots")
-        .in("session_id", sessionIds)
-        .eq("type", "change")
-        .eq("status", "accepted")
-        .order("resolved_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (reqRows && reqRows.original_at) {
-        const after =
-          (reqRows.proposed_slots && (reqRows.proposed_slots as string[])[0]) ||
-          reqRows.original_at;
-        const remaining = await (async () => {
-          const ms = await sessionMembers(reqRows.session_id as string);
-          return ms[0] ? remainingFor(ms[0].id) : 0;
-        })();
-        return {
-          before: slotLabel(reqRows.original_at),
-          after: slotLabel(after),
-          remainingKept: remaining,
-        };
-      }
-    }
+export async function getConfirm(requestId: string): Promise<ConfirmView | null> {
+  if (!requestId) return null;
+  const [t, member] = await Promise.all([getTrainerContext(), getMemberContext()]);
+  if (!t && !member) return null;
+
+  const { data: request, error: requestError } = await sb
+    .from("schedule_change_requests")
+    .select("id, session_id, original_at, accepted_slot, type, status")
+    .eq("id", requestId)
+    .eq("type", "change")
+    .eq("status", "accepted")
+    .maybeSingle();
+  if (requestError || !request?.original_at) return null;
+
+  const { data: session, error: sessionError } = await sb
+    .from("sessions")
+    .select("id, trainer_id, scheduled_at")
+    .eq("id", request.session_id)
+    .maybeSingle();
+  if (sessionError || !session?.scheduled_at) return null;
+
+  let remainingMemberId: string | null = null;
+  if (member) {
+    const { data: membership, error: membershipError } = await sb
+      .from("session_members")
+      .select("member_id")
+      .eq("session_id", request.session_id)
+      .eq("member_id", member.memberId)
+      .maybeSingle();
+    if (!membershipError && membership) remainingMemberId = member.memberId;
   }
-  return { before: "", after: "", remainingKept: 0 };
+  if (!remainingMemberId && t && (t.role === "owner" || session.trainer_id === t.id)) {
+    const members = await sessionMembers(request.session_id as string);
+    remainingMemberId = members[0]?.id ?? null;
+  }
+  if (!remainingMemberId) return null;
+
+  return {
+    before: slotLabel(request.original_at as string),
+    // 신규 요청은 수락 순간의 실제 선택값을 보존한다. 마이그레이션 이전 accepted 행만
+    // 현재 세션 시각으로 폴백해 기존 링크가 깨지지 않게 한다.
+    after: slotLabel((request.accepted_slot ?? session.scheduled_at) as string),
+    remainingKept: remainingMemberId ? await remainingFor(remainingMemberId) : 0,
+  };
 }

@@ -44,7 +44,7 @@ export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: 
     : tabs;
 
   return (
-    <nav data-tabbar className="flex flex-none border-t border-ink/10 bg-surface/95 px-3 pt-2.5 pb-[max(20px,calc(var(--safe-b)_-_14px))] shadow-[0_-1px_10px_-6px_rgba(75,59,46,0.16)]">
+    <nav aria-label="주요 메뉴" data-tabbar className="flex flex-none border-t border-ink/10 bg-surface/95 px-3 pt-2.5 pb-[max(20px,calc(var(--safe-b)_-_14px))] shadow-[0_-1px_10px_-6px_rgba(75,59,46,0.16)]">
       {/* ponytail: bottom hugs the edge. var(--safe-b) is the FULL iPhone home-indicator
           inset (~34px) → using it whole left the bar visibly floating once the app went
           truly fullscreen. Subtract ~14px so items clear the (translucent) indicator
@@ -69,13 +69,16 @@ export function TabBar({ tabs, liveChat = false }: { tabs: TabDef[]; liveChat?: 
             <span className={cn("text-[11px]", active ? "font-semibold" : "font-medium")}>{t.label}</span>
           </>
         );
-        const cls = cn("tappable flex flex-1 flex-col items-center gap-1 active:scale-90", tone);
+        const cls = cn(
+          "tappable relative flex flex-1 flex-col items-center gap-1 after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-[''] active:scale-90",
+          tone
+        );
         return t.href ? (
-          <Link key={t.label} href={t.href} prefetch className={cls}>
+          <Link key={t.label} href={t.href} prefetch aria-current={active ? "page" : undefined} className={cls}>
             {inner}
           </Link>
         ) : (
-          <button key={t.label} type="button" onClick={() => t.toast && showToast(t.toast)} className={cls}>
+          <button key={t.label} type="button" aria-pressed={active} onClick={() => t.toast && showToast(t.toast)} className={cls}>
             {inner}
           </button>
         );

@@ -126,7 +126,9 @@ export function MemberCalendarClient({
                 <Card className="flex items-center gap-3 px-[15px] py-[13px]">
                   <div className="h-9 w-1 flex-none rounded-[3px] bg-sage" />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13.5px] font-bold text-ink">1:1 PT · {dayClass.time}</div>
+                    <div className="text-[13.5px] font-bold text-ink">
+                      {dayClass.type === "2on1" ? "2:1 PT" : "1:1 PT"} · {dayClass.time}
+                    </div>
                     <div className="mt-0.5 text-[12px] font-medium text-muted">{dayClass.trainerName}</div>
                   </div>
                   <Icon name="chevron-right" size={16} className="flex-none text-muted" />

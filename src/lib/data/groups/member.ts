@@ -290,24 +290,26 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
     primaryTrainer(me.memberId),
     sb
       .from("session_members")
-      .select("session_id, sessions(id, scheduled_at, status)")
+      .select("session_id, sessions(id, scheduled_at, status, type)")
       .eq("member_id", me.memberId),
   ]);
   const trainerName = tr?.display_name ?? "";
   const rows = (sm ?? [])
-    .map((r) => (r as unknown as {sessions?: { id: string; scheduled_at: string; status: string } }).sessions)
-    .filter((s): s is { id: string; scheduled_at: string; status: string } => !!s)
+    .map((r) => (r as unknown as {
+      sessions?: { id: string; scheduled_at: string; status: string; type: "1on1" | "2on1" };
+    }).sessions)
+    .filter((s): s is { id: string; scheduled_at: string; status: string; type: "1on1" | "2on1" } => !!s)
     .filter((s) => {
       const d = kstDateISO(s.scheduled_at);
       return d >= monthStart && d < monthEndExcl && s.status !== "cancelled";
     });
 
   const nowIso = new Date().toISOString();
-  const byDay = new Map<string, { id: string; scheduled_at: string }[]>();
+  const byDay = new Map<string, { id: string; scheduled_at: string; type: "1on1" | "2on1" }[]>();
   for (const s of rows.sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))) {
     const d = kstDateISO(s.scheduled_at);
     const arr = byDay.get(d) ?? [];
-    arr.push({ id: s.id, scheduled_at: s.scheduled_at });
+    arr.push({ id: s.id, scheduled_at: s.scheduled_at, type: s.type });
     byDay.set(d, arr);
   }
 
@@ -438,6 +440,7 @@ export async function getMemberCalendarDayMap(iso?: string): Promise<MemberCalen
       selDateLabel: `${month}월 ${n}일 ${weekdayKo(wd)}`,
       dayClasses: (byDay.get(dISO) ?? []).map((sess) => ({
         sessionId: sess.id,
+        type: sess.type,
         time: clockLabel(sess.scheduled_at),
         trainerName,
         isPast: sess.scheduled_at < nowIso,

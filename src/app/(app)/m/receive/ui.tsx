@@ -68,7 +68,8 @@ export function MemberReceiveClient({ items: initialItems }: { items: MemberRece
       }
     } else {
       // 변경 수락은 확정 화면을 거친다(기존 단건 UX 유지). 남은 요청이 있으면 목록으로 복귀.
-      router.push(remaining > 0 ? "/confirm?to=/m/receive" : "/confirm?to=/m");
+      const to = remaining > 0 ? "/m/receive" : "/m";
+      router.push(`/confirm?request=${encodeURIComponent(item.requestId)}&to=${encodeURIComponent(to)}`);
     }
   }
 

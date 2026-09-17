@@ -341,6 +341,7 @@ export interface ClassDetailView {
   status: SessionStatus;
   dateISO: string; // 세션 KST 날짜 YYYY-MM-DD
   isFuture: boolean; // scheduled_at > now
+  isFutureDay: boolean; // 오늘보다 뒤의 KST 날짜(출석 처리 차단 기준)
   members: SessionMemberContent[];
 }
 /** 회원 앱 수업 상세 — 본인 데이터만(읽기 전용). */
@@ -470,6 +471,7 @@ export interface MemberCalendarView {
 /** A class shown under the selected calendar day. `isPast` hides the 변경 affordance. */
 export interface MemberDayClass {
   sessionId: string;
+  type: SessionType;
   time: string;
   trainerName: string;
   isPast: boolean;

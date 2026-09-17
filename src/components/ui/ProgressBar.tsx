@@ -6,18 +6,31 @@ export function ProgressBar({
   fill = "bg-progress",
   animate = true,
   className,
+  label = "진행률",
+  valueText,
 }: {
   pct: number;
   track?: string;
   fill?: string;
   animate?: boolean;
   className?: string;
+  label?: string;
+  valueText?: string;
 }) {
+  const value = Math.max(0, Math.min(100, pct));
   return (
-    <div className={cn("h-2 w-full overflow-hidden rounded-full", track, className)}>
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+      aria-valuetext={valueText}
+      className={cn("h-2 w-full overflow-hidden rounded-full", track, className)}
+    >
       <div
         className={cn("h-full rounded-full", fill, animate && "pt-grow")}
-        style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+        style={{ width: `${value}%` }}
       />
     </div>
   );

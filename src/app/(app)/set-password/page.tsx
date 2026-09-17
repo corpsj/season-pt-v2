@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { getTrainerContext } from "@/lib/auth/context";
+import { getTrainerSetupContext } from "@/lib/auth/context";
 import { SetPasswordClient } from "./ui";
 
 export default async function SetPasswordPage() {
-  const ctx = await getTrainerContext();
+  const ctx = await getTrainerSetupContext();
   if (!ctx) redirect("/login/trainer");
   return <SetPasswordClient needsUsername={ctx.needsUsername} />;
 }

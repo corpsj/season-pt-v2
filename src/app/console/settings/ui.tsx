@@ -50,7 +50,7 @@ export function SettingsClient({ products, settings, exercises, notices, display
           <div className="flex items-center gap-3 rounded-[13px] bg-[#FBF7F1] px-4 py-3.5">
             <Icon name="triangle-exclamation" size={18} className="text-terracotta" />
             <div className="flex-1"><div className="text-[13px] font-semibold text-ink">노쇼 시 1회 차감</div><div className="mt-px text-[11px] font-medium text-[#9A917F]">미출석 회원 잔여 횟수 차감</div></div>
-            <Switch on={noshow} onChange={(v) => { setNoshow(v); savePolicy({ noshowDeducts: v, cancelCutoffHours: cutoff }); }} />
+            <Switch label="노쇼 시 1회 차감" on={noshow} onChange={(v) => { setNoshow(v); savePolicy({ noshowDeducts: v, cancelCutoffHours: cutoff }); }} />
           </div>
           <div className="mt-2.5 flex items-center gap-3 rounded-[13px] bg-[#FBF7F1] px-4 py-3.5">
             <Icon name="clock" size={18} className="text-sage-deep" />
@@ -74,7 +74,7 @@ export function SettingsClient({ products, settings, exercises, notices, display
           ].map((n) => (
             <div key={n.key} className="flex items-center gap-3 px-1 py-3">
               <div className="flex-1"><div className="text-[13px] font-semibold text-ink">{n.label}</div><div className="mt-px text-[11px] font-medium text-[#9A917F]">{n.desc}</div></div>
-              <Switch on={n.on} onChange={(v) => { n.set(v); saveNotif({ notifExpiry: n.key === "notifExpiry" ? v : nExpiry, notifSession: n.key === "notifSession" ? v : nSession, notifPayment: n.key === "notifPayment" ? v : nPayment }); }} />
+              <Switch label={n.label} on={n.on} onChange={(v) => { n.set(v); saveNotif({ notifExpiry: n.key === "notifExpiry" ? v : nExpiry, notifSession: n.key === "notifSession" ? v : nSession, notifPayment: n.key === "notifPayment" ? v : nPayment }); }} />
             </div>
           ))}
         </Card>
@@ -762,4 +762,3 @@ function NoticesEditor({ notices }: { notices: OwnerNotice[] }) {
     </Card>
   );
 }
-

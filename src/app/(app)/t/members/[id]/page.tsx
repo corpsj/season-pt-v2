@@ -121,7 +121,13 @@ export default async function MemberDetailPage(props: { params: Promise<{ id: st
             <span className="serif text-[40px] font-semibold leading-none">{m.remaining}</span>
             <span className="text-[14px] font-semibold text-surface/80">/ {m.total}회</span>
           </div>
-          <ProgressBar pct={m.barPct} track="bg-surface/20" fill="bg-progress" />
+          <ProgressBar
+            pct={m.barPct}
+            track="bg-surface/20"
+            fill="bg-progress"
+            label="잔여 회원권 비율"
+            valueText={`${m.total}회 중 ${m.remaining}회 남음`}
+          />
           <div className="mt-3 text-[11.5px] font-medium text-surface/85">
             시작 {m.startDate} · 만료 {m.endDate}
           </div>

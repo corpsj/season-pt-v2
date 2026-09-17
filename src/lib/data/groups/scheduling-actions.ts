@@ -10,9 +10,14 @@ import { getProposeSlots, slotLabel, getRecordTarget, parseExercises } from "@/l
 import {
   hasSlotConflict,
   moveSessionWithTombstone,
-  claimCancelSession,
+  acceptCancelRequestAtomic,
   rejectPendingRequestsForSession,
 } from "@/lib/data/groups/session-mutations";
+import {
+  isFutureInstant,
+  isFutureKstDate,
+  validateFutureSlots,
+} from "@/lib/data/scheduling-guards";
 import type { AttendanceAction, WorkoutExercise } from "@/lib/types";
 
 type ActionResult = { ok: boolean; error?: string };
@@ -179,9 +184,26 @@ export async function confirmAttendance(
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
-  // 수업 완료 회원 확인 서명(신뢰 경계 검증): 작은 PNG data URL만 허용.
+  // 수업 완료 회원 확인 서명(신뢰 경계 검증): 출석은 서명이 필수이며 작은 PNG data URL만 허용.
+  if (action === "attend" && !signature) {
+    return { ok: false, error: "회원 확인 서명을 받아야 출석 처리할 수 있어요." };
+  }
   if (signature != null && (!signature.startsWith("data:image/png;base64,") || signature.length > 200_000)) {
     return { ok: false, error: "서명 데이터가 올바르지 않아요. 다시 서명해주세요." };
+  }
+
+  // UI를 우회해 미래 날짜 수업을 미리 차감하지 못하게 서버에서 다시 확인한다.
+  // 같은 KST 날짜 안에서는 운영 편의를 위해 수업 시작 전 처리도 허용한다.
+  const { data: preflight, error: preflightError } = await sb
+    .from("sessions")
+    .select("status, trainer_id, scheduled_at")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (preflightError || !preflight) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && preflight.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
+  if (preflight.status !== "scheduled") return { ok: false, error: "이미 처리된 수업이에요" };
+  if (isFutureKstDate(preflight.scheduled_at as string)) {
+    return { ok: false, error: "출석 처리는 수업 당일부터 할 수 있어요." };
   }
 
   const statusMap: Record<AttendanceAction, "attended" | "noshow" | "cancelled"> = {
@@ -359,7 +381,8 @@ export async function sendPropose(
 ): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
-  if (!proposedSlots || proposedSlots.length === 0) return { ok: false, error: "제안할 시간을 선택해주세요." };
+  const checkedSlots = validateFutureSlots(proposedSlots);
+  if (!checkedSlots.ok) return { ok: false, error: checkedSlots.error };
 
   // 세션 상태·담당 가드(감사 #14·#16): 이미 처리된 수업이나 남의 수업에 제안 불가.
   const { data: session } = await sb
@@ -396,7 +419,7 @@ export async function sendPropose(
     status: "pending",
     reason: reason ?? null,
     original_at: session.scheduled_at,
-    proposed_slots: proposedSlots,
+    proposed_slots: checkedSlots.slots,
   });
   if (error) return { ok: false, error: "제안을 보내지 못했어요. 다시 시도해주세요." }; // 유실을 성공으로 표시하지 않는다(감사 #37)
 
@@ -430,7 +453,8 @@ export async function counterPropose(
 ): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
-  if (!slotsIso || slotsIso.length === 0) return { ok: false, error: "제안할 시간을 선택해주세요." };
+  const checkedSlots = validateFutureSlots(slotsIso);
+  if (!checkedSlots.ok) return { ok: false, error: checkedSlots.error };
 
   const { data: reqRow } = await sb
     .from("schedule_change_requests")
@@ -469,7 +493,7 @@ export async function counterPropose(
     status: "pending",
     reason: reason ?? null,
     original_at: session.scheduled_at,
-    proposed_slots: slotsIso,
+    proposed_slots: checkedSlots.slots,
   });
   if (error) {
     // insert 실패 시 원 요청을 되살려 유실 방지(감사 #37 톤).
@@ -493,12 +517,11 @@ export async function moveSessionDirect(sessionId: string, newISO: string): Prom
   if (!t) return { ok: false, error: "권한이 없어요." };
 
   const target = new Date(newISO);
-  if (Number.isNaN(target.getTime())) return { ok: false, error: "시간이 올바르지 않아요." };
-  if (target.getTime() <= Date.now()) return { ok: false, error: "지난 시간으로는 옮길 수 없어요." };
+  if (!isFutureInstant(newISO)) return { ok: false, error: "지난 시간으로는 옮길 수 없어요." };
 
   const { data: session } = await sb
     .from("sessions")
-    .select("status, trainer_id")
+    .select("status, trainer_id, scheduled_at")
     .eq("id", sessionId)
     .maybeSingle();
   if (!session) return { ok: false, error: "수업을 찾을 수 없어요." };
@@ -509,7 +532,11 @@ export async function moveSessionDirect(sessionId: string, newISO: string): Prom
     return { ok: false, error: "그 시간엔 이미 다른 수업이 있어요. 다른 시간을 골라주세요." };
   }
 
-  const moved = await moveSessionWithTombstone(sessionId, target.toISOString());
+  const moved = await moveSessionWithTombstone(
+    sessionId,
+    session.scheduled_at as string,
+    target.toISOString(),
+  );
   if (!moved) return { ok: false, error: "이동에 실패했어요. 다시 시도해주세요." };
 
   // 대표가 직접 옮긴 경우 세션의 모든 회원에게 통지(2:1이면 두 명 다).
@@ -567,63 +594,78 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
   const t = await getTrainerContext();
   if (!t) return { ok: false, error: "권한이 없어요." };
 
-  // 강사는 본인 담당 세션의 요청만 처리(대표는 전체).
-  if (t.role !== "owner") {
-    const { data: pre } = await sb.from("schedule_change_requests").select("session_id").eq("id", requestId).maybeSingle();
-    if (!pre) return { ok: false, error: "요청을 찾을 수 없어요." };
-    const { data: s } = await sb.from("sessions").select("trainer_id").eq("id", pre.session_id).maybeSingle();
-    if (s?.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
-  }
-
-  // Atomic claim: accept only if still pending, so re-accepting a resolved request
-  // can't move/cancel the session (and re-deduct) a second time.
-  const { data: claimedReq } = await sb
+  const { data: req, error: requestError } = await sb
     .from("schedule_change_requests")
-    .update({ status: "accepted", resolved_at: new Date().toISOString() })
+    .select("id, session_id, requester_id, requester_type, type, status, proposed_slots, created_at, original_at")
     .eq("id", requestId)
-    .eq("status", "pending")
-    .select("id, session_id, requester_id, requester_type, type, proposed_slots, created_at, original_at");
-  if (!claimedReq || claimedReq.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
-  const req = claimedReq[0];
-  // 팀 파트너 통지 시 조율 당사자는 건너뛴다 — 회원 발의면 그 회원, 강사 발의면 없음(회원 전원에게).
-  const initiatorMemberId = req.requester_type === "member" ? (req.requester_id as string) : undefined;
+    .maybeSingle();
+  if (requestError || !req) return { ok: false, error: "요청을 찾을 수 없어요." };
+  if (req.requester_type !== "member") return { ok: false, error: "회원이 보낸 요청만 처리할 수 있어요." };
+  if (req.status !== "pending") return { ok: false, error: "이미 처리된 요청이에요." };
 
   // 요청 대상 세션의 현재 상태·시각·트레이너(가드/표식용).
-  const { data: session } = await sb
+  const { data: session, error: sessionError } = await sb
     .from("sessions")
     .select("trainer_id, type, source_schedule_id, scheduled_at, status")
     .eq("id", req.session_id)
     .maybeSingle();
+  if (sessionError || !session) return { ok: false, error: "수업을 찾을 수 없어요." };
+  if (t.role !== "owner" && session.trainer_id !== t.id) {
+    return { ok: false, error: "담당 수업이 아니에요." };
+  }
 
   // 세션이 이미 출석/노쇼/취소 처리됐으면 요청 수락은 무효 → 요청을 정리(rejected)하고 알린다(감사 C1).
-  if (!session || session.status !== "scheduled") {
-    await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
+  if (session.status !== "scheduled") {
+    await sb
+      .from("schedule_change_requests")
+      .update({ status: "rejected", resolved_at: new Date().toISOString() })
+      .eq("id", req.id)
+      .eq("status", "pending");
     return { ok: false, error: "이미 진행됐거나 처리된 수업이에요. 요청을 정리했어요." };
   }
 
   // 요청 생성 후 세션 시간이 이미 바뀌었으면(다른 요청 수락 등) 낡은 요청 — 수락하면 합의된 시간을
   // 되돌리므로 정리한다(감사 high #2 신선도 가드).
   if (req.original_at && session.scheduled_at !== req.original_at) {
-    await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
+    await sb
+      .from("schedule_change_requests")
+      .update({ status: "rejected", resolved_at: new Date().toISOString() })
+      .eq("id", req.id)
+      .eq("status", "pending");
     return { ok: false, error: "수업 시간이 이미 변경돼 요청이 만료됐어요. 요청을 정리했어요." };
   }
 
+  let target: string | null = null;
   if (req.type === "change") {
     const slots = (req.proposed_slots as string[] | null) ?? [];
-    const target = slots[0];
-    if (!target) {
-      await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
-      return { ok: false, error: "제안된 시간이 없어 변경할 수 없어요." };
+    // 회원 발의 요청은 첫 번째 제안이 수락 대상이다. 뒤쪽 대안 하나가 먼저
+    // 만료됐다는 이유로 아직 유효한 첫 제안까지 함께 폐기하지 않는다.
+    const checkedTarget = validateFutureSlots(slots[0] ? [slots[0]] : []);
+    if (!checkedTarget.ok) {
+      await sb
+        .from("schedule_change_requests")
+        .update({ status: "rejected", resolved_at: new Date().toISOString() })
+        .eq("id", req.id)
+        .eq("status", "pending");
+      return { ok: false, error: "제안 시간이 지나 요청이 만료됐어요. 요청을 정리했어요." };
     }
+    target = checkedTarget.slots[0];
     // 더블부킹 가드(감사 H6): 같은 강사·같은 시각에 다른 scheduled 세션이 있으면 거부.
     if (await hasSlotConflict(session.trainer_id as string, target, req.session_id)) {
-      await sb.from("schedule_change_requests").update({ status: "pending" }).eq("id", req.id); // 되돌려 재시도 가능
       return { ok: false, error: "그 시간에 이미 다른 수업이 있어요." };
     }
-    const moved = await moveSessionWithTombstone(req.session_id, target);
+  }
+
+  const initiatorMemberId = req.requester_id as string;
+  if (req.type === "change") {
+    const moved = await moveSessionWithTombstone(
+      req.session_id,
+      session.scheduled_at as string,
+      target!,
+      req.id as string,
+    );
     if (!moved) {
-      await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
-      return { ok: false, error: "이미 처리된 수업이에요. 요청을 정리했어요." };
+      return { ok: false, error: "다른 요청과 동시에 처리됐어요. 일정을 새로 확인해주세요." };
     }
     await notifyRequestResult({
       recipientType: "member",
@@ -632,38 +674,29 @@ export async function acceptRequest(requestId: string): Promise<ActionResult> {
       accepted: true,
     }).catch(() => {});
     // 2:1 팀이면 파트너에게 변경 결과 통지(무조건 함께 움직이므로).
-    await notifyTeamOfScheduleChange({ sessionId: req.session_id, exceptMemberId: initiatorMemberId, kind: "change", detail: `→ ${slotLabel(target)}` }).catch(() => {});
+    await notifyTeamOfScheduleChange({ sessionId: req.session_id, exceptMemberId: initiatorMemberId, kind: "change", detail: `→ ${slotLabel(target!)}` }).catch(() => {});
   } else {
-    // cancel request: atomic-claim the session, then apply deduction by REQUEST time (감사 C1·C4).
-    const settings = await getStudioSettings();
     // 회원이 요청한 시점 기준으로 컷오프 판정 — 강사가 늦게 수락해도 부당 차감되지 않게(감사 C4).
+    const settings = await getStudioSettings();
     const requestedMs = req.created_at ? new Date(req.created_at as string).getTime() : Date.now();
     const deducted = shouldDeduct("cancel", session.scheduled_at as string, settings, requestedMs);
 
-    const cancelled = await claimCancelSession(req.session_id); // 취소 + 낡은 pending 정리
-    if (!cancelled) {
-      await sb.from("schedule_change_requests").update({ status: "rejected" }).eq("id", req.id);
-      return { ok: false, error: "이미 진행됐거나 처리된 수업이에요. 요청을 정리했어요." };
+    const cancelled = await acceptCancelRequestAtomic({
+      requestId: req.id as string,
+      sessionId: req.session_id as string,
+      expectedOriginalISO: session.scheduled_at as string,
+      deducted,
+      createdBy: t.id,
+    });
+    if (!cancelled.ok) {
+      return { ok: false, error: "다른 요청과 동시에 처리됐어요. 일정을 새로 확인해주세요." };
     }
-
-    if (deducted) {
-      const memberIds = await memberIdsForSession(req.session_id);
-      const failMsg = await deductForMembers({
-        sessionId: req.session_id,
-        memberIds,
-        action: "cancel",
-        deducted: true,
-        createdBy: t.id,
-      });
-      if (failMsg) {
-        // 보상: 세션·차감·원장을 원복하고 요청을 pending으로 되돌려 재시도 가능하게(감사 #4).
-        await restoreProcessedSession(req.session_id);
-        await sb
-          .from("schedule_change_requests")
-          .update({ status: "pending", resolved_at: null })
-          .eq("id", req.id);
-        return { ok: false, error: failMsg };
-      }
+    for (const deduction of cancelled.deductions) {
+      await notifyLowSessions(
+        deduction.membershipId,
+        deduction.memberId,
+        deduction.remaining,
+      ).catch(() => {});
     }
     await notifyRequestResult({
       recipientType: "member",
@@ -695,12 +728,14 @@ export async function rejectRequest(requestId: string): Promise<ActionResult> {
     if (s?.trainer_id !== t.id) return { ok: false, error: "담당 수업이 아니에요." };
   }
 
-  const { data: rejected } = await sb
+  const { data: rejected, error: rejectError } = await sb
     .from("schedule_change_requests")
     .update({ status: "rejected", resolved_at: new Date().toISOString() })
     .eq("id", requestId)
+    .eq("requester_type", "member")
     .eq("status", "pending")
     .select("id, requester_id, type");
+  if (rejectError) return { ok: false, error: "요청을 처리하지 못했어요. 다시 시도해주세요." };
   if (!rejected || rejected.length === 0) return { ok: false, error: "이미 처리된 요청이에요." };
   const r = rejected[0];
   await notifyRequestResult({

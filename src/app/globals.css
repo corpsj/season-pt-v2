@@ -284,6 +284,29 @@ img {
   transition: transform 0.13s ease, filter 0.15s ease, background-color 0.15s ease,
     box-shadow 0.18s ease;
 }
+.tappable:focus-visible {
+  outline: 3px solid var(--color-sage-deep);
+  outline-offset: 3px;
+}
 .tappable:active {
   transform: scale(0.975);
+}
+
+/* Tailwind's stock loading utilities live outside the custom animation gate above.
+   Keep state feedback visible but static when the OS asks for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .scr,
+  .pt-pop,
+  .pt-grow,
+  .pt-live,
+  .toast-in {
+    animation: none !important;
+  }
+
+  .tappable {
+    transition-duration: 0.01ms !important;
+  }
 }

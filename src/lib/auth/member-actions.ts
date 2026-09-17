@@ -45,7 +45,7 @@ export async function memberLogin(phone: string, password: string): Promise<Resu
   if (await isLocked(admin, p)) return { ok: false, error: "로그인 시도가 많아요. 약 10분 후 다시 시도해주세요" };
   const { data: member } = await admin
     .from("members")
-    .select("id, name, password_hash")
+    .select("id, name, password_hash, status")
     .eq("phone", p)
     .maybeSingle();
   const ok = verifyPassword(password.trim(), member?.password_hash ?? DUMMY_HASH);
@@ -54,6 +54,10 @@ export async function memberLogin(phone: string, password: string): Promise<Resu
     return { ok: false, error: "휴대폰 번호 또는 비밀번호를 확인해주세요" };
   }
   await clearFails(admin, p);
+  // 상태는 비밀번호 검증 뒤에만 알려 계정 존재·탈퇴 여부가 로그인 오라클이 되지 않게 한다.
+  if (member.status === "inactive") {
+    return { ok: false, error: "탈퇴 처리된 계정이에요. 담당 선생님께 문의해주세요" };
+  }
   const token = await signSession({ memberId: member.id, name: member.name });
   const c = await cookies();
   c.set(MEMBER_COOKIE, token, {

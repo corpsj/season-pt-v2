@@ -240,7 +240,7 @@ export default function ClassDetailClient({ id, view }: { id: string; view: Clas
         <div className="h-3.5" />
       </Body>
 
-      {view.status === "scheduled" ? (
+      {view.status === "scheduled" && !view.isFutureDay ? (
         <Footer>
           <PrimaryButton href={`/t/attend/${id}`}>출석 체크</PrimaryButton>
         </Footer>

@@ -335,7 +335,7 @@ export default function InboxClient({ view }: { view: TrainerInboxView }) {
               toast(r.error ?? "처리하지 못했어요", "error");
               router.refresh();
             } else if (type === "change") {
-              router.push("/confirm");
+              router.push(`/confirm?request=${encodeURIComponent(id)}`);
             } else {
               toast("요청을 처리했어요");
               router.refresh();
