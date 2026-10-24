@@ -53,9 +53,12 @@ const draft = async ({
 before(async () => {
   if(pgUrl) await db.exec("drop schema if exists public cascade; create schema public; drop schema if exists auth cascade;");
   await db.exec(
-    "create schema auth; create table auth.users(id uuid primary key); do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$; create function auth.uid() returns uuid language sql as $$ select null::uuid $$;",
+    "create schema auth; create table auth.users(id uuid primary key); do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$; create function auth.uid() returns uuid language sql as $$ select null::uuid $$;",
   );
-  await db.exec('grant usage on schema public to authenticated, service_role');
+  await db.exec('grant usage on schema public to anon, authenticated, service_role');
+  // Observed Supabase public defaults explicitly grant these roles EXECUTE;
+  // revoking only PUBLIC does not remove inherited explicit role grants.
+  await db.exec('alter default privileges in schema public grant execute on functions to anon, authenticated');
   for (const name of [
     "0001_v2_foundation",
     "0002_revenue",
@@ -359,12 +362,29 @@ test("restore refuses refunded/transferred membership instead of inventing balan
     null,
   );
 });
-test("authenticated clients cannot execute service-only RPCs directly", async () => {
-  await db.exec("set role authenticated");
-  try {
-    await assert.rejects(attendance(), /permission denied/);
-  } finally {
-    await db.exec("reset role");
+test("anon/authenticated clients cannot execute service-only RPCs directly", async () => {
+  for (const role of ['anon','authenticated']) {
+    await db.exec(`set role ${role}`);
+    try {
+      await assert.rejects(attendance(), /permission denied for function class_attendance_atomic/);
+    } finally {
+      await db.exec("reset role");
+    }
+  }
+});
+test('Supabase default function grants are explicitly revoked from anon/authenticated',async()=>{
+  const signatures=[
+    'class_state_version()',
+    'can_manage_class(uuid,uuid)',
+    'save_class_workout_draft(uuid,uuid,uuid,integer,jsonb,text)',
+    'publish_class_workouts(uuid,uuid,jsonb)',
+    'class_attendance_atomic(uuid,uuid,text,integer,uuid,text,jsonb,boolean,text)',
+    'move_session_with_tombstone_atomic(uuid,timestamp with time zone,timestamp with time zone,uuid)',
+    'accept_cancel_request_atomic(uuid,uuid,timestamp with time zone,boolean,uuid)',
+  ];
+  for(const signature of signatures){
+    for(const role of ['anon','authenticated'])assert.equal((await rows('select has_function_privilege($1,$2,\'EXECUTE\') allowed',[role,signature]))[0].allowed,false,`${role} can execute ${signature}`);
+    assert.equal((await rows('select has_function_privilege(\'service_role\',$1,\'EXECUTE\') allowed',[signature]))[0].allowed,true,`service_role cannot execute ${signature}`);
   }
 });
 test("complete, correct, complete again keeps all audit events and returns current total balance", async () => {

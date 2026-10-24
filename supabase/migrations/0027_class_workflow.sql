@@ -199,10 +199,10 @@ begin
 end; $$;
 
 -- Service-role only; all callers must derive p_actor from the verified server context.
-revoke all on function public.can_manage_class(uuid,uuid) from public;
-revoke all on function public.save_class_workout_draft(uuid,uuid,uuid,int,jsonb,text) from public;
-revoke all on function public.publish_class_workouts(uuid,uuid,jsonb) from public;
-revoke all on function public.class_attendance_atomic(uuid,uuid,text,int,uuid,text,jsonb,boolean,text) from public;
+revoke all on function public.can_manage_class(uuid,uuid) from public, anon, authenticated;
+revoke all on function public.save_class_workout_draft(uuid,uuid,uuid,int,jsonb,text) from public, anon, authenticated;
+revoke all on function public.publish_class_workouts(uuid,uuid,jsonb) from public, anon, authenticated;
+revoke all on function public.class_attendance_atomic(uuid,uuid,text,int,uuid,text,jsonb,boolean,text) from public, anon, authenticated;
 grant execute on function public.can_manage_class(uuid,uuid) to service_role;
 grant execute on function public.save_class_workout_draft(uuid,uuid,uuid,int,jsonb,text) to service_role;
 grant execute on function public.publish_class_workouts(uuid,uuid,jsonb) to service_role;
@@ -329,7 +329,7 @@ begin
 end;
 $$;
 
-revoke all on function public.move_session_with_tombstone_atomic(uuid, timestamptz, timestamptz, uuid) from public;
+revoke all on function public.move_session_with_tombstone_atomic(uuid, timestamptz, timestamptz, uuid) from public, anon, authenticated;
 grant execute on function public.move_session_with_tombstone_atomic(uuid, timestamptz, timestamptz, uuid) to service_role;
 
 -- 취소 요청 수락도 request claim, 세션 취소, 선택적 회차 차감/원장 기록을
@@ -452,5 +452,9 @@ begin
 end;
 $$;
 
-revoke all on function public.accept_cancel_request_atomic(uuid, uuid, timestamptz, boolean, uuid) from public;
+revoke all on function public.accept_cancel_request_atomic(uuid, uuid, timestamptz, boolean, uuid) from public, anon, authenticated;
 grant execute on function public.accept_cancel_request_atomic(uuid, uuid, timestamptz, boolean, uuid) to service_role;
+
+-- Supabase default ACLs explicitly grant anon/authenticated; revoke those too.
+revoke all on function public.class_state_version() from public, anon, authenticated;
+grant execute on function public.class_state_version() to service_role;

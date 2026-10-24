@@ -1,0 +1,48 @@
+✔ duplicate/retried completion deducts once; stale retry after correction does not re-complete (819.612292ms)
+✔ simultaneously submitted last-credit requests: one debit, one rejected; PGlite serializes requests (16.063125ms)
+✔ duet second-member failure rolls back first debit, session, and ledger (14.656833ms)
+✔ cancel cutoff and reversal preserve exact original membership (16.641375ms)
+✔ existing cancellation request RPC interoperates with retained ledger and state version (14.70875ms)
+✔ foreign coach, member id, inactive and setup-only trainer cannot mutate (13.436458ms)
+✔ draft CAS, lost-response retry, member isolation, and legacy JSON round-trip (16.240042ms)
+✔ publishing member-specific drafts twice does not duplicate or mix duet records (13.615584ms)
+✔ draft conflict during completion rolls back debit and publication (14.171917ms)
+✔ free exception must be explicit; paused/expired entitlement never silently authorizes it (12.699583ms)
+✔ restore refuses refunded/transferred membership instead of inventing balance (10.186834ms)
+✔ authenticated clients cannot execute service-only RPCs directly (11.010292ms)
+✖ Supabase default function grants are explicitly revoked from anon/authenticated (10.326916ms)
+✔ complete, correct, complete again keeps all audit events and returns current total balance (13.772833ms)
+✔ existing 60-minute reservation conflict guard rejects a 30-minute overlap, allows boundary (14.615667ms)
+✔ reapplying additive migration preserves saved drafts, balances and audit rows (18.349333ms)
+﹣ independent PostgreSQL connections serialize duplicate completion and last-credit competition (0.088875ms) # SKIP
+﹣ independent PostgreSQL same-operation retry waits and returns original result (0.022625ms) # SKIP
+﹣ independent cancellation and completion on two sessions do not deadlock through member FK locks (0.017083ms) # SKIP
+﹣ cancellation request waits for session before claiming request; completion wins without deadlock (0.015625ms) # SKIP
+﹣ move request waits for session before claiming request; completion wins without deadlock (0.014541ms) # SKIP
+ℹ tests 21
+ℹ suites 0
+ℹ pass 15
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 5
+ℹ todo 0
+ℹ duration_ms 1163.905958
+
+✖ failing tests:
+
+test at scripts/qa/class-workflow-db.mjs:373:1
+✖ Supabase default function grants are explicitly revoked from anon/authenticated (10.326916ms)
+  AssertionError [ERR_ASSERTION]: anon can execute class_state_version()
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///Users/zoopark-studio/Documents/dev/season-pt_v2/scripts/qa/class-workflow-db.mjs:384:55)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

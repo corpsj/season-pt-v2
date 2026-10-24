@@ -1,0 +1,92 @@
+▲ Next.js 16.2.9 (webpack)
+- Experiments (use with caution):
+  · serverActions
+  · staleTimes
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 6.9s
+  Running TypeScript ...
+  Finished TypeScript in 4.4s ...
+  Collecting page data using 27 workers ...
+  Generating static pages using 27 workers (0/58) ...
+  Generating static pages using 27 workers (14/58)
+  Generating static pages using 27 workers (28/58)
+  Generating static pages using 27 workers (43/58)
+✓ Generating static pages using 27 workers (58/58) in 28.2s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /api/maintenance
+├ ƒ /confirm
+├ ƒ /console
+├ ƒ /console/calendar
+├ ƒ /console/finance
+├ ƒ /console/members
+├ ƒ /console/messages
+├ ƒ /console/requests
+├ ƒ /console/retention
+├ ƒ /console/revenue
+├ ƒ /console/settings
+├ ƒ /console/settlement
+├ ƒ /console/trainers
+├ ○ /dev
+├ ○ /icon.png
+├ ○ /login/instructor
+├ ○ /login/member
+├ ƒ /login/trainer
+├ ƒ /m
+├ ƒ /m/chat
+├ ƒ /m/class/[id]
+├ ƒ /m/my
+├ ƒ /m/my/body
+├ ƒ /m/my/meals
+├ ƒ /m/my/notices
+├ ƒ /m/my/notifications
+├ ƒ /m/my/notifications/feed
+├ ƒ /m/my/payments
+├ ƒ /m/my/policy
+├ ƒ /m/my/records
+├ ƒ /m/my/requests
+├ ƒ /m/receive
+├ ƒ /m/request
+├ ○ /manifest.webmanifest
+├ ƒ /set-password
+├ ○ /signup/owner
+├ ƒ /t
+├ ƒ /t/attend/[id]
+├ ƒ /t/chat
+├ ƒ /t/chat/[id]
+├ ƒ /t/chat/new
+├ ƒ /t/class/[id]
+├ ƒ /t/class/[id]/propose
+├ ƒ /t/inbox
+├ ƒ /t/members
+├ ƒ /t/members/[id]
+├ ƒ /t/members/[id]/membership
+├ ƒ /t/members/[id]/team
+├ ƒ /t/members/register
+├ ƒ /t/notifications
+├ ƒ /t/payment
+├ ƒ /t/perf
+├ ƒ /t/record/[id]
+├ ƒ /t/retention
+├ ƒ /t/revenue
+├ ƒ /t/settings
+├ ƒ /t/settings/exercises
+├ ƒ /t/settings/notices
+├ ƒ /t/settings/notifications
+├ ƒ /t/settings/policy
+├ ƒ /t/settings/products
+├ ƒ /t/staff
+├ ƒ /t/staff/[id]
+├ ƒ /t/staff/invite
+└ ƒ /t/stats
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

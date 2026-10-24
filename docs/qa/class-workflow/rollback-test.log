@@ -1,0 +1,14 @@
+bun test v1.3.14 (0d9b296a)
+
+rollback-guard.test.mjs:
+(pass) compatibility rollback confirmAttendance authenticates and refuses writes [0.69ms]
+(pass) compatibility rollback saveRecord authenticates and refuses writes [0.20ms]
+(pass) compatibility rollback deleteRecord authenticates and refuses writes [0.12ms]
+(pass) compatibility rollback acceptRequest authenticates and refuses writes [0.39ms]
+(pass) compatibility rollback revertAttendance authenticates and refuses writes [0.15ms]
+(pass) compatibility rollback preserves unauthenticated rejection [0.06ms]
+
+ 6 pass
+ 0 fail
+ 17 expect() calls
+Ran 6 tests across 1 file. [21.00ms]

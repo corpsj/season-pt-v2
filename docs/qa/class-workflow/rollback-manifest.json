@@ -1,0 +1,17 @@
+{
+  "base": "ba1c905196a51a0f9ba14cebd89f62e490d538ec",
+  "guardedActions": [
+    "confirmAttendance",
+    "saveRecord",
+    "deleteRecord",
+    "acceptRequest",
+    "revertAttendance"
+  ],
+  "patchSha256": "b15074cc0b6364780f7c1ff58dcb3652c62ff74326a9b817ddea07dbf968f43d",
+  "purpose": "Emergency app compatibility rollback after retained reversal history; no schema rollback or DB restore",
+  "envCopied": false,
+  "archiveSha256": "3006434574385fdb634e707cc9d94a726c8a6d7d3ee60e6375b0e22a70727713",
+  "build": "pass; Next16.2.9 webpack with synthetic environment",
+  "writeGuardTests": "6pass/0fail; no DB/notification access",
+  "priorDeployment": "dpl_2Sb8U5Gq5ZdNV45ftL6L1PkAY6h6"
+}

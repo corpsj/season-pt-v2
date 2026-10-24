@@ -1,0 +1,52 @@
+--- a/src/lib/data/groups/scheduling-actions.ts
++++ b/src/lib/data/groups/scheduling-actions.ts
+@@ -21,6 +21,9 @@
+ import type { AttendanceAction, WorkoutExercise } from "@/lib/types";
+
+ type ActionResult = { ok: boolean; error?: string };
++
++// Emergency compatibility build: retain data while repairing the class workflow.
++function classWorkflowWritesPaused() { return true; }
+
+ /** Members attached to a session. */
+ async function memberIdsForSession(sessionId: string): Promise<string[]> {
+@@ -183,6 +186,7 @@
+ ): Promise<ActionResult> {
+   const t = await getTrainerContext();
+   if (!t) return { ok: false, error: "권한이 없어요." };
++  if (classWorkflowWritesPaused()) return { ok: false, error: "수업 기록과 회차 처리를 점검 중이에요. 기존 기록은 보존돼요." };
+
+   // 수업 완료 회원 확인 서명(신뢰 경계 검증): 출석은 서명이 필수이며 작은 PNG data URL만 허용.
+   if (action === "attend" && !signature) {
+@@ -277,6 +281,7 @@
+ ): Promise<ActionResult> {
+   const t = await getTrainerContext();
+   if (!t) return { ok: false, error: "권한이 없어요." };
++  if (classWorkflowWritesPaused()) return { ok: false, error: "수업 기록과 회차 처리를 점검 중이에요. 기존 기록은 보존돼요." };
+
+   // 강사는 본인 담당 세션만 기록(대표는 전체) — 임의 sessionId 변이 차단(감사 #14).
+   const { data: target } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+@@ -353,6 +358,7 @@
+ export async function deleteRecord(sessionId: string): Promise<ActionResult> {
+   const t = await getTrainerContext();
+   if (!t) return { ok: false, error: "권한이 없어요." };
++  if (classWorkflowWritesPaused()) return { ok: false, error: "수업 기록과 회차 처리를 점검 중이에요. 기존 기록은 보존돼요." };
+
+   const { data: target } = await sb.from("sessions").select("trainer_id").eq("id", sessionId).maybeSingle();
+   if (!target) return { ok: false, error: "수업을 찾을 수 없어요." };
+@@ -593,6 +599,7 @@
+ export async function acceptRequest(requestId: string): Promise<ActionResult> {
+   const t = await getTrainerContext();
+   if (!t) return { ok: false, error: "권한이 없어요." };
++  if (classWorkflowWritesPaused()) return { ok: false, error: "수업 기록과 회차 처리를 점검 중이에요. 기존 기록은 보존돼요." };
+
+   const { data: req, error: requestError } = await sb
+     .from("schedule_change_requests")
+@@ -776,6 +783,7 @@
+ export async function revertAttendance(sessionId: string): Promise<ActionResult> {
+   const t = await getTrainerContext();
+   if (!t) return { ok: false, error: "권한이 없어요." };
++  if (classWorkflowWritesPaused()) return { ok: false, error: "수업 기록과 회차 처리를 점검 중이에요. 기존 기록은 보존돼요." };
+
+   // 원자 클레임: 처리된(attended/noshow/cancelled) 세션만 scheduled로 되돌린다. 서명도 무효화.
+   let claimQ = sb

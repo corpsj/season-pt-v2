@@ -1,123 +1,123 @@
 bun test v1.3.14 (0d9b296a)
 
 src/lib/chat/merge.test.ts:
-(pass) isTempId detects optimistic ids [0.09ms]
-(pass) mergeMessages skips messages already present by id [0.70ms]
-(pass) mergeMessages replaces an optimistic temp with the real row by text [0.24ms]
-(pass) mergeMessages appends genuinely new incoming messages [0.05ms]
-(pass) mergeMessages returns the SAME reference when nothing changed (감사 H14) [0.02ms]
+(pass) isTempId detects optimistic ids [0.08ms]
+(pass) mergeMessages skips messages already present by id [0.24ms]
+(pass) mergeMessages replaces an optimistic temp with the real row by text [0.05ms]
+(pass) mergeMessages appends genuinely new incoming messages [0.03ms]
+(pass) mergeMessages returns the SAME reference when nothing changed (감사 H14) [0.01ms]
 (pass) mergeMessages returns a NEW reference when something changed [0.02ms]
-(pass) latestCursor returns the newest createdAt, ignoring temps [0.05ms]
+(pass) latestCursor returns the newest createdAt, ignoring temps [0.03ms]
 (pass) latestCursor keeps fallback when no message has a timestamp [0.01ms]
 
 src/lib/auth/cron-auth.test.ts:
-(pass) authorizeCronRequest > fails closed with 503 when CRON_SECRET is missing [0.26ms]
-(pass) authorizeCronRequest > rejects a missing authorization header [0.07ms]
-(pass) authorizeCronRequest > rejects a wrong bearer secret [0.02ms]
-(pass) authorizeCronRequest > accepts the exact configured bearer secret [0.06ms]
+(pass) authorizeCronRequest > fails closed with 503 when CRON_SECRET is missing [0.12ms]
+(pass) authorizeCronRequest > rejects a missing authorization header [0.02ms]
+(pass) authorizeCronRequest > rejects a wrong bearer secret [0.01ms]
+(pass) authorizeCronRequest > accepts the exact configured bearer secret [0.01ms]
 
 src/lib/import/carryover-parse.test.ts:
-(pass) parseEndDate: 다양한 표기 → YYYY-MM-DD, 존재하지 않는 날짜 거부 [0.29ms]
+(pass) parseEndDate: 다양한 표기 → YYYY-MM-DD, 존재하지 않는 날짜 거부 [0.18ms]
 
 src/lib/data/notify.test.ts:
 (pass) 잔여 3 이하 low [0.03ms]
 (pass) 만료 7일 이내(0이상) 임박 [0.02ms]
 
 src/lib/data/refund.test.ts:
-(pass) 환불 = 결제 − 사용회차×정상가 − 결제×10% [0.16ms]
-(pass) 음수면 0 clamp [0.02ms]
-(pass) 사용 0회 = 위약금만
+(pass) 환불 = 결제 − 사용회차×정상가 − 결제×10% [0.11ms]
+(pass) 음수면 0 clamp [0.01ms]
+(pass) 사용 0회 = 위약금만 [0.01ms]
 
 src/lib/data/finance-calc.test.ts:
-(pass) summarizeFinance: netProfit = revenue - expenses [0.68ms]
-(pass) summarizeFinance: byCategory 합 = expenseTotal, 금액 내림차순 [0.38ms]
-(pass) summarizeFinance: netDeltaPct는 prevNet<=0이면 null, >0이면 값 [0.08ms]
-(pass) summarizeFinance: revenue 0이면 pctOfRevenue null, netProfit 음수 허용 [0.04ms]
-(pass) settlementLaborRows: owner와 payout<=0 제외 [0.15ms]
+(pass) summarizeFinance: netProfit = revenue - expenses [0.25ms]
+(pass) summarizeFinance: byCategory 합 = expenseTotal, 금액 내림차순 [0.04ms]
+(pass) summarizeFinance: netDeltaPct는 prevNet<=0이면 null, >0이면 값 [0.02ms]
+(pass) summarizeFinance: revenue 0이면 pctOfRevenue null, netProfit 음수 허용 [0.02ms]
+(pass) settlementLaborRows: owner와 payout<=0 제외 [0.06ms]
 
 src/lib/data/workout-sets.test.ts:
-(pass) legacy summaries remain summaries; malformed history is tolerated [0.31ms]
-(pass) targets and incomplete actual values do not become completed performance [0.12ms]
-(pass) copy uses completed actual as next target without inventing another completion [0.03ms]
-(pass) server input boundary rejects excessive, negative, fractional reps, missing actual reps [0.09ms]
+(pass) legacy summaries remain summaries; malformed history is tolerated [0.33ms]
+(pass) targets and incomplete actual values do not become completed performance [0.11ms]
+(pass) copy uses completed actual as next target without inventing another completion [0.02ms]
+(pass) server input boundary rejects excessive, negative, fractional reps, missing actual reps [0.10ms]
 
 src/lib/data/renewal.test.ts:
-(pass) valid membership: adds sessions and extends from current end_date [0.38ms]
-(pass) expired membership: extends from today, paused stays paused [0.07ms]
+(pass) valid membership: adds sessions and extends from current end_date [0.08ms]
+(pass) expired membership: extends from today, paused stays paused [0.02ms]
 
 src/lib/data/workout-format.test.ts:
-(pass) exerciseLine — reps 유무·kg 0 하위호환 [0.29ms]
+(pass) exerciseLine — reps 유무·kg 0 하위호환 [0.03ms]
 
 src/lib/data/deduction.test.ts:
-(pass) attend always deducts [0.09ms]
-(pass) noshow respects noshowDeducts [0.04ms]
-(pass) cancel never deducts when cutoff is 0 [0.02ms]
-(pass) cancel deducts only inside the cutoff window [0.04ms]
+(pass) attend always deducts [0.06ms]
+(pass) noshow respects noshowDeducts [0.02ms]
+(pass) cancel never deducts when cutoff is 0
+(pass) cancel deducts only inside the cutoff window [0.02ms]
 
 src/lib/data/team-slots.test.ts:
-(pass) teamMembersError: needs exactly two distinct ids [0.14ms]
-(pass) normalizeTeamSlots: dedups exact duplicates [0.16ms]
-(pass) normalizeTeamSlots: rejects out-of-range and bad minutes [0.05ms]
-(pass) normalizeTeamSlots: empty is an error [0.02ms]
+(pass) teamMembersError: needs exactly two distinct ids [0.05ms]
+(pass) normalizeTeamSlots: dedups exact duplicates [0.07ms]
+(pass) normalizeTeamSlots: rejects out-of-range and bad minutes [0.03ms]
+(pass) normalizeTeamSlots: empty is an error
 
 src/lib/data/kst-bounds.test.ts:
-(pass) weekBoundsFromKst → 그 주의 월~토 (KST), 실제 UTC instant [0.09ms]
-(pass) monthBoundsFromKst → 2026년 6월 경계 (UTC) [0.03ms]
-(pass) monthLabelFromKst → '2026년 6월' [0.02ms]
+(pass) weekBoundsFromKst → 그 주의 월~토 (KST), 실제 UTC instant [0.04ms]
+(pass) monthBoundsFromKst → 2026년 6월 경계 (UTC) [0.02ms]
+(pass) monthLabelFromKst → '2026년 6월' [0.01ms]
 (pass) kstSlotInstant: 2026-07-01(수) 21:30 KST → UTC 12:30 [0.02ms]
 (pass) kstSlotInstant: 07:00 KST는 UTC 전날 22:00이지만 KST 날짜는 유지 [0.01ms]
-(pass) dayBoundsFromKst: 2026-07-03 → [07-02 15:00Z, 07-03 15:00Z) [0.07ms]
+(pass) dayBoundsFromKst: 2026-07-03 → [07-02 15:00Z, 07-03 15:00Z) [0.06ms]
 (pass) dayBoundsFromKst: 월말 경계 2026-07-31 → 다음날은 08-01 00:00 KST [0.01ms]
 
 src/lib/data/settlement-calc.test.ts:
-(pass) computePayout: 빈 배열은 0 [0.11ms]
-(pass) computePayout: 스냅샷 pay_rate 우선 [0.04ms]
-(pass) computePayout: pay_rate 없으면 현재 단가 폴백 [0.03ms]
-(pass) computePayout: 2on1은 count2on1 + rate2on1 폴백 [0.02ms]
-(pass) computePayout: 유형 혼합 + 스냅샷/폴백 혼합 합산 [0.03ms]
-(pass) computePayout: 단가 0 + 스냅샷 없음이면 payout 0 [0.03ms]
+(pass) computePayout: 빈 배열은 0 [0.03ms]
+(pass) computePayout: 스냅샷 pay_rate 우선 [0.01ms]
+(pass) computePayout: pay_rate 없으면 현재 단가 폴백
+(pass) computePayout: 2on1은 count2on1 + rate2on1 폴백
+(pass) computePayout: 유형 혼합 + 스냅샷/폴백 혼합 합산 [0.01ms]
+(pass) computePayout: 단가 0 + 스냅샷 없음이면 payout 0
 
 src/lib/data/balance.test.ts:
-(pass) 미수금 = 가격 − 양수 결제 합계 [1.43ms]
-(pass) 음수(환불) 결제는 제외, 완납/과납은 0 [0.02ms]
+(pass) 미수금 = 가격 − 양수 결제 합계 [0.03ms]
+(pass) 음수(환불) 결제는 제외, 완납/과납은 0 [0.01ms]
 (pass) price null이면 0
 (pass) paidInFull [0.02ms]
 
 src/lib/data/scheduling-guards.test.ts:
-(pass) validateFutureSlots > normalizes valid future slots [0.29ms]
-(pass) validateFutureSlots > rejects missing, past, duplicate, and excessive slots [0.07ms]
-(pass) future instant and future KST day are separate policies [0.06ms]
+(pass) validateFutureSlots > normalizes valid future slots [0.05ms]
+(pass) validateFutureSlots > rejects missing, past, duplicate, and excessive slots [0.02ms]
+(pass) future instant and future KST day are separate policies [0.04ms]
 
 src/lib/data/draft-save-queue.test.ts:
-(pass) edits while saving and a second member are serialized without losing the latest input [1.18ms]
-(pass) network failure retains input; reload recovery retries against the original server version [0.32ms]
-(pass) conflict never automatically overwrites another tab; stale local recovery is blocked [0.12ms]
-(pass) recovery only applies to authorized workspace members and expires [1.72ms]
-(pass) lost response whose payload reached the server recovers without a false key-order conflict [0.76ms]
+(pass) edits while saving and a second member are serialized without losing the latest input [0.45ms]
+(pass) network failure retains input; reload recovery retries against the original server version [0.25ms]
+(pass) conflict never automatically overwrites another tab; stale local recovery is blocked [0.11ms]
+(pass) recovery only applies to authorized workspace members and expires [0.04ms]
+(pass) lost response whose payload reached the server recovers without a false key-order conflict [0.24ms]
 
 src/lib/data/product-class.test.ts:
-(pass) productTier: 대표/강사/공용 분류 [0.09ms]
-(pass) productType: 1:1/2:1/기타 [0.04ms]
-(pass) matchesQuad: 담당×유형 4분류 탭 [0.09ms]
-(pass) isUnclassified: 무표기 공용/무유형 상품 [0.04ms]
-(pass) isDuetProduct: 2:1 상품이면 듀엣(2명 등록) [0.03ms]
-(pass) productShortLabel: 유형 있으면 회차만, 없으면 전체 이름 [0.05ms]
-(pass) composeProductName: 토글 조합 → 규칙 준수 이름 [0.04ms]
-(pass) isDiscountProduct: 특별할인 접두 감지 [0.04ms]
-(pass) composeProductName: 특별할인 접두(4번째 인자) [0.02ms]
-(pass) compose → parse 왕복 일치 [0.02ms]
-(pass) compose(특별할인) → parse 왕복 일치 (담당·유형 유지) [0.02ms]
+(pass) productTier: 대표/강사/공용 분류 [0.03ms]
+(pass) productType: 1:1/2:1/기타 [0.02ms]
+(pass) matchesQuad: 담당×유형 4분류 탭 [0.04ms]
+(pass) isUnclassified: 무표기 공용/무유형 상품 [0.02ms]
+(pass) isDuetProduct: 2:1 상품이면 듀엣(2명 등록) [0.01ms]
+(pass) productShortLabel: 유형 있으면 회차만, 없으면 전체 이름 [0.02ms]
+(pass) composeProductName: 토글 조합 → 규칙 준수 이름 [0.02ms]
+(pass) isDiscountProduct: 특별할인 접두 감지 [0.02ms]
+(pass) composeProductName: 특별할인 접두(4번째 인자) [0.01ms]
+(pass) compose → parse 왕복 일치 [0.01ms]
+(pass) compose(특별할인) → parse 왕복 일치 (담당·유형 유지) [0.01ms]
 
 src/lib/media/upload-guard.test.ts:
-(pass) fitDimensions: 작은 이미지는 그대로 [1.57ms]
-(pass) fitDimensions: 가로가 긴 이미지는 긴 변 기준 축소 [0.03ms]
+(pass) fitDimensions: 작은 이미지는 그대로 [0.04ms]
+(pass) fitDimensions: 가로가 긴 이미지는 긴 변 기준 축소
 (pass) fitDimensions: 세로가 긴 이미지는 긴 변 기준 축소 [0.02ms]
-(pass) validateUpload: 용량 초과 거부 [0.06ms]
-(pass) validateUpload: 잘못된 MIME 거부 [0.03ms]
-(pass) validateUpload: 활성 콘텐츠 가능한 SVG 거부 [0.01ms]
-(pass) validateUpload: 정상 통과 [0.03ms]
+(pass) validateUpload: 용량 초과 거부 [0.03ms]
+(pass) validateUpload: 잘못된 MIME 거부 [0.01ms]
+(pass) validateUpload: 활성 콘텐츠 가능한 SVG 거부
+(pass) validateUpload: 정상 통과 [0.01ms]
 
  81 pass
  0 fail
  194 expect() calls
-Ran 81 tests across 18 files. [317.00ms]
+Ran 81 tests across 18 files. [43.00ms]
