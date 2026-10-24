@@ -65,6 +65,7 @@ export interface StudioClass {
   isTeam: boolean;
   showAttend: boolean;
   scheduledAt: string;
+  attendanceVersion: number;
   signed: boolean; // 수업 완료 회원 확인 서명 존재 여부(이미지는 온디맨드 로드)
 }
 
@@ -74,13 +75,14 @@ type SessRow = {
   type: "1on1" | "2on1";
   status: SessionStatus;
   trainer_id: string;
+  attendance_version: number;
   signed_at: string | null;
   trainers: { display_name: string } | null;
   session_members: { members: { name: string; avatar_tone: string } | null }[];
 };
 
 const SELECT =
-  "id, scheduled_at, type, status, trainer_id, signed_at, trainers(display_name), session_members(members(name, avatar_tone))";
+  "id, scheduled_at, type, status, trainer_id, signed_at, attendance_version, trainers(display_name), session_members(members(name, avatar_tone))";
 
 function plusHour(iso: string): string {
   return new Date(new Date(iso).getTime() + 60 * 60 * 1000).toISOString();
@@ -105,6 +107,7 @@ function mapClass(s: SessRow, colorByTrainer: Map<string, string>, today: string
     showAttend: s.status === "scheduled" && dayDiff(sessionISO, today) >= 0,
     scheduledAt: s.scheduled_at,
     signed: !!s.signed_at,
+    attendanceVersion: s.attendance_version,
   };
 }
 
@@ -270,7 +273,7 @@ export interface StudioCalendarWeek {
 }
 
 const WEEK_SELECT =
-  "id, scheduled_at, type, status, trainer_id, signed_at, trainers(display_name), session_members(member_id, members(name, avatar_tone))";
+  "id, scheduled_at, type, status, trainer_id, signed_at, attendance_version, trainers(display_name), session_members(member_id, members(name, avatar_tone))";
 
 export async function getStudioCalendarWeek(offset = 0): Promise<StudioCalendarWeek> {
   const now = nowKstParts();
@@ -298,7 +301,8 @@ export async function getStudioCalendarWeek(offset = 0): Promise<StudioCalendarW
     type: "1on1" | "2on1";
     status: SessionStatus;
     trainer_id: string;
-    signed_at: string | null;
+    attendance_version: number;
+  signed_at: string | null;
     trainers: { display_name: string } | null;
     session_members: { member_id: string; members: { name: string; avatar_tone: string } | null }[];
   };

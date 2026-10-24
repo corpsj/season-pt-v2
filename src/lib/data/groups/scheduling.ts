@@ -1,4 +1,5 @@
 import "server-only";
+import { parseWorkoutExercises } from "@/lib/data/workout-sets";
 import {
   sb,
   getTrainerContext,
@@ -32,6 +33,7 @@ type SessionRow = {
   scheduled_at: string;
   type: "1on1" | "2on1";
   status: "scheduled" | "attended" | "noshow" | "cancelled";
+  attendance_version: number;
 };
 
 type MemberRow = {
@@ -45,13 +47,7 @@ const initialOf = (name: string): string => name.slice(0, 1);
 
 /** workout_records.exercises(jsonb) → 안전 파싱. reps는 있을 때만(하위호환). */
 export function parseExercises(raw: unknown): WorkoutExercise[] {
-  return (Array.isArray(raw) ? raw : [])
-    .map((e) => e as { name?: unknown; kg?: unknown; sets?: unknown; reps?: unknown })
-    .filter((e) => typeof e?.name === "string")
-    .map((e) => {
-      const reps = Number(e.reps);
-      return { name: String(e.name), kg: Number(e.kg) || 0, sets: Number(e.sets) || 0, ...(reps > 0 ? { reps } : {}) };
-    });
+  return parseWorkoutExercises(raw);
 }
 
 /** Members attached to a session, ordered for stable team rendering. */
@@ -101,7 +97,7 @@ async function fetchSession(sessionId: string): Promise<SessionRow | null> {
   if (!t) return null;
   let q = sb
     .from("sessions")
-    .select("id, trainer_id, scheduled_at, type, status")
+    .select("id, trainer_id, scheduled_at, type, status, attendance_version")
     .eq("id", sessionId);
   if (t.role !== "owner") q = q.eq("trainer_id", t.id);
   const { data } = await q.maybeSingle();
@@ -132,6 +128,7 @@ export async function getAttendTarget(sessionId: string): Promise<AttendTarget> 
   const name = members.length ? sessionName(members) : "";
   return {
     sessionId,
+    attendanceVersion: session?.attendance_version ?? 0,
     name,
     initial: first ? initialOf(first.name) : "",
     avatarTone: first ? tone(first.avatar_tone) : "sage",

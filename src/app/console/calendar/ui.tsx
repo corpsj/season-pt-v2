@@ -1,21 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { PlainTextInput } from "@/components/ui/PlainTextInput";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { Card, OBtn, GBtn, PBtn, ConsoleModal, MicroLabel, pill } from "@/components/console/ui";
-import { Combobox } from "@/components/ui/Select";
-import { Stepper } from "@/components/ui/Stepper";
-import { confirmAttendance, revertAttendance, sendPropose, moveSessionDirect, saveRecord, loadRecordTarget } from "@/lib/data/groups/scheduling-actions";
+import { confirmAttendance, revertAttendance, sendPropose, moveSessionDirect } from "@/lib/data/groups/scheduling-actions";
 import { loadSessionSignature, loadProposeSlots, loadStudioWeek } from "@/lib/data/groups/console-actions";
 import type { StudioCalendarMonth, StudioCalendarWeek, StudioClass } from "@/lib/data/groups/console";
 import { WeekGrid } from "./WeekGrid";
 
 type ProposeView = NonNullable<Awaited<ReturnType<typeof loadProposeSlots>>>;
-type RecordView = NonNullable<Awaited<ReturnType<typeof loadRecordTarget>>>;
-type RecExercise = { name: string; kg: number; sets: number; reps?: number };
 
 const WD = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -79,33 +75,8 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
     setSig({ member: c.member, url });
   }
 
-  // 수업 기록 모달 — 캘린더 날짜 모달의 수업 행에서 '기록'을 누르면 기존 기록·종목 옵션을 온디맨드 로드한다.
-  const [rec, setRec] = useState<RecordView | null>(null);
-  const [recExercises, setRecExercises] = useState<RecExercise[]>([]);
-  const [recComment, setRecComment] = useState("");
-  const [recSaving, setRecSaving] = useState(false);
-  const updateEx = (i: number, patch: Partial<RecExercise>) =>
-    setRecExercises((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...patch } : e)));
-
-  async function openRecord(c: StudioClass) {
-    setBusy(c.sessionId);
-    const r = await loadRecordTarget(c.sessionId);
-    setBusy(null);
-    if (!r) return toast("기록 정보를 불러오지 못했어요", "error");
-    setRecExercises(r.target.exercises);
-    setRecComment(r.target.comment ?? "");
-    setRec(r);
-  }
-
-  async function saveRec() {
-    if (!rec || recSaving) return;
-    setRecSaving(true);
-    const r = await saveRecord(rec.target.sessionId, recExercises, recComment || undefined);
-    setRecSaving(false);
-    if (!r.ok) return toast(r.error ?? "기록 저장에 실패했어요", "error");
-    toast("기록을 저장했어요");
-    setRec(null);
-    router.refresh();
+  function openRecord(c: StudioClass) {
+    router.push(`/t/record/${c.sessionId}`);
   }
 
   async function openPropose(c: StudioClass) {
@@ -182,24 +153,48 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
     return (src[iso] ?? []).filter(match);
   }
 
-  async function mark(id: string, action: "attend" | "noshow") {
-    setBusy(id);
-    const r = await confirmAttendance(id, action);
-    setBusy(null);
-    if (!r.ok) return toast(r.error ?? "처리에 실패했어요", "error");
-    toast(action === "attend" ? "출석 처리했어요" : "노쇼 처리했어요");
-    await refreshActive();
+  const operationIds = useRef(new Map<string, string>());
+  function operationFor(key: string) {
+    const existing = operationIds.current.get(key);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    operationIds.current.set(key, id);
+    return id;
   }
 
-  // 오처리 정정(감사 H1): 예정 상태로 되돌리고 차감된 회차를 복구한다.
-  async function revert(id: string) {
-    if (!(await confirm({ title: "이 수업 처리를 되돌릴까요?", description: "차감된 회차가 복구되고 '예정' 상태로 돌아가요.", confirmLabel: "되돌리기" }))) return;
+  async function mark(id: string, action: "attend" | "noshow") {
+    // Attendance requires the member signature collected in the shared record screen.
+    if (action === "attend") { router.push(`/t/record/${id}`); return; }
+    const c = Object.values(view === "week" ? week.byDate : month.byDate).flat().find((c) => c.sessionId === id);
+    if (!c || busy === id) return;
     setBusy(id);
-    const r = await revertAttendance(id);
-    setBusy(null);
-    if (!r.ok) return toast(r.error ?? "되돌리지 못했어요", "error");
-    toast("처리를 되돌렸어요");
-    await refreshActive();
+    try {
+      const r = await confirmAttendance(id, action, undefined, {
+        operationId: operationFor(`${id}:${c.attendanceVersion}:${action}`),
+        expectedVersion: c.attendanceVersion,
+      });
+      if (!r.ok) return toast(r.error ?? "처리에 실패했어요", "error");
+      toast("노쇼 처리했어요");
+      await refreshActive();
+    } catch { toast("처리 결과를 확인하지 못했어요. 같은 요청으로 다시 시도해주세요.", "error"); }
+    finally { setBusy(null); }
+  }
+
+  async function revert(id: string) {
+    if (!(await confirm({ title: "이 수업 처리를 되돌릴까요?", description: "차감된 회차가 복구되고 '예정' 상태로 돌아가요. 기존 이력은 유지돼요.", confirmLabel: "되돌리기" }))) return;
+    const c = Object.values(view === "week" ? week.byDate : month.byDate).flat().find((c) => c.sessionId === id);
+    if (!c || busy === id) return;
+    setBusy(id);
+    try {
+      const r = await revertAttendance(id, {
+        operationId: operationFor(`${id}:${c.attendanceVersion}:revert`),
+        expectedVersion: c.attendanceVersion, reason: "콘솔에서 수업 처리 정정",
+      });
+      if (!r.ok) return toast(r.error ?? "되돌리지 못했어요", "error");
+      toast("처리를 되돌렸어요");
+      await refreshActive();
+    } catch { toast("정정 결과를 확인하지 못했어요. 같은 요청으로 다시 시도해주세요.", "error"); }
+    finally { setBusy(null); }
   }
 
   const modalClasses = day ? classesOn(day) : [];
@@ -502,69 +497,6 @@ export function CalendarClient({ month, initialWeek }: { month: StudioCalendarMo
               ) : null}
             </>
           )}
-        </ConsoleModal>
-      ) : null}
-
-      {/* 수업 기록 — 날짜 모달의 수업 행에서 '기록' 클릭 시. 모바일 운동 기록과 동일한 폼(종목·중량·세트·코멘트). */}
-      {rec ? (
-        <ConsoleModal
-          title="수업 기록"
-          width={460}
-          onClose={() => setRec(null)}
-          footer={
-            <>
-              <GBtn className="flex-1" onClick={() => setRec(null)}>취소</GBtn>
-              <PBtn className="flex-[2]" icon="check-bold" pending={recSaving} onClick={saveRec}>기록 저장</PBtn>
-            </>
-          }
-        >
-          <div className="mb-4 flex items-center gap-2.5 rounded-[12px] bg-[#F3F7EC] px-3.5 py-2.5">
-            <span className="text-[13.5px] font-bold text-ink">{rec.target.name}</span>
-            <span className="text-[12px] font-medium text-[#847A66]">{rec.target.dateLabel}</span>
-          </div>
-
-          <MicroLabel className="mb-2">운동 종목</MicroLabel>
-          <div className="flex flex-col gap-2.5">
-            {recExercises.map((ex, i) => (
-              <div key={i} className="rounded-[13px] border border-[rgba(75,59,46,0.1)] bg-[#FBF9F5] p-3">
-                <div className="mb-2.5 flex items-center gap-2">
-                  <div className="flex-1">
-                    <Combobox value={ex.name} options={rec.exerciseOptions} onChange={(v) => updateEx(i, { name: v })} placeholder="종목 이름" />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setRecExercises((prev) => prev.filter((_, idx) => idx !== i))}
-                    aria-label="종목 삭제"
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[#A89F92] transition hover:bg-ink/[0.06]"
-                  >
-                    <Icon name="close" size={16} />
-                  </button>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <Stepper value={ex.kg} unit="kg" onDec={() => updateEx(i, { kg: Math.max(0, ex.kg - 5) })} onInc={() => updateEx(i, { kg: ex.kg + 5 })} />
-                  <Stepper value={ex.reps ?? 10} unit="회" onDec={() => updateEx(i, { reps: Math.max(0, (ex.reps ?? 10) - 1) })} onInc={() => updateEx(i, { reps: (ex.reps ?? 10) + 1 })} />
-                  <Stepper value={ex.sets} unit="세트" onDec={() => updateEx(i, { sets: Math.max(0, ex.sets - 1) })} onInc={() => updateEx(i, { sets: ex.sets + 1 })} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setRecExercises((prev) => [...prev, { name: "", kg: 0, sets: 0, reps: 10 }])}
-            className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[12px] border-[1.5px] border-dashed border-sage-deep/40 py-2.5 text-[13px] font-bold text-sage-deep transition hover:bg-[#F3F7EC]"
-          >
-            <Icon name="plus-bold" size={15} />
-            종목 추가
-          </button>
-
-          <MicroLabel className="mb-2 mt-4">코멘트</MicroLabel>
-          <PlainTextInput
-            multiline
-            value={recComment}
-            onChange={setRecComment}
-            placeholder="오늘 수업 코멘트를 남겨주세요…"
-            className="min-h-[66px] w-full resize-none rounded-[12px] border border-[rgba(75,59,46,0.12)] bg-white px-3.5 py-3 text-[13.5px] text-ink outline-none placeholder:text-[#B3AA9C] focus:ring-2 focus:ring-sage/40"
-          />
         </ConsoleModal>
       ) : null}
 

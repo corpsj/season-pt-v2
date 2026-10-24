@@ -1,0 +1,74 @@
+✔ duplicate/retried completion deducts once; stale retry after correction does not re-complete (61.956333ms)
+✔ simultaneously submitted last-credit requests: one debit, one rejected; PGlite serializes requests (18.408ms)
+✔ duet second-member failure rolls back first debit, session, and ledger (15.389542ms)
+✔ cancel cutoff and reversal preserve exact original membership (16.612541ms)
+✔ existing cancellation request RPC interoperates with retained ledger and state version (18.09225ms)
+✔ foreign coach, member id, inactive and setup-only trainer cannot mutate (16.381958ms)
+✔ draft CAS, lost-response retry, member isolation, and legacy JSON round-trip (16.494833ms)
+✔ publishing member-specific drafts twice does not duplicate or mix duet records (17.512791ms)
+✔ draft conflict during completion rolls back debit and publication (15.8315ms)
+✔ free exception must be explicit; paused/expired entitlement never silently authorizes it (16.0895ms)
+✔ restore refuses refunded/transferred membership instead of inventing balance (18.441542ms)
+✖ authenticated clients cannot execute service-only RPCs directly (15.431125ms)
+✔ complete, correct, complete again keeps all audit events and returns current total balance (15.400959ms)
+✔ existing 60-minute reservation conflict guard rejects a 30-minute overlap, allows boundary (17.067708ms)
+✔ reapplying additive migration preserves saved drafts, balances and audit rows (17.833417ms)
+✔ independent PostgreSQL connections serialize duplicate completion and last-credit competition (69.774084ms)
+✔ independent PostgreSQL same-operation retry waits and returns original result (73.901917ms)
+✖ independent cancellation and completion on two sessions do not deadlock through member FK locks (1070.674125ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 16
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1633.035584
+
+✖ failing tests:
+
+test at scripts/qa/class-workflow-db.mjs:361:1
+✖ authenticated clients cannot execute service-only RPCs directly (15.431125ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /permission denied/. Input:
+
+  'error: function class_attendance_atomic(unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) does not exist'
+
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///Users/zoopark-studio/Documents/dev/season-pt_v2/scripts/qa/class-workflow-db.mjs:364:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: error: function class_attendance_atomic(unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown) does not exist
+        at /private/tmp/season-pt-release/tools/node_modules/pg/lib/client.js:694:17
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async attendanceWith (file:///Users/zoopark-studio/Documents/dev/season-pt_v2/scripts/qa/class-workflow-db.mjs:34:11)
+        at async waitForActual (node:assert:615:5)
+        at async strict.rejects (node:assert:738:25)
+        at async TestContext.<anonymous> (file:///Users/zoopark-studio/Documents/dev/season-pt_v2/scripts/qa/class-workflow-db.mjs:364:5)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: /permission denied/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at scripts/qa/class-workflow-db.mjs:461:1
+✖ independent cancellation and completion on two sessions do not deadlock through member FK locks (1070.674125ms)
+  AssertionError [ERR_ASSERTION]: deadlock detected
+  + actual - expected
+
+  + 'rejected'
+  - 'fulfilled'
+
+      at TestContext.<anonymous> (file:///Users/zoopark-studio/Documents/dev/season-pt_v2/scripts/qa/class-workflow-db.mjs:470:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'rejected',
+    expected: 'fulfilled',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

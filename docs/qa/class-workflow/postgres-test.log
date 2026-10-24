@@ -1,0 +1,28 @@
+✔ duplicate/retried completion deducts once; stale retry after correction does not re-complete (77.805875ms)
+✔ simultaneously submitted last-credit requests: one debit, one rejected; PGlite serializes requests (21.601208ms)
+✔ duet second-member failure rolls back first debit, session, and ledger (21.729083ms)
+✔ cancel cutoff and reversal preserve exact original membership (22.09425ms)
+✔ existing cancellation request RPC interoperates with retained ledger and state version (22.669667ms)
+✔ foreign coach, member id, inactive and setup-only trainer cannot mutate (21.482416ms)
+✔ draft CAS, lost-response retry, member isolation, and legacy JSON round-trip (23.188334ms)
+✔ publishing member-specific drafts twice does not duplicate or mix duet records (20.109667ms)
+✔ draft conflict during completion rolls back debit and publication (19.800334ms)
+✔ free exception must be explicit; paused/expired entitlement never silently authorizes it (20.793625ms)
+✔ restore refuses refunded/transferred membership instead of inventing balance (20.159167ms)
+✔ authenticated clients cannot execute service-only RPCs directly (17.672709ms)
+✔ complete, correct, complete again keeps all audit events and returns current total balance (18.930334ms)
+✔ existing 60-minute reservation conflict guard rejects a 30-minute overlap, allows boundary (19.238083ms)
+✔ reapplying additive migration preserves saved drafts, balances and audit rows (22.287458ms)
+✔ independent PostgreSQL connections serialize duplicate completion and last-credit competition (72.913333ms)
+✔ independent PostgreSQL same-operation retry waits and returns original result (72.054042ms)
+✔ independent cancellation and completion on two sessions do not deadlock through member FK locks (665.823959ms)
+✔ cancellation request waits for session before claiming request; completion wins without deadlock (93.253292ms)
+✔ move request waits for session before claiming request; completion wins without deadlock (91.127334ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1491.268292

@@ -1,9 +1,19 @@
-import { getRecordTarget } from "@/lib/data/groups/scheduling";
+import { notFound } from "next/navigation";
+import { getClassWorkspace } from "@/lib/data/groups/class-workflow";
 import { getExercises } from "@/lib/data/groups/owner-ops";
 import RecordClient from "./ui";
 
-export default async function RecordPage(props: { params: Promise<{ id: string }> }) {
+export default async function RecordPage(props: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await props.params;
-  const [target, exercises] = await Promise.all([getRecordTarget(id), getExercises()]);
-  return <RecordClient target={target} exerciseOptions={exercises.map((e) => e.name)} />;
+  const workspace = await getClassWorkspace(id);
+  if (!workspace) notFound();
+  const exercises = await getExercises();
+  return (
+    <RecordClient
+      workspace={workspace}
+      exerciseOptions={exercises.map(({ id, name }) => ({ id, name }))}
+    />
+  );
 }

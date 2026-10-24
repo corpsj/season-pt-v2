@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Body, Footer } from "@/components/shell/Body";
 import { BackButton } from "@/components/shell/BackButton";
@@ -26,6 +26,8 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const operationId = useRef<string>("");
+  const [allowFree, setAllowFree] = useState(false);
   const needSign = method === "attend" && !signature;
 
   const deducted = shouldDeduct(method, t.scheduledAt, settings);
@@ -125,6 +127,7 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
           ) : null;
         })()}
 
+        {t.balances.some((b) => b.remaining <= 0) ? <label className="mt-3 flex min-h-12 items-center gap-2 text-sm"><input type="checkbox" checked={allowFree} onChange={(e) => setAllowFree(e.target.checked)} />회차가 없는 회원은 무료 수업으로 기록</label> : null}
         {/* 수업 완료 회원 확인 서명 — 출석일 때만(노쇼·취소는 회원 부재) */}
         {method === "attend" ? (
           <>
@@ -157,7 +160,10 @@ export default function AttendClient({ target: t, settings }: { target: AttendTa
           if (busy) return;
           setConfirmOpen(false);
           setBusy(true);
-          const r = await confirmAttendance(t.sessionId, method, method === "attend" ? signature ?? undefined : undefined);
+          operationId.current ||= crypto.randomUUID();
+          let r;
+          try { r = await confirmAttendance(t.sessionId, method, method === "attend" ? signature ?? undefined : undefined, { operationId: operationId.current, expectedVersion: t.attendanceVersion, allowFree }); }
+          catch { setBusy(false); toast("처리 결과를 확인하지 못했어요. 같은 요청으로 다시 시도해주세요.", "error"); return; }
           setBusy(false);
           if (!r.ok) {
             toast(r.error ?? "처리에 실패했어요", "error");

@@ -84,6 +84,8 @@ export interface Session {
 }
 
 export interface WorkoutExercise {
+  exerciseId?: string;
+  setRows?: import("@/lib/data/workout-sets").WorkoutSet[];
   name: string;
   kg: number;
   sets: number;
@@ -290,6 +292,7 @@ export interface PerfSummary {
 }
 
 export interface AttendTarget {
+  attendanceVersion: number;
   sessionId: string;
   name: string;
   initial: string;

@@ -1,0 +1,28 @@
+✔ duplicate/retried completion deducts once; stale retry after correction does not re-complete (957.857709ms)
+✔ simultaneously submitted last-credit requests: one debit, one rejected; PGlite serializes requests (14.891792ms)
+✔ duet second-member failure rolls back first debit, session, and ledger (15.108584ms)
+✔ cancel cutoff and reversal preserve exact original membership (17.683042ms)
+✔ existing cancellation request RPC interoperates with retained ledger and state version (13.95ms)
+✔ foreign coach, member id, inactive and setup-only trainer cannot mutate (16.061708ms)
+✔ draft CAS, lost-response retry, member isolation, and legacy JSON round-trip (16.479708ms)
+✔ publishing member-specific drafts twice does not duplicate or mix duet records (10.977458ms)
+✔ draft conflict during completion rolls back debit and publication (12.477625ms)
+✔ free exception must be explicit; paused/expired entitlement never silently authorizes it (14.041417ms)
+✔ restore refuses refunded/transferred membership instead of inventing balance (13.0485ms)
+✔ authenticated clients cannot execute service-only RPCs directly (11.135541ms)
+✔ complete, correct, complete again keeps all audit events and returns current total balance (14.121167ms)
+✔ existing 60-minute reservation conflict guard rejects a 30-minute overlap, allows boundary (15.413541ms)
+✔ reapplying additive migration preserves saved drafts, balances and audit rows (28.661833ms)
+﹣ independent PostgreSQL connections serialize duplicate completion and last-credit competition (0.109208ms) # SKIP
+﹣ independent PostgreSQL same-operation retry waits and returns original result (0.022ms) # SKIP
+﹣ independent cancellation and completion on two sessions do not deadlock through member FK locks (0.017167ms) # SKIP
+﹣ cancellation request waits for session before claiming request; completion wins without deadlock (0.014667ms) # SKIP
+﹣ move request waits for session before claiming request; completion wins without deadlock (0.014292ms) # SKIP
+ℹ tests 20
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 5
+ℹ todo 0
+ℹ duration_ms 1654.987459

@@ -7,6 +7,7 @@ import { NoZoom } from "@/components/shell/NoZoom";
 import { InstallPrompt } from "@/components/shell/InstallPrompt";
 import { ServiceWorkerRegister } from "@/components/shell/ServiceWorkerRegister";
 import { OfflineBanner } from "@/components/shell/OfflineBanner";
+import { ClassDraftRecoveryBoundary } from "@/components/trainer/ClassDraftRecoveryBoundary";
 
 const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
@@ -94,6 +95,7 @@ export default function RootLayout({
         <KeyboardInsets />
         <NoZoom />
         <OfflineBanner />
+        <ClassDraftRecoveryBoundary />
         <ServiceWorkerRegister />
         <InstallPrompt />
         {children}
