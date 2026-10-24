@@ -1,0 +1,11 @@
+Connecting to 43.202.154.182
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: C=US, ST=Delware, L=New Castle, O=Supabase Inc, CN=*.pooler.supabase.com
+Hash used: SHA256
+Signature type: rsa_pss_rsae_sha256
+Verification: OK
+Verified peername: *.pooler.supabase.com
+Peer Temp Key: X25519, 253 bits
+DONE

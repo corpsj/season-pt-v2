@@ -1,0 +1,48 @@
+{"target":"exdsrqjvjmakduufslif","backup":"/Users/zoopark-studio/Documents/dev/season-pt_v2-backups/20261024T023849Z","backupChecksumVerified":true,"migrations":[{"file":"supabase/migrations/0026_schedule_request_integrity.sql","sha256":"01432d5076b621b001f1aedf266f45389cce37fe7cdb65915b4a572149c21b39"},{"file":"supabase/migrations/0027_class_workflow.sql","sha256":"b647e52c1f680a9b31eecceb712761025dcb9888c36a956e15497ac9c3206d6b"}],"transaction":"single; rollback on SQL/ACL/lock failure"}
+SET
+SET
+LOCK TABLE
+DO
+ALTER TABLE
+UPDATE 0
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE TABLE
+ALTER TABLE
+CREATE TABLE
+ALTER TABLE
+CREATE FUNCTION
+psql:<stdin>:317: NOTICE:  trigger "class_state_version" for relation "sessions" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+REVOKE
+REVOKE
+GRANT
+GRANT
+GRANT
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+REVOKE
+GRANT
+DO
+NOTIFY

@@ -1,0 +1,2 @@
+{"role":"service_role","status":200,"result":false}
+{"role":"anon","status":401,"errorCode":"42501"}

@@ -1,0 +1,9 @@
+Detected Next.js version: 16.2.9
+Running "bun run build"
+$ next build
+▲ Next.js 16.2.9 (Turbopack)
+✓ Compiled successfully in 21.9s
+Finished TypeScript in 15.8s ...
+✓ Generating static pages using 1 worker (59/59) in 5.7s
+Build Completed in /vercel/output [51s]
+  "message": "Deployment season-e9d6vr36w-season-pt.vercel.app ready.",

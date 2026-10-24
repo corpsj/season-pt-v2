@@ -1,0 +1,7 @@
+{"path":"/login/trainer","status":200,"location":null}
+{"path":"/login/member","status":200,"location":null}
+{"path":"/console","status":200,"location":null}
+{"path":"/t","status":307,"location":"/login/trainer"}
+{"path":"/m","status":307,"location":"/login/member"}
+{"path":"/t/record/00000000-0000-0000-0000-000000000000","status":307,"location":"/login/trainer"}
+{"path":"/dev/class-workflow","status":404,"location":null}

@@ -1,0 +1,18 @@
+{
+  "createdAt": "2026-10-24T02:38:52.834Z",
+  "project": "season-pt",
+  "dbRef": "exdsrqjvjmakduufslif",
+  "scope": "public schema and data only; auth/storage/roles unchanged and excluded",
+  "deploymentBefore": "dpl_2Sb8U5Gq5ZdNV45ftL6L1PkAY6h6",
+  "commitBefore": "4018f883c15afa9848cf03fc727fcc8da10fa060",
+  "client": "pg_dump/pg_restore18.6",
+  "database": {
+    "version": "17.6",
+    "operations": null,
+    "drafts": null,
+    "movement": null
+  },
+  "archiveBytes": 104194,
+  "sha256": "308d850eb8dfc0e5fc2dc38857792868d399aa9f80ceb2833cff1ff3dbbbbe9f",
+  "fullArchiveReadCheck": "passed; no DB restore performed"
+}
